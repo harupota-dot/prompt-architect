@@ -172,6 +172,10 @@ export default function PromptArchitect() {
   const isUserStoppedRef = useRef(true);
   // onresult（非同期）で更新される最新テキストを stopListening が読めるよう ref で同期する
   const currentTextRef = useRef('');
+  // 自動再開用タイマーID（競合防止のため必ず clearTimeout してから再セット）
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 直前のエラー種別を onend で参照するための ref
+  const lastErrorRef = useRef<string>('');
 
   // ── 履歴: 初期ロード ────────────────────────────────────────
   useEffect(() => {
@@ -247,31 +251,61 @@ export default function PromptArchitect() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onerror = (event: any) => {
-      // no-speech / aborted はAndroidで頻発するが無害なので無視
-      if (event.error === 'no-speech' || event.error === 'aborted') return;
-      isUserStoppedRef.current = true;
-      setVoiceState('error');
-      setVoiceError('音声認識でエラーが発生しました。マイクの許可を確認してください。');
+      const err: string = event.error ?? 'unknown';
+      lastErrorRef.current = err;
+
+      // not-allowed / service-not-allowed = マイク権限なし → ハード停止
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        isUserStoppedRef.current = true;
+        if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
+        setVoiceState('error');
+        setVoiceError('マイクの使用が許可されていません。ブラウザのアドレスバー横のマイクアイコンから許可してください。');
+        return;
+      }
+
+      // network エラー → ハード停止
+      if (err === 'network') {
+        isUserStoppedRef.current = true;
+        if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
+        setVoiceState('error');
+        setVoiceError('ネットワークエラーで音声認識が停止しました。接続を確認してください。');
+        return;
+      }
+
+      // no-speech / aborted = Android・Chrome で頻発する無害なイベント
+      // → voiceState は変えずに onend に任せる（再起動で自然に回復）
     };
 
     r.onend = () => {
       // 暫定テキストを除去
       setText(prev => stripInterim(prev));
 
-      if (!isUserStoppedRef.current) {
-        // ① Android対策: ユーザーが止めていないなら100ms後に自動再開
-        setTimeout(() => {
-          if (!isUserStoppedRef.current) {
-            try {
-              r.start();
-            } catch {
-              // start 失敗時はアイドルに戻す
-              isUserStoppedRef.current = true;
-              setVoiceState('idle');
-            }
-          }
-        }, 100);
-      }
+      // ユーザーが意図的に止めた場合は再開しない
+      if (isUserStoppedRef.current) return;
+
+      // aborted の直後は少し長く待つ（ブラウザがまだビジーな可能性）
+      // それ以外は 400ms 待機（Chrome がスパム判定しない最低ライン）
+      const delay = lastErrorRef.current === 'aborted' ? 600 : 400;
+      lastErrorRef.current = '';
+
+      // 既存の保留タイマーを必ずキャンセルしてから新規セット（二重起動防止）
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = setTimeout(() => {
+        restartTimerRef.current = null;
+        // タイマー待機中にユーザーが止めた場合はキャンセル
+        if (isUserStoppedRef.current) return;
+        try {
+          r.start();
+        } catch (e: unknown) {
+          const name = (e instanceof Error) ? e.name : '';
+          // InvalidStateError = すでに起動済み → 問題なし（録音は継続中）
+          if (name === 'InvalidStateError') return;
+          // それ以外 = 再起動失敗 → ループに陥らないようハード停止
+          isUserStoppedRef.current = true;
+          setVoiceState('error');
+          setVoiceError('音声認識の再開に失敗しました。もう一度「話す」を押してください。');
+        }
+      }, delay);
     };
 
     recognitionRef.current = r;
@@ -286,17 +320,30 @@ export default function PromptArchitect() {
       setVoiceError('このブラウザは音声認識に対応していません（Chrome / Edge を推奨）。');
       return;
     }
+    // 保留中の自動再開タイマーをキャンセル（競合防止）
+    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     setVoiceError('');
+    lastErrorRef.current = '';
     isUserStoppedRef.current = false;
     try {
       r.start();
       setVoiceState('recording');
-    } catch { /* 既に start 済みの場合を無視 */ }
+    } catch (e: unknown) {
+      // InvalidStateError = すでに起動中（問題なし）
+      if (e instanceof Error && e.name !== 'InvalidStateError') {
+        setVoiceState('error');
+        setVoiceError('マイクの起動に失敗しました。ページを再読み込みして試してください。');
+        isUserStoppedRef.current = true;
+      } else {
+        setVoiceState('recording'); // already running
+      }
+    }
   }, [initRecognition]);
 
   // ② 一時停止（テキスト保持のまま認識だけ止める）
   const pauseListening = useCallback(() => {
     isUserStoppedRef.current = true; // onend で再起動しないよう先にフラグを立てる
+    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     recognitionRef.current?.stop();
     setText(prev => stripInterim(prev));
     setVoiceState('paused');
@@ -319,6 +366,8 @@ export default function PromptArchitect() {
   // 完全停止 → Geminiで校正
   const stopListening = useCallback(async () => {
     isUserStoppedRef.current = true;
+    // 保留中の自動再開タイマーを必ずキャンセル（停止後に再起動が走るのを防ぐ）
+    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     recognitionRef.current?.stop();
 
     const raw = currentTextRef.current || stripInterim(text);
@@ -356,6 +405,7 @@ export default function PromptArchitect() {
   useEffect(() => {
     return () => {
       isUserStoppedRef.current = true;
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
       recognitionRef.current?.stop();
     };
   }, []);
