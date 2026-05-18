@@ -5,12 +5,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
 type PromptMode = 'standard' | 'pro' | 'think';
-
-interface HistoryEntry {
-  id: string;
-  topic: string;
-  createdAt: number;
-}
+type AppPhase = 'input' | 'catchball' | 'result';
+interface ChatMsg { role: 'user' | 'ai'; text: string }
+interface HistoryEntry { id: string; topic: string; createdAt: number }
 
 // ── 定数 ────────────────────────────────────────────────────────
 const HISTORY_KEY = 'prompt-architect-history';
@@ -137,7 +134,7 @@ ${topic}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 }
 
-// ── ユーティリティ ───────────────────────────────────────────────
+// ── ユーティリティ ────────────────────────────────────────────
 function stripInterim(text: string) {
   return text.replace(new RegExp(`\\s*${INTERIM_MARKER.trim()}.*$`), '').trimEnd();
 }
@@ -147,42 +144,61 @@ function formatDate(ts: number) {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-// ── メインコンポーネント ──────────────────────────────────────────
+// ── メインコンポーネント ──────────────────────────────────────
 export default function PromptArchitect() {
+
+  // ── テキスト入力 state ────────────────────────────────────
   const [text, setText] = useState('');
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState('');
-  const [promptMode, setPromptMode] = useState<PromptMode>('standard');
-  const [copied1, setCopied1] = useState(false);
-  const [copied2, setCopied2] = useState(false);
-  const [copiedPro, setCopiedPro] = useState(false);
-  const [copiedThink, setCopiedThink] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
-  // 校正機能
   const [rawText, setRawText] = useState('');
   const [proofreadText, setProofreadText] = useState('');
   const [proofreadError, setProofreadError] = useState('');
 
+  // ── アプリフェーズ ────────────────────────────────────────
+  const [appPhase, setAppPhase] = useState<AppPhase>('input');
+  const [confirmedTopic, setConfirmedTopic] = useState('');
+
+  // ── キャッチボール ────────────────────────────────────────
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isLoadingChat, setIsLoadingChat] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const [aiTurnCount, setAiTurnCount] = useState(0);
+  const [chatVoiceActive, setChatVoiceActive] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // ── 結果 ─────────────────────────────────────────────────
+  const [promptMode, setPromptMode] = useState<PromptMode>('standard');
+  const [finalStep1, setFinalStep1] = useState('');
+  const [isGeneratingFinal, setIsGeneratingFinal] = useState(false);
+  const [finalError, setFinalError] = useState('');
+  const [copiedFinal1, setCopiedFinal1] = useState(false);
+  const [copiedFinal2, setCopiedFinal2] = useState(false);
+  const [isCatchballResult, setIsCatchballResult] = useState(false);
+
+  // ── 履歴 ─────────────────────────────────────────────────
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
+
+  // ── 音声認識 Refs ─────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
-  // true = ユーザーが意図的に止めた / false = 聞き続けるべき状態（Android自動再開フラグ）
+  // ユーザーが意図的に止めたか（onend でのステート変更制御のみに使用）
   const isUserStoppedRef = useRef(true);
-  // onresult（非同期）で更新される最新テキストを stopListening が読めるよう ref で同期する
   const currentTextRef = useRef('');
-  // 自動再開用タイマーID（競合防止のため必ず clearTimeout してから再セット）
-  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 直前のエラー種別を onend で参照するための ref
-  const lastErrorRef = useRef<string>('');
+  // チャット用音声認識（別インスタンス）
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chatRecognitionRef = useRef<any>(null);
 
-  // ── 履歴: 初期ロード ────────────────────────────────────────
+  // ── 履歴ロード ────────────────────────────────────────────
   useEffect(() => {
     try {
       const saved = localStorage.getItem(HISTORY_KEY);
       if (saved) setHistory(JSON.parse(saved));
-    } catch { /* localStorage 利用不可でも無視 */ }
+    } catch { /* ignore */ }
   }, []);
 
   const persistHistory = (entries: HistoryEntry[]) => {
@@ -203,11 +219,7 @@ export default function PromptArchitect() {
   }, []);
 
   const deleteHistoryEntry = (id: string) => {
-    setHistory(prev => {
-      const next = prev.filter(h => h.id !== id);
-      persistHistory(next);
-      return next;
-    });
+    setHistory(prev => { const next = prev.filter(h => h.id !== id); persistHistory(next); return next; });
     if (expandedId === id) setExpandedId(null);
   };
 
@@ -217,7 +229,12 @@ export default function PromptArchitect() {
     setExpandedId(null);
   };
 
-  // ── 音声認識: 初期化（1度だけ） ────────────────────────────
+  // ── チャットスクロール ─────────────────────────────────────
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isLoadingChat]);
+
+  // ── 音声認識：初期化（① 修正: continuous=true のみ、自動再起動ループなし） ──
   const initRecognition = useCallback(() => {
     if (recognitionRef.current) return recognitionRef.current;
     if (typeof window === 'undefined') return null;
@@ -227,8 +244,8 @@ export default function PromptArchitect() {
 
     const r = new SR();
     r.lang = 'ja-JP';
-    r.continuous = true;
-    r.interimResults = true;
+    r.continuous = true;      // ブラウザに連続認識を一任
+    r.interimResults = true;  // リアルタイム表示
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onresult = (event: any) => {
@@ -244,7 +261,7 @@ export default function PromptArchitect() {
         const next = final
           ? (base + (base ? '　' : '') + final).trimStart()
           : (interim ? base + INTERIM_MARKER + interim : base);
-        currentTextRef.current = stripInterim(next); // 最新の確定テキストを ref に同期
+        currentTextRef.current = stripInterim(next);
         return next;
       });
     };
@@ -252,63 +269,27 @@ export default function PromptArchitect() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onerror = (event: any) => {
       const err: string = event.error ?? 'unknown';
-      lastErrorRef.current = err;
-
-      // not-allowed / service-not-allowed = マイク権限なし → ハード停止（再起動しない）
+      // マイク権限エラーのみハード停止、他は continuous=true で自動回復
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         isUserStoppedRef.current = true;
-        if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
         setVoiceState('error');
         setVoiceError('マイクの使用が許可されていません。ブラウザのアドレスバー横のマイクアイコンから許可してください。');
-        return;
       }
-
-      // network / no-speech / aborted = 一時的な現象（本番環境で頻発）
-      // → voiceState は変えずに onend のタイマーで自動復帰させる
-      // network だけ少し長めの遅延を使うよう lastErrorRef に記録する
     };
 
     r.onend = () => {
       // 暫定テキストを除去
       setText(prev => stripInterim(prev));
-
-      // ユーザーが意図的に止めた場合は再開しない
-      if (isUserStoppedRef.current) return;
-
-      // エラー種別に応じて再起動ディレイを決定
-      //   network  → 800ms（サーバー側の一時障害への配慮）
-      //   aborted  → 600ms（ブラウザがまだビジーな可能性）
-      //   それ以外 → 400ms（Chrome がスパム判定しない最低ライン）
-      const delay =
-        lastErrorRef.current === 'network'  ? 800 :
-        lastErrorRef.current === 'aborted'  ? 600 : 400;
-      lastErrorRef.current = '';
-
-      // 既存の保留タイマーを必ずキャンセルしてから新規セット（二重起動防止）
-      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = setTimeout(() => {
-        restartTimerRef.current = null;
-        // タイマー待機中にユーザーが止めた場合はキャンセル
-        if (isUserStoppedRef.current) return;
-        try {
-          r.start();
-        } catch (e: unknown) {
-          const name = (e instanceof Error) ? e.name : '';
-          // InvalidStateError = すでに起動済み → 問題なし（録音は継続中）
-          if (name === 'InvalidStateError') return;
-          // それ以外 = 再起動失敗 → ループに陥らないようハード停止
-          isUserStoppedRef.current = true;
-          setVoiceState('error');
-          setVoiceError('音声認識の再開に失敗しました。もう一度「話す」を押してください。');
-        }
-      }, delay);
+      // ユーザーが意図的に止めていない場合（ブラウザが予期せず終了）のみ idle に戻す
+      if (!isUserStoppedRef.current) {
+        setVoiceState('idle');
+      }
     };
 
     recognitionRef.current = r;
     return r;
   }, []);
 
-  // ── 音声操作 ────────────────────────────────────────────────
   const startListening = useCallback(() => {
     const r = initRecognition();
     if (!r) {
@@ -316,36 +297,29 @@ export default function PromptArchitect() {
       setVoiceError('このブラウザは音声認識に対応していません（Chrome / Edge を推奨）。');
       return;
     }
-    // 保留中の自動再開タイマーをキャンセル（競合防止）
-    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     setVoiceError('');
-    lastErrorRef.current = '';
     isUserStoppedRef.current = false;
     try {
       r.start();
       setVoiceState('recording');
     } catch (e: unknown) {
-      // InvalidStateError = すでに起動中（問題なし）
-      if (e instanceof Error && e.name !== 'InvalidStateError') {
+      if (e instanceof Error && e.name === 'InvalidStateError') {
+        setVoiceState('recording'); // すでに起動中
+      } else {
         setVoiceState('error');
         setVoiceError('マイクの起動に失敗しました。ページを再読み込みして試してください。');
         isUserStoppedRef.current = true;
-      } else {
-        setVoiceState('recording'); // already running
       }
     }
   }, [initRecognition]);
 
-  // ② 一時停止（テキスト保持のまま認識だけ止める）
   const pauseListening = useCallback(() => {
-    isUserStoppedRef.current = true; // onend で再起動しないよう先にフラグを立てる
-    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
+    isUserStoppedRef.current = true;
     recognitionRef.current?.stop();
     setText(prev => stripInterim(prev));
     setVoiceState('paused');
   }, []);
 
-  // ② 再開
   const resumeListening = useCallback(() => {
     setVoiceError('');
     isUserStoppedRef.current = false;
@@ -353,28 +327,28 @@ export default function PromptArchitect() {
       recognitionRef.current?.start();
       setVoiceState('recording');
     } catch {
-      setVoiceState('error');
-      setVoiceError('再開に失敗しました。もう一度「話す」を押してください。');
-      isUserStoppedRef.current = true;
+      // 同一インスタンスで再起動できない場合は新規作成
+      recognitionRef.current = null;
+      const r = initRecognition();
+      if (r) {
+        try { r.start(); setVoiceState('recording'); }
+        catch {
+          setVoiceState('error');
+          setVoiceError('再開に失敗しました。もう一度「話す」を押してください。');
+          isUserStoppedRef.current = true;
+        }
+      }
     }
-  }, []);
+  }, [initRecognition]);
 
-  // 完全停止 → Geminiで校正
   const stopListening = useCallback(async () => {
     isUserStoppedRef.current = true;
-    // 保留中の自動再開タイマーを必ずキャンセル（停止後に再起動が走るのを防ぐ）
-    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     recognitionRef.current?.stop();
-
     const raw = currentTextRef.current || stripInterim(text);
     setText(raw);
 
-    if (!raw.trim()) {
-      setVoiceState('idle');
-      return;
-    }
+    if (!raw.trim()) { setVoiceState('idle'); return; }
 
-    // 校正フロー開始
     setRawText(raw);
     setProofreadText('');
     setProofreadError('');
@@ -401,17 +375,174 @@ export default function PromptArchitect() {
   useEffect(() => {
     return () => {
       isUserStoppedRef.current = true;
-      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
       recognitionRef.current?.stop();
+      chatRecognitionRef.current?.stop();
     };
   }, []);
 
-  // ── コピー（③ 履歴保存も兼ねる） ──────────────────────────
-  const copyToClipboard = (content: string, setCopied: (v: boolean) => void, topic?: string) => {
+  // ── テキスト確定 ─────────────────────────────────────────
+  const confirmTopic = (topic: string) => {
+    const t = topic.trim();
+    setConfirmedTopic(t);
+    setText(t);
+    setProofreadText('');
+    setRawText('');
+    setProofreadError('');
+  };
+
+  // ── 全リセット ────────────────────────────────────────────
+  const resetAll = () => {
+    setText('');
+    setConfirmedTopic('');
+    setAppPhase('input');
+    setChatMessages([]);
+    setChatInput('');
+    setFinalStep1('');
+    setFinalError('');
+    setProofreadText('');
+    setRawText('');
+    setProofreadError('');
+    setAiTurnCount(0);
+    setVoiceState('idle');
+    setVoiceError('');
+    setIsCatchballResult(false);
+    setIsGeneratingFinal(false);
+    currentTextRef.current = '';
+  };
+
+  // ── ② キャッチボール開始 ─────────────────────────────────
+  const startCatchball = async () => {
+    setAppPhase('catchball');
+    setChatMessages([]);
+    setAiTurnCount(0);
+    setIsLoadingChat(true);
+    setChatError('');
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'start', topic: confirmedTopic }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'APIエラー');
+      setChatMessages([{ role: 'ai', text: data.aiMessage }]);
+      setAiTurnCount(1);
+    } catch (e) {
+      setChatError(e instanceof Error ? e.message : 'エラーが発生しました');
+      setAppPhase('input'); // 失敗時は入力画面に戻る
+    } finally {
+      setIsLoadingChat(false);
+    }
+  };
+
+  // ── チャットメッセージ送信 ────────────────────────────────
+  const sendChatMessage = async () => {
+    const msg = chatInput.trim();
+    if (!msg || isLoadingChat) return;
+
+    const userMsg: ChatMsg = { role: 'user', text: msg };
+    const newMsgs: ChatMsg[] = [...chatMessages, userMsg];
+    setChatMessages(newMsgs);
+    setChatInput('');
+    setIsLoadingChat(true);
+    setChatError('');
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'continue',
+          topic: confirmedTopic,
+          messages: chatMessages, // ユーザーメッセージ前のリスト
+          userMessage: msg,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'APIエラー');
+      setChatMessages([...newMsgs, { role: 'ai', text: data.aiMessage }]);
+      setAiTurnCount(prev => prev + 1);
+    } catch (e) {
+      setChatError(e instanceof Error ? e.message : 'エラーが発生しました');
+    } finally {
+      setIsLoadingChat(false);
+    }
+  };
+
+  // ── キャッチボールから最強プロンプト生成 ─────────────────
+  const finalizeCatchball = async (mode: PromptMode) => {
+    setPromptMode(mode);
+    setIsGeneratingFinal(true);
+    setFinalError('');
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'finalize',
+          topic: confirmedTopic,
+          messages: chatMessages,
+          promptMode: mode,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'APIエラー');
+      setFinalStep1(data.finalPrompt);
+      setIsCatchballResult(true);
+      setAppPhase('result');
+      saveToHistory(confirmedTopic);
+    } catch (e) {
+      setFinalError(e instanceof Error ? e.message : 'プロンプト生成に失敗しました');
+    } finally {
+      setIsGeneratingFinal(false);
+    }
+  };
+
+  // ── 直接生成（キャッチボールなし） ───────────────────────
+  const generateDirectly = (mode: PromptMode) => {
+    setPromptMode(mode);
+    const step1 =
+      mode === 'pro'   ? buildStep1Pro(confirmedTopic) :
+      mode === 'think' ? buildStep1Think(confirmedTopic) :
+                         buildStep1(confirmedTopic);
+    setFinalStep1(step1);
+    setIsCatchballResult(false);
+    setAppPhase('result');
+    saveToHistory(confirmedTopic);
+  };
+
+  // ── チャット用 音声入力（ワンショット） ───────────────────
+  const toggleChatVoice = () => {
+    if (typeof window === 'undefined') return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+
+    if (chatVoiceActive) {
+      chatRecognitionRef.current?.stop();
+      setChatVoiceActive(false);
+      return;
+    }
+    const r = new SR();
+    r.lang = 'ja-JP';
+    r.continuous = false;
+    r.interimResults = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    r.onresult = (event: any) => {
+      const t = event.results[0]?.[0]?.transcript ?? '';
+      if (t) setChatInput(prev => prev + (prev ? '　' : '') + t);
+    };
+    r.onend = () => setChatVoiceActive(false);
+    r.onerror = () => setChatVoiceActive(false);
+    chatRecognitionRef.current = r;
+    try { r.start(); setChatVoiceActive(true); } catch { setChatVoiceActive(false); }
+  };
+
+  // ── コピー ────────────────────────────────────────────────
+  const copyText = (content: string, setCopied: (v: boolean) => void) => {
     navigator.clipboard.writeText(content).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      if (topic) saveToHistory(topic);
     });
   };
 
@@ -424,18 +555,14 @@ export default function PromptArchitect() {
     });
   };
 
-  // ── 派生値 ──────────────────────────────────────────────────
+  // ── 派生値 ────────────────────────────────────────────────
   const cleanText = stripInterim(text).trim();
-  const prompt1 =
-    !cleanText ? '' :
-    promptMode === 'pro'   ? buildStep1Pro(cleanText) :
-    promptMode === 'think' ? buildStep1Think(cleanText) :
-                             buildStep1(cleanText);
-  const prompt2 = cleanText ? buildStep2() : '';
-  const charCount = cleanText.length;
   const isActive = voiceState === 'recording' || voiceState === 'paused' || voiceState === 'proofreading';
+  const hasUserReplied = chatMessages.some(m => m.role === 'user');
+  const step2 = buildStep2();
+  const modeLabel = promptMode === 'pro' ? '⚡ プロ' : promptMode === 'think' ? '🧠 思考' : '📋 標準';
 
-  // ── レンダー ─────────────────────────────────────────────────
+  // ── レンダー ──────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
 
@@ -447,402 +574,555 @@ export default function PromptArchitect() {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold text-gray-900 leading-none">Prompt Architect</h1>
-            <p className="text-xs text-gray-400 mt-0.5 truncate">Gemini用・2ステッププロンプト自動生成</p>
+            <p className="text-xs text-gray-400 mt-0.5 truncate">
+              {appPhase === 'catchball' ? 'AIとキャッチボール中…' :
+               appPhase === 'result'    ? 'プロンプト生成完了' :
+               'AIヒアリング→5大条件プロンプト自動生成'}
+            </p>
           </div>
-          {/* ③ 履歴ボタン */}
-          <button
-            onClick={() => setShowHistory(v => !v)}
-            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              showHistory
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
-            }`}
-          >
-            <span>📋</span>
-            <span className="hidden sm:inline">履歴</span>
-            {history.length > 0 && (
-              <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
-                showHistory ? 'bg-white text-indigo-600' : 'bg-indigo-600 text-white'
-              }`}>
-                {history.length > 9 ? '9+' : history.length}
-              </span>
-            )}
-          </button>
+          {/* 履歴ボタン（inputフェーズのみ表示） */}
+          {appPhase === 'input' && (
+            <button
+              onClick={() => setShowHistory(v => !v)}
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                showHistory
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+              }`}
+            >
+              <span>📋</span>
+              <span className="hidden sm:inline">履歴</span>
+              {history.length > 0 && (
+                <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
+                  showHistory ? 'bg-white text-indigo-600' : 'bg-indigo-600 text-white'
+                }`}>{history.length > 9 ? '9+' : history.length}</span>
+              )}
+            </button>
+          )}
+          {/* リセットボタン（input以外） */}
+          {appPhase !== 'input' && (
+            <button
+              onClick={resetAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-gray-200 bg-white text-gray-600 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all"
+            >
+              ↺ 最初から
+            </button>
+          )}
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
 
-        {/* ③ 履歴パネル */}
-        {showHistory && (
-          <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-700">
-                過去の履歴 <span className="text-gray-400 font-normal">({history.length}件)</span>
-              </h2>
-              {history.length > 0 && (
-                <button
-                  onClick={clearAllHistory}
-                  className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                >
-                  すべて削除
-                </button>
-              )}
-            </div>
-
-            {history.length === 0 ? (
-              <p className="px-5 py-6 text-xs text-gray-400 text-center">
-                まだ履歴がありません。プロンプトをコピーすると自動保存されます。
-              </p>
-            ) : (
-              <ul className="divide-y divide-gray-50">
-                {history.map(entry => {
-                  const isExpanded = expandedId === entry.id;
-                  const ep1 = buildStep1(entry.topic);
-                  const ep2 = buildStep2();
-                  return (
-                    <li key={entry.id}>
-                      {/* 折りたたみヘッダー */}
-                      <button
-                        onClick={() => setExpandedId(isExpanded ? null : entry.id)}
-                        className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
-                      >
-                        <span className="flex-shrink-0 text-gray-400 mt-0.5 text-xs">
-                          {isExpanded ? '▲' : '▼'}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-800 leading-snug line-clamp-2">{entry.topic}</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(entry.createdAt)}</p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={e => { e.stopPropagation(); setText(entry.topic); setShowHistory(false); }}
-                            onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), setText(entry.topic), setShowHistory(false))}
-                            className="text-[10px] px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
-                          >
-                            再利用
-                          </span>
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={e => { e.stopPropagation(); deleteHistoryEntry(entry.id); }}
-                            onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), deleteHistoryEntry(entry.id))}
-                            className="text-[10px] text-gray-300 hover:text-red-400 transition-colors"
-                          >
-                            ✕
-                          </span>
-                        </div>
-                      </button>
-
-                      {/* 展開: コピーボタン */}
-                      {isExpanded && (
-                        <div className="px-5 pb-4 space-y-2 bg-gray-50 border-t border-gray-100">
-                          <div className="pt-3 grid grid-cols-2 gap-2">
-                            <button
-                              onClick={() => copyHistoryPrompt(entry, 1)}
-                              className={`py-2 rounded-xl text-xs font-semibold transition-all ${
-                                copiedHistoryId === `${entry.id}-1`
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                              }`}
-                            >
-                              {copiedHistoryId === `${entry.id}-1` ? '✓ STEP1コピー済み' : 'STEP1をコピー'}
-                            </button>
-                            <button
-                              onClick={() => copyHistoryPrompt(entry, 2)}
-                              className={`py-2 rounded-xl text-xs font-semibold transition-all ${
-                                copiedHistoryId === `${entry.id}-2`
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-purple-600 hover:bg-purple-700 text-white'
-                              }`}
-                            >
-                              {copiedHistoryId === `${entry.id}-2` ? '✓ STEP2コピー済み' : 'STEP2をコピー'}
-                            </button>
-                          </div>
-                          <div className="rounded-xl bg-white border border-gray-100 px-4 py-3 max-h-36 overflow-y-auto">
-                            <pre className="text-[10px] text-gray-500 whitespace-pre-wrap leading-relaxed">{ep1.split('\n').slice(0, 6).join('\n')}…</pre>
-                          </div>
-                          <div className="rounded-xl bg-white border border-gray-100 px-4 py-3 max-h-28 overflow-y-auto">
-                            <pre className="text-[10px] text-gray-500 whitespace-pre-wrap leading-relaxed">{ep2.split('\n').slice(0, 4).join('\n')}…</pre>
-                          </div>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        )}
-
-        {/* 入力エリア */}
-        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">0</span>
-            <h2 className="text-sm font-semibold text-gray-700">テーマを入力</h2>
-          </div>
-
-          {/* ── 音声ボタン群 ── */}
-          <div className="flex flex-col items-center gap-3">
-
-            {/* idle: 話すボタン1つ */}
-            {(voiceState === 'idle' || voiceState === 'error') && (
-              <button
-                onClick={startListening}
-                className="relative w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:ring-offset-2"
-                aria-label="音声入力を開始"
-              >
-                <span className="text-2xl">🎤</span>
-                <span className="text-xs">話す</span>
-              </button>
-            )}
-
-            {/* recording: 一時停止（大）+ 停止（小） */}
-            {voiceState === 'recording' && (
-              <div className="flex flex-col items-center gap-3 w-full">
-                <button
-                  onClick={pauseListening}
-                  className="relative w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-lg transition-all scale-105 focus:outline-none focus:ring-4 focus:ring-amber-300 focus:ring-offset-2"
-                  aria-label="一時停止"
-                >
-                  <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-30" />
-                  <span className="text-2xl relative z-10">⏸</span>
-                  <span className="text-xs relative z-10">一時停止</span>
-                </button>
-                <button
-                  onClick={stopListening}
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-600 border border-gray-200 hover:border-red-200 text-xs font-medium transition-all"
-                  aria-label="録音を完全停止"
-                >
-                  <span>⏹</span> 停止（完了）
-                </button>
-              </div>
-            )}
-
-            {/* paused: 再開（大）+ 停止（小） */}
-            {voiceState === 'paused' && (
-              <div className="flex flex-col items-center gap-3 w-full">
-                <button
-                  onClick={resumeListening}
-                  className="w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:ring-offset-2"
-                  aria-label="録音を再開"
-                >
-                  <span className="text-2xl">▶</span>
-                  <span className="text-xs">再開</span>
-                </button>
-                <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-full">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span className="text-xs text-amber-700 font-medium">一時停止中 — 続きから再開できます</span>
+        {/* ════════════════════════════════════════
+            INPUT フェーズ
+        ════════════════════════════════════════ */}
+        {appPhase === 'input' && (
+          <>
+            {/* 履歴パネル */}
+            {showHistory && (
+              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+                  <h2 className="text-sm font-semibold text-gray-700">
+                    過去の履歴 <span className="text-gray-400 font-normal">({history.length}件)</span>
+                  </h2>
+                  {history.length > 0 && (
+                    <button onClick={clearAllHistory} className="text-xs text-red-400 hover:text-red-600 transition-colors">
+                      すべて削除
+                    </button>
+                  )}
                 </div>
-                <button
-                  onClick={stopListening}
-                  className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-600 border border-gray-200 hover:border-red-200 text-xs font-medium transition-all"
-                  aria-label="録音を完全停止"
-                >
-                  <span>⏹</span> 停止（完了）
-                </button>
+                {history.length === 0 ? (
+                  <p className="px-5 py-6 text-xs text-gray-400 text-center">まだ履歴がありません。プロンプトをコピーすると自動保存されます。</p>
+                ) : (
+                  <ul className="divide-y divide-gray-50">
+                    {history.map(entry => {
+                      const isExpanded = expandedId === entry.id;
+                      return (
+                        <li key={entry.id}>
+                          <button
+                            onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                            className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
+                          >
+                            <span className="flex-shrink-0 text-gray-400 mt-0.5 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-800 leading-snug line-clamp-2">{entry.topic}</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(entry.createdAt)}</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                              <span
+                                role="button" tabIndex={0}
+                                onClick={e => { e.stopPropagation(); confirmTopic(entry.topic); setShowHistory(false); }}
+                                onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), confirmTopic(entry.topic), setShowHistory(false))}
+                                className="text-[10px] px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                              >再利用</span>
+                              <span
+                                role="button" tabIndex={0}
+                                onClick={e => { e.stopPropagation(); deleteHistoryEntry(entry.id); }}
+                                onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), deleteHistoryEntry(entry.id))}
+                                className="text-[10px] text-gray-300 hover:text-red-400 transition-colors"
+                              >✕</span>
+                            </div>
+                          </button>
+                          {isExpanded && (
+                            <div className="px-5 pb-4 space-y-2 bg-gray-50 border-t border-gray-100">
+                              <div className="pt-3 grid grid-cols-2 gap-2">
+                                <button onClick={() => copyHistoryPrompt(entry, 1)}
+                                  className={`py-2 rounded-xl text-xs font-semibold transition-all ${copiedHistoryId === `${entry.id}-1` ? 'bg-green-500 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>
+                                  {copiedHistoryId === `${entry.id}-1` ? '✓ STEP1コピー済み' : 'STEP1をコピー'}
+                                </button>
+                                <button onClick={() => copyHistoryPrompt(entry, 2)}
+                                  className={`py-2 rounded-xl text-xs font-semibold transition-all ${copiedHistoryId === `${entry.id}-2` ? 'bg-green-500 text-white' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}>
+                                  {copiedHistoryId === `${entry.id}-2` ? '✓ STEP2コピー済み' : 'STEP2をコピー'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            )}
+
+            {/* テーマが未確定の場合: 音声入力セクション */}
+            {!confirmedTopic && (
+              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">0</span>
+                  <h2 className="text-sm font-semibold text-gray-700">テーマを入力</h2>
+                </div>
+
+                {/* 音声ボタン群 */}
+                <div className="flex flex-col items-center gap-3">
+                  {(voiceState === 'idle' || voiceState === 'error') && (
+                    <button onClick={startListening}
+                      className="relative w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:ring-offset-2"
+                      aria-label="音声入力を開始">
+                      <span className="text-2xl">🎤</span>
+                      <span className="text-xs">話す</span>
+                    </button>
+                  )}
+
+                  {voiceState === 'recording' && (
+                    <div className="flex flex-col items-center gap-3 w-full">
+                      <button onClick={pauseListening}
+                        className="relative w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-lg transition-all scale-105 focus:outline-none focus:ring-4 focus:ring-amber-300 focus:ring-offset-2"
+                        aria-label="一時停止">
+                        <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-30" />
+                        <span className="text-2xl relative z-10">⏸</span>
+                        <span className="text-xs relative z-10">一時停止</span>
+                      </button>
+                      <button onClick={stopListening}
+                        className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-600 border border-gray-200 hover:border-red-200 text-xs font-medium transition-all"
+                        aria-label="録音を完全停止">
+                        <span>⏹</span> 停止（完了）
+                      </button>
+                    </div>
+                  )}
+
+                  {voiceState === 'paused' && (
+                    <div className="flex flex-col items-center gap-3 w-full">
+                      <button onClick={resumeListening}
+                        className="w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:ring-offset-2"
+                        aria-label="録音を再開">
+                        <span className="text-2xl">▶</span>
+                        <span className="text-xs">再開</span>
+                      </button>
+                      <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-full">
+                        <span className="w-2 h-2 rounded-full bg-amber-400" />
+                        <span className="text-xs text-amber-700 font-medium">一時停止中 — 続きから再開できます</span>
+                      </div>
+                      <button onClick={stopListening}
+                        className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-600 border border-gray-200 hover:border-red-200 text-xs font-medium transition-all">
+                        <span>⏹</span> 停止（完了）
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 録音中インジケーター */}
+                {voiceState === 'recording' && (
+                  <div className="flex items-center justify-center gap-2 text-red-500">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-xs font-medium">録音中 — 話し終わったら停止を押してください</span>
+                  </div>
+                )}
+
+                {/* エラー */}
+                {voiceState === 'error' && voiceError && (
+                  <p className="text-xs text-red-500 text-center bg-red-50 rounded-xl px-4 py-2">⚠️ {voiceError}</p>
+                )}
+
+                {/* テキストエリア */}
+                <div className="relative">
+                  <textarea
+                    value={text}
+                    onChange={e => setText(e.target.value)}
+                    placeholder={'例：「副業でYouTubeを始めて収益化するまでの手順」\n\n話したテキストが自動でここに入ります。手入力でも使えます。'}
+                    rows={5}
+                    className="w-full px-4 py-3 pr-10 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                  />
+                  {text && (
+                    <button onClick={() => { setText(''); setVoiceError(''); if (!isActive) setVoiceState('idle'); }}
+                      className="absolute top-3 right-3 text-gray-300 hover:text-gray-500 transition-colors"
+                      aria-label="テキストをクリア">✕</button>
+                  )}
+                </div>
+                {cleanText.length > 0 && (
+                  <p className="text-xs text-gray-400 text-right">{cleanText.length}文字</p>
+                )}
+
+                {/* 手入力テキストがある場合の「次へ」ボタン */}
+                {cleanText && !proofreadText && voiceState === 'idle' && (
+                  <button
+                    onClick={() => confirmTopic(cleanText)}
+                    className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-all"
+                  >
+                    このテキストで次のステップへ →
+                  </button>
+                )}
+              </section>
+            )}
+
+            {/* 校正中スピナー */}
+            {voiceState === 'proofreading' && (
+              <section className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 flex items-center gap-4">
+                <div className="flex-shrink-0 flex gap-1">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"
+                      style={{ animationDelay: `${i * 0.15}s` }} />
+                  ))}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-indigo-700">Geminiが校正・整理中...</p>
+                  <p className="text-xs text-gray-400 mt-0.5">話した内容を自然な文章に変換しています</p>
+                </div>
+              </section>
+            )}
+
+            {/* 校正結果カード */}
+            {voiceState === 'idle' && proofreadText && (
+              <section className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
+                  <span className="text-base">✨</span>
+                  <div>
+                    <p className="text-xs font-bold text-emerald-700">Geminiによる校正結果</p>
+                    <p className="text-[10px] text-emerald-500">採用するとこの内容でプロンプトが生成されます</p>
+                  </div>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                    <p className="text-sm text-gray-800 leading-relaxed">{proofreadText}</p>
+                  </div>
+                  {rawText !== proofreadText && (
+                    <details className="group">
+                      <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 list-none flex items-center gap-1">
+                        <span className="group-open:hidden">▼</span>
+                        <span className="hidden group-open:inline">▲</span>
+                        元の音声テキストを確認
+                      </summary>
+                      <p className="mt-2 text-xs text-gray-400 bg-gray-50 rounded-xl p-3 leading-relaxed">{rawText}</p>
+                    </details>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={() => confirmTopic(proofreadText)}
+                      className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition-all">
+                      ✓ この内容で確定
+                    </button>
+                    <button onClick={() => confirmTopic(rawText)}
+                      className="px-4 py-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm transition-all">
+                      元のまま
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* 校正エラー */}
+            {proofreadError && (
+              <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+                <span className="flex-shrink-0 text-amber-500">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-amber-700">校正をスキップしました</p>
+                  <p className="text-xs text-amber-600 mt-0.5">{proofreadError}</p>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => confirmTopic(rawText)}
+                    className="text-xs px-3 py-1 rounded-lg bg-amber-600 text-white">
+                    このまま続ける
+                  </button>
+                  <button onClick={() => setProofreadError('')} className="text-amber-400 hover:text-amber-600 text-xs">✕</button>
+                </div>
               </div>
             )}
 
-          </div>
+            {/* ② テーマ確定後：アクション選択 */}
+            {confirmedTopic && !proofreadText && (
+              <section className="space-y-4">
+                {/* 確定テーマ表示 */}
+                <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm p-4 flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0">📌</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-indigo-500 font-semibold uppercase tracking-wide mb-1">確定テーマ</p>
+                    <p className="text-sm text-gray-800 leading-relaxed">{confirmedTopic}</p>
+                  </div>
+                  <button onClick={() => { setConfirmedTopic(''); setText(confirmedTopic); }}
+                    className="flex-shrink-0 text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-2 py-1 transition-colors">
+                    変更
+                  </button>
+                </div>
 
-          {/* 録音中インジケーター */}
-          {voiceState === 'recording' && (
-            <div className="flex items-center justify-center gap-2 text-red-500">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs font-medium">録音中 — 言葉を続けて話せます（途切れても自動再開します）</span>
-            </div>
-          )}
+                {/* アクション選択 */}
+                <div className="space-y-3">
+                  <p className="text-xs text-center text-gray-500 font-medium">どちらで進めますか？</p>
 
-          {/* エラー */}
-          {voiceState === 'error' && voiceError && (
-            <p className="text-xs text-red-500 text-center bg-red-50 rounded-xl px-4 py-2">⚠️ {voiceError}</p>
-          )}
+                  {/* キャッチボール（推奨） */}
+                  <button
+                    onClick={startCatchball}
+                    className="w-full p-5 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white text-left hover:opacity-95 active:scale-[0.99] transition-all shadow-lg shadow-indigo-200"
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-2xl">🎯</span>
+                      <div>
+                        <p className="font-bold text-base">AIとキャッチボール</p>
+                        <span className="text-[10px] bg-white/20 rounded px-1.5 py-0.5">おすすめ</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-indigo-100 leading-relaxed">
+                      AIが2〜3回質問してあなたの意図を100%引き出します。
+                      人生相談・複雑な悩み・細かい要件も完全対応。
+                      ヒアリング後に「あなた専用の最強プロンプト」を自動生成します。
+                    </p>
+                  </button>
 
-          {/* テキストエリア */}
-          <div className="relative">
-            <textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder={'例：「副業でYouTubeを始めて収益化するまでの手順」\n\n話したテキストが自動でここに入ります。手入力でも使えます。'}
-              rows={5}
-              className="w-full px-4 py-3 pr-10 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
-            />
-            {text && (
-              <button
-                onClick={() => { setText(''); setVoiceError(''); if (!isActive) setVoiceState('idle'); }}
-                className="absolute top-3 right-3 text-gray-300 hover:text-gray-500 transition-colors"
-                aria-label="テキストをクリア"
-              >✕</button>
+                  {/* 直接生成 */}
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-lg">⚡</span>
+                      <p className="text-sm font-semibold text-gray-700">すぐにプロンプト生成</p>
+                      <span className="text-[10px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">テンプレート版</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { mode: 'standard' as PromptMode, icon: '📋', label: '標準', desc: '網羅・大ボリューム', color: 'bg-indigo-600 hover:bg-indigo-700' },
+                        { mode: 'pro' as PromptMode,      icon: '⚡', label: 'プロ',  desc: '結論優先・実務',    color: 'bg-amber-500 hover:bg-amber-600' },
+                        { mode: 'think' as PromptMode,    icon: '🧠', label: '思考',  desc: '論理・多角分析',   color: 'bg-purple-600 hover:bg-purple-700' },
+                      ].map(item => (
+                        <button key={item.mode} onClick={() => generateDirectly(item.mode)}
+                          className={`flex flex-col items-center gap-1 py-3 rounded-xl text-white ${item.color} transition-all`}>
+                          <span className="text-lg">{item.icon}</span>
+                          <span className="text-xs font-bold">{item.label}</span>
+                          <span className="text-[9px] opacity-80 text-center leading-tight">{item.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
             )}
-          </div>
-          {charCount > 0 && (
-            <p className="text-xs text-gray-400 text-right">{charCount}文字</p>
-          )}
-        </section>
 
-        {/* ── 校正中スピナー ── */}
-        {voiceState === 'proofreading' && (
-          <section className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 flex items-center gap-4">
-            <div className="flex-shrink-0 flex gap-1">
-              {[0, 1, 2].map(i => (
-                <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }} />
-              ))}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-indigo-700">Geminiが校正・整理中...</p>
-              <p className="text-xs text-gray-400 mt-0.5">話した内容を自然な文章に変換しています</p>
-            </div>
-          </section>
+            {/* 使い方ガイド（テキストが空のとき） */}
+            {!cleanText && !confirmedTopic && (
+              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">使い方</h2>
+                <ol className="space-y-3">
+                  {[
+                    { n: 1, title: 'テーマを音声 or テキストで入力', desc: '「話す」ボタンで録音。停止後にGeminiが自動校正します。手入力でもOK。' },
+                    { n: 2, title: 'AIとキャッチボール（おすすめ）', desc: 'Geminiが2〜3回質問してあなたの意図を深掘り。複雑な相談も完全対応。' },
+                    { n: 3, title: '最強プロンプトをコピーしてGeminiへ', desc: 'ヒアリング内容を反映した「あなた専用の5大条件プロンプト」が生成されます。' },
+                    { n: 4, title: 'Gemini回答後にSTEP2を貼る', desc: 'Canva拡張機能が起動し、A4サイズの印刷用PDF資料が完成します。' },
+                  ].map(item => (
+                    <li key={item.n} className="flex gap-3">
+                      <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold mt-0.5">{item.n}</span>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{item.title}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+          </>
         )}
 
-        {/* ── 校正結果カード ── */}
-        {voiceState === 'idle' && proofreadText && (
-          <section className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
-              <span className="text-base">✨</span>
-              <div>
-                <p className="text-xs font-bold text-emerald-700">Geminiによる校正結果</p>
-                <p className="text-[10px] text-emerald-500">採用するとこの内容でプロンプトが生成されます</p>
-              </div>
+        {/* ════════════════════════════════════════
+            CATCHBALL フェーズ
+        ════════════════════════════════════════ */}
+        {appPhase === 'catchball' && (
+          <section className="space-y-4">
+            {/* トピックバー */}
+            <div className="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+              <span className="text-sm flex-shrink-0">📌</span>
+              <p className="text-xs text-indigo-700 font-medium flex-1 min-w-0 line-clamp-2">{confirmedTopic}</p>
+              <span className="flex-shrink-0 text-[10px] text-indigo-400 bg-indigo-100 rounded-lg px-2 py-1 whitespace-nowrap">
+                AI {aiTurnCount}回目
+              </span>
             </div>
-            <div className="p-5 space-y-4">
-              {/* 校正後テキスト */}
-              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-                <p className="text-sm text-gray-800 leading-relaxed">{proofreadText}</p>
+
+            {/* チャットエリア */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 bg-gradient-to-r from-indigo-50 to-violet-50 border-b border-gray-100 flex items-center gap-2">
+                <span className="text-sm">💬</span>
+                <p className="text-xs font-semibold text-indigo-700">AIとのキャッチボール</p>
+                <p className="text-[10px] text-gray-400 ml-auto">意図を引き出したら「最強プロンプト生成」へ</p>
               </div>
-              {/* 元テキストとの比較（変更がある場合のみ） */}
-              {rawText !== proofreadText && (
-                <details className="group">
-                  <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 list-none flex items-center gap-1">
-                    <span className="group-open:hidden">▼</span>
-                    <span className="hidden group-open:inline">▲</span>
-                    元の音声テキストを確認
-                  </summary>
-                  <p className="mt-2 text-xs text-gray-400 bg-gray-50 rounded-xl p-3 leading-relaxed">
-                    {rawText}
-                  </p>
-                </details>
+
+              {/* メッセージリスト */}
+              <div className="p-4 space-y-4 min-h-[200px] max-h-[50vh] overflow-y-auto">
+
+                {/* 初期ロード中 */}
+                {isLoadingChat && chatMessages.length === 0 && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-sm">🤖</div>
+                    <div className="flex gap-1 items-center bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
+                      {[0, 1, 2].map(i => (
+                        <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                    {msg.role === 'ai' ? (
+                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-sm">🤖</div>
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-sm">🙋</div>
+                    )}
+                    <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                      msg.role === 'ai'
+                        ? 'bg-gray-100 text-gray-800 rounded-tl-sm'
+                        : 'bg-indigo-600 text-white rounded-tr-sm'
+                    }`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+
+                {/* AI思考中ローダー */}
+                {isLoadingChat && chatMessages.length > 0 && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-sm">🤖</div>
+                    <div className="flex gap-1 items-center bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
+                      {[0, 1, 2].map(i => (
+                        <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* スクロール anchor */}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* チャットエラー */}
+              {chatError && (
+                <div className="mx-4 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
+                  ⚠️ {chatError}
+                </div>
               )}
-              {/* ボタン */}
-              <div className="flex gap-2">
+
+              {/* 入力エリア */}
+              <div className="border-t border-gray-100 p-3 flex gap-2 items-end">
                 <button
-                  onClick={() => { setText(proofreadText); setProofreadText(''); setRawText(''); }}
-                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition-all"
+                  onClick={toggleChatVoice}
+                  className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                    chatVoiceActive
+                      ? 'bg-red-500 text-white animate-pulse'
+                      : 'bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600'
+                  }`}
+                  title="音声で入力"
                 >
-                  ✓ この内容で確定
+                  🎤
                 </button>
+                <textarea
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                  placeholder="AIの質問に答えてください… (Enterで送信)"
+                  rows={2}
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                />
                 <button
-                  onClick={() => { setText(rawText); setProofreadText(''); setRawText(''); }}
-                  className="px-4 py-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm transition-all"
+                  onClick={sendChatMessage}
+                  disabled={!chatInput.trim() || isLoadingChat}
+                  className="flex-shrink-0 w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 text-white flex items-center justify-center transition-all"
                 >
-                  元のまま
+                  ➤
                 </button>
               </div>
             </div>
-          </section>
-        )}
 
-        {/* ── 校正エラー通知 ── */}
-        {proofreadError && (
-          <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
-            <span className="flex-shrink-0 text-amber-500">⚠️</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-amber-700">校正をスキップしました</p>
-              <p className="text-xs text-amber-600 mt-0.5">{proofreadError}</p>
-              {proofreadError.includes('GEMINI_API_KEY') && (
-                <p className="text-xs text-amber-500 mt-1">
-                  .env.local に GEMINI_API_KEY を設定してサーバーを再起動してください。
+            {/* 最強プロンプト生成パネル */}
+            <div className={`bg-white rounded-2xl border shadow-sm p-5 transition-all ${hasUserReplied ? 'border-indigo-200' : 'border-gray-200 opacity-60'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">✨</span>
+                <p className="text-sm font-bold text-gray-800">
+                  {hasUserReplied ? '最強プロンプトを生成する' : '返答するとプロンプトを生成できます'}
+                </p>
+              </div>
+
+              {finalError && (
+                <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2 mb-3">⚠️ {finalError}</p>
+              )}
+
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { mode: 'standard' as PromptMode, icon: '📋', label: '標準', desc: '網羅・丁寧', color: 'bg-indigo-600 hover:bg-indigo-700' },
+                  { mode: 'pro' as PromptMode,      icon: '⚡', label: 'プロ',  desc: '結論優先', color: 'bg-amber-500 hover:bg-amber-600' },
+                  { mode: 'think' as PromptMode,    icon: '🧠', label: '思考',  desc: '深く多角的', color: 'bg-purple-600 hover:bg-purple-700' },
+                ].map(item => (
+                  <button
+                    key={item.mode}
+                    onClick={() => finalizeCatchball(item.mode)}
+                    disabled={!hasUserReplied || isGeneratingFinal}
+                    className={`relative flex flex-col items-center gap-1 py-3 rounded-xl text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed ${item.color}`}
+                  >
+                    {isGeneratingFinal && promptMode === item.mode && (
+                      <span className="absolute inset-0 rounded-xl bg-black/20 flex items-center justify-center text-xs">生成中…</span>
+                    )}
+                    <span className="text-xl">{item.icon}</span>
+                    <span className="text-xs font-bold">{item.label}</span>
+                    <span className="text-[9px] opacity-80">{item.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              {!hasUserReplied && (
+                <p className="text-[10px] text-gray-400 text-center mt-2">
+                  まずAIの質問に1回以上回答してください
                 </p>
               )}
             </div>
-            <button onClick={() => setProofreadError('')} className="flex-shrink-0 text-amber-400 hover:text-amber-600 text-xs">✕</button>
-          </div>
+          </section>
         )}
 
-        {/* プロンプト出力 */}
-        {cleanText && !proofreadText && (
+        {/* ════════════════════════════════════════
+            RESULT フェーズ
+        ════════════════════════════════════════ */}
+        {appPhase === 'result' && (
           <div className="space-y-4">
-
-            {/* ── モード切り替えバー ── */}
-            <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 tracking-wide">STEP 1 のモードを選択してコピー</p>
-
-              <div className="grid grid-cols-3 gap-2">
-                {/* 標準モード */}
-                <button
-                  onClick={() => {
-                    setPromptMode('standard');
-                    copyToClipboard(buildStep1(cleanText), setCopied1, cleanText);
-                  }}
-                  className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl border text-center transition-all ${
-                    promptMode === 'standard'
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200'
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-indigo-300 hover:bg-indigo-50'
-                  }`}
-                >
-                  <span className="text-lg">📋</span>
-                  <span className="text-xs font-bold leading-none">標準</span>
-                  <span className={`text-[9px] leading-tight ${promptMode === 'standard' ? 'text-indigo-100' : 'text-gray-400'}`}>
-                    網羅・大ボリューム
-                  </span>
-                  {copied1 && promptMode === 'standard' && (
-                    <span className="text-[9px] font-semibold text-green-300">✓ コピー済み</span>
+            {/* 完了バッジ */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-5 py-4 flex items-center gap-3">
+              <span className="text-2xl">✅</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    promptMode === 'pro'   ? 'bg-amber-100 text-amber-700' :
+                    promptMode === 'think' ? 'bg-purple-100 text-purple-700' :
+                                             'bg-indigo-100 text-indigo-700'
+                  }`}>{modeLabel}</span>
+                  {isCatchballResult && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                      🎯 AIキャッチボール最適化済み
+                    </span>
                   )}
-                </button>
-
-                {/* プロモード */}
-                <button
-                  onClick={() => {
-                    setPromptMode('pro');
-                    copyToClipboard(buildStep1Pro(cleanText), setCopiedPro, cleanText);
-                  }}
-                  className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl border text-center transition-all ${
-                    promptMode === 'pro'
-                      ? 'bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-200'
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-amber-300 hover:bg-amber-50'
-                  }`}
-                >
-                  <span className="text-lg">⚡</span>
-                  <span className="text-xs font-bold leading-none">プロ</span>
-                  <span className={`text-[9px] leading-tight ${promptMode === 'pro' ? 'text-amber-100' : 'text-gray-400'}`}>
-                    結論優先・実務直結
-                  </span>
-                  {copiedPro && promptMode === 'pro' && (
-                    <span className="text-[9px] font-semibold text-green-300">✓ コピー済み</span>
-                  )}
-                </button>
-
-                {/* 思考モード */}
-                <button
-                  onClick={() => {
-                    setPromptMode('think');
-                    copyToClipboard(buildStep1Think(cleanText), setCopiedThink, cleanText);
-                  }}
-                  className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl border text-center transition-all ${
-                    promptMode === 'think'
-                      ? 'bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-200'
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-purple-300 hover:bg-purple-50'
-                  }`}
-                >
-                  <span className="text-lg">🧠</span>
-                  <span className="text-xs font-bold leading-none">思考</span>
-                  <span className={`text-[9px] leading-tight ${promptMode === 'think' ? 'text-purple-100' : 'text-gray-400'}`}>
-                    論理・多角分析
-                  </span>
-                  {copiedThink && promptMode === 'think' && (
-                    <span className="text-[9px] font-semibold text-green-300">✓ コピー済み</span>
-                  )}
-                </button>
+                </div>
+                <p className="text-xs text-gray-500 line-clamp-2">{confirmedTopic}</p>
               </div>
-
-              <p className="text-[10px] text-gray-400 text-center">
-                タップで即コピー ＆ 下のSTEP 1プレビューが切り替わります
-              </p>
-            </section>
+            </div>
 
             {/* STEP 1 */}
             <section className="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden">
@@ -850,34 +1130,23 @@ export default function PromptArchitect() {
                 <div className="flex items-center gap-2">
                   <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">1</span>
                   <div>
-                    <p className="text-xs font-bold text-indigo-700">
-                      STEP 1 — Geminiに貼り付ける
-                      <span className={`ml-2 px-1.5 py-0.5 rounded-md text-[9px] font-bold ${
-                        promptMode === 'pro'   ? 'bg-amber-100 text-amber-700' :
-                        promptMode === 'think' ? 'bg-purple-100 text-purple-700' :
-                                                 'bg-indigo-100 text-indigo-600'
-                      }`}>
-                        {promptMode === 'pro' ? '⚡ プロ' : promptMode === 'think' ? '🧠 思考' : '📋 標準'}
-                      </span>
-                    </p>
+                    <p className="text-xs font-bold text-indigo-700">STEP 1 — Geminiに貼り付ける</p>
                     <p className="text-[10px] text-indigo-400">
-                      {promptMode === 'pro'   ? '結論優先・実務直結型' :
-                       promptMode === 'think' ? '論理・多角分析型' :
-                                               'ディープリサーチ・完全解説書型'}
+                      {isCatchballResult ? 'あなた専用・AIヒアリング反映済み' : 'ディープリサーチ・5大条件テンプレート'}
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => copyToClipboard(prompt1, setCopied1, cleanText)}
+                  onClick={() => copyText(finalStep1, setCopiedFinal1)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    copied1 ? 'bg-green-500 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    copiedFinal1 ? 'bg-green-500 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                   }`}
                 >
-                  {copied1 ? '✓ コピー済み' : 'コピー'}
+                  {copiedFinal1 ? '✓ コピー済み' : 'コピー'}
                 </button>
               </div>
-              <pre className="px-5 py-4 text-xs text-gray-600 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">
-                {prompt1}
+              <pre className="px-5 py-4 text-xs text-gray-600 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
+                {finalStep1}
               </pre>
             </section>
 
@@ -892,44 +1161,49 @@ export default function PromptArchitect() {
                   </div>
                 </div>
                 <button
-                  onClick={() => copyToClipboard(prompt2, setCopied2, cleanText)}
+                  onClick={() => copyText(step2, setCopiedFinal2)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                    copied2 ? 'bg-green-500 text-white' : 'bg-purple-600 hover:bg-purple-700 text-white'
+                    copiedFinal2 ? 'bg-green-500 text-white' : 'bg-purple-600 hover:bg-purple-700 text-white'
                   }`}
                 >
-                  {copied2 ? '✓ コピー済み' : 'コピー'}
+                  {copiedFinal2 ? '✓ コピー済み' : 'コピー'}
                 </button>
               </div>
-              <pre className="px-5 py-4 text-xs text-gray-600 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto">
-                {prompt2}
+              <pre className="px-5 py-4 text-xs text-gray-600 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+                {step2}
               </pre>
             </section>
 
-          </div>
-        )}
+            {/* 別モードで再生成 */}
+            {!isCatchballResult && (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+                <p className="text-xs text-gray-500 font-medium mb-3">別モードで再生成</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { mode: 'standard' as PromptMode, icon: '📋', label: '標準', color: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100' },
+                    { mode: 'pro' as PromptMode,      icon: '⚡', label: 'プロ',  color: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' },
+                    { mode: 'think' as PromptMode,    icon: '🧠', label: '思考',  color: 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100' },
+                  ].map(item => (
+                    <button key={item.mode}
+                      onClick={() => generateDirectly(item.mode)}
+                      className={`flex items-center justify-center gap-1.5 py-2 rounded-xl border text-xs font-semibold transition-all ${item.color} ${promptMode === item.mode ? 'ring-2 ring-offset-1 ring-current' : ''}`}>
+                      <span>{item.icon}</span>{item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        {/* 使い方ガイド（テキストが空のとき） */}
-        {!cleanText && (
-          <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">使い方</h2>
-            <ol className="space-y-3">
-              {[
-                { n: 1, title: '「話す」ボタンで音声入力', desc: 'Androidでも途切れず認識し続けます。途中で考えたいときは「一時停止」が使えます。' },
-                { n: 2, title: 'STEP 1をコピーしてGeminiに貼る', desc: '5つの必須条件を埋め込み済み。プロレベルのリサーチ＆解説書が自動生成されます。' },
-                { n: 3, title: 'GeminiがSTEP 1を回答したらSTEP 2を貼る', desc: 'Canva拡張機能が起動し、A4サイズの印刷用PDF資料が完成します。' },
-              ].map(item => (
-                <li key={item.n} className="flex gap-3">
-                  <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold mt-0.5">
-                    {item.n}
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{item.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </section>
+            {/* キャッチボール結果の場合のやり直しオプション */}
+            {isCatchballResult && (
+              <button
+                onClick={() => { setAppPhase('catchball'); setFinalStep1(''); setFinalError(''); }}
+                className="w-full py-3 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-all"
+              >
+                ← キャッチボールに戻って調整する
+              </button>
+            )}
+          </div>
         )}
 
       </main>
