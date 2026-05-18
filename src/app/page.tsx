@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 // ── 型定義 ──────────────────────────────────────────────────────
-type VoiceState = 'idle' | 'recording' | 'paused' | 'error';
+type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
 type PromptMode = 'standard' | 'pro' | 'think';
 
 interface HistoryEntry {
@@ -161,11 +161,17 @@ export default function PromptArchitect() {
   const [showHistory, setShowHistory] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
+  // 校正機能
+  const [rawText, setRawText] = useState('');
+  const [proofreadText, setProofreadText] = useState('');
+  const [proofreadError, setProofreadError] = useState('');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   // true = ユーザーが意図的に止めた / false = 聞き続けるべき状態（Android自動再開フラグ）
   const isUserStoppedRef = useRef(true);
+  // onresult（非同期）で更新される最新テキストを stopListening が読めるよう ref で同期する
+  const currentTextRef = useRef('');
 
   // ── 履歴: 初期ロード ────────────────────────────────────────
   useEffect(() => {
@@ -231,8 +237,11 @@ export default function PromptArchitect() {
       }
       setText(prev => {
         const base = stripInterim(prev);
-        if (final) return (base + (base ? '　' : '') + final).trimStart();
-        return interim ? base + INTERIM_MARKER + interim : base;
+        const next = final
+          ? (base + (base ? '　' : '') + final).trimStart()
+          : (interim ? base + INTERIM_MARKER + interim : base);
+        currentTextRef.current = stripInterim(next); // 最新の確定テキストを ref に同期
+        return next;
       });
     };
 
@@ -307,13 +316,41 @@ export default function PromptArchitect() {
     }
   }, []);
 
-  // 完全停止（停止ボタン）
-  const stopListening = useCallback(() => {
+  // 完全停止 → Geminiで校正
+  const stopListening = useCallback(async () => {
     isUserStoppedRef.current = true;
     recognitionRef.current?.stop();
-    setText(prev => stripInterim(prev));
-    setVoiceState('idle');
-  }, []);
+
+    const raw = currentTextRef.current || stripInterim(text);
+    setText(raw);
+
+    if (!raw.trim()) {
+      setVoiceState('idle');
+      return;
+    }
+
+    // 校正フロー開始
+    setRawText(raw);
+    setProofreadText('');
+    setProofreadError('');
+    setVoiceState('proofreading');
+
+    try {
+      const res = await fetch('/api/proofread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText: raw }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'APIエラー');
+      setProofreadText(data.proofread ?? raw);
+    } catch (e) {
+      setProofreadError(e instanceof Error ? e.message : '校正に失敗しました');
+    } finally {
+      setVoiceState('idle');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
 
   // アンマウント時クリーンアップ
   useEffect(() => {
@@ -350,7 +387,7 @@ export default function PromptArchitect() {
                              buildStep1(cleanText);
   const prompt2 = cleanText ? buildStep2() : '';
   const charCount = cleanText.length;
-  const isActive = voiceState === 'recording' || voiceState === 'paused';
+  const isActive = voiceState === 'recording' || voiceState === 'paused' || voiceState === 'proofreading';
 
   // ── レンダー ─────────────────────────────────────────────────
   return (
@@ -600,8 +637,88 @@ export default function PromptArchitect() {
           )}
         </section>
 
+        {/* ── 校正中スピナー ── */}
+        {voiceState === 'proofreading' && (
+          <section className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 flex items-center gap-4">
+            <div className="flex-shrink-0 flex gap-1">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"
+                  style={{ animationDelay: `${i * 0.15}s` }} />
+              ))}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-indigo-700">Geminiが校正・整理中...</p>
+              <p className="text-xs text-gray-400 mt-0.5">話した内容を自然な文章に変換しています</p>
+            </div>
+          </section>
+        )}
+
+        {/* ── 校正結果カード ── */}
+        {voiceState === 'idle' && proofreadText && (
+          <section className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
+              <span className="text-base">✨</span>
+              <div>
+                <p className="text-xs font-bold text-emerald-700">Geminiによる校正結果</p>
+                <p className="text-[10px] text-emerald-500">採用するとこの内容でプロンプトが生成されます</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* 校正後テキスト */}
+              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                <p className="text-sm text-gray-800 leading-relaxed">{proofreadText}</p>
+              </div>
+              {/* 元テキストとの比較（変更がある場合のみ） */}
+              {rawText !== proofreadText && (
+                <details className="group">
+                  <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 list-none flex items-center gap-1">
+                    <span className="group-open:hidden">▼</span>
+                    <span className="hidden group-open:inline">▲</span>
+                    元の音声テキストを確認
+                  </summary>
+                  <p className="mt-2 text-xs text-gray-400 bg-gray-50 rounded-xl p-3 leading-relaxed">
+                    {rawText}
+                  </p>
+                </details>
+              )}
+              {/* ボタン */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setText(proofreadText); setProofreadText(''); setRawText(''); }}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold transition-all"
+                >
+                  ✓ この内容で確定
+                </button>
+                <button
+                  onClick={() => { setText(rawText); setProofreadText(''); setRawText(''); }}
+                  className="px-4 py-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm transition-all"
+                >
+                  元のまま
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── 校正エラー通知 ── */}
+        {proofreadError && (
+          <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <span className="flex-shrink-0 text-amber-500">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-amber-700">校正をスキップしました</p>
+              <p className="text-xs text-amber-600 mt-0.5">{proofreadError}</p>
+              {proofreadError.includes('GEMINI_API_KEY') && (
+                <p className="text-xs text-amber-500 mt-1">
+                  .env.local に GEMINI_API_KEY を設定してサーバーを再起動してください。
+                </p>
+              )}
+            </div>
+            <button onClick={() => setProofreadError('')} className="flex-shrink-0 text-amber-400 hover:text-amber-600 text-xs">✕</button>
+          </div>
+        )}
+
         {/* プロンプト出力 */}
-        {cleanText && (
+        {cleanText && !proofreadText && (
           <div className="space-y-4">
 
             {/* ── モード切り替えバー ── */}
