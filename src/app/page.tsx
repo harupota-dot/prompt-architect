@@ -254,7 +254,7 @@ export default function PromptArchitect() {
       const err: string = event.error ?? 'unknown';
       lastErrorRef.current = err;
 
-      // not-allowed / service-not-allowed = マイク権限なし → ハード停止
+      // not-allowed / service-not-allowed = マイク権限なし → ハード停止（再起動しない）
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         isUserStoppedRef.current = true;
         if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
@@ -263,17 +263,9 @@ export default function PromptArchitect() {
         return;
       }
 
-      // network エラー → ハード停止
-      if (err === 'network') {
-        isUserStoppedRef.current = true;
-        if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
-        setVoiceState('error');
-        setVoiceError('ネットワークエラーで音声認識が停止しました。接続を確認してください。');
-        return;
-      }
-
-      // no-speech / aborted = Android・Chrome で頻発する無害なイベント
-      // → voiceState は変えずに onend に任せる（再起動で自然に回復）
+      // network / no-speech / aborted = 一時的な現象（本番環境で頻発）
+      // → voiceState は変えずに onend のタイマーで自動復帰させる
+      // network だけ少し長めの遅延を使うよう lastErrorRef に記録する
     };
 
     r.onend = () => {
@@ -283,9 +275,13 @@ export default function PromptArchitect() {
       // ユーザーが意図的に止めた場合は再開しない
       if (isUserStoppedRef.current) return;
 
-      // aborted の直後は少し長く待つ（ブラウザがまだビジーな可能性）
-      // それ以外は 400ms 待機（Chrome がスパム判定しない最低ライン）
-      const delay = lastErrorRef.current === 'aborted' ? 600 : 400;
+      // エラー種別に応じて再起動ディレイを決定
+      //   network  → 800ms（サーバー側の一時障害への配慮）
+      //   aborted  → 600ms（ブラウザがまだビジーな可能性）
+      //   それ以外 → 400ms（Chrome がスパム判定しない最低ライン）
+      const delay =
+        lastErrorRef.current === 'network'  ? 800 :
+        lastErrorRef.current === 'aborted'  ? 600 : 400;
       lastErrorRef.current = '';
 
       // 既存の保留タイマーを必ずキャンセルしてから新規セット（二重起動防止）
