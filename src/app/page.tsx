@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'error';
+type PromptMode = 'standard' | 'pro' | 'think';
 
 interface HistoryEntry {
   id: string;
@@ -71,6 +72,71 @@ function buildStep2(): string {
 ・完成したらPDFでエクスポートできる状態にしてください`;
 }
 
+function buildStep1Pro(topic: string): string {
+  return `以下のテーマについて、プロフェッショナルとして実務直結の解説をしてください。
+
+【テーマ】
+${topic}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ プロモード：テンポ重視・結論ファーストの方針
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【方針1：結論ファースト】
+まず「最重要ポイント」「今日から使える結論」を冒頭に示し、その後に根拠・詳細を続けてください。
+
+【方針2：実務直結・行動優先】
+理論よりも「今すぐ使える」「今すぐ行動できる」ノウハウ・手順・判断基準を優先してください。
+
+【方針3：箇条書き・番号リストで整理】
+散文より構造化。読んで5秒で要点が掴めるフォーマットにしてください。
+
+【方針4：プロの精度で正確に】
+情報は最新・正確なものを。不確かな点はその旨を明示してください。
+
+【方針5：Canva資料化を前提とした構成】
+このあとCanva拡張機能で資料化するため、見出しと箇条書きを明確に使った構成にしてください。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+簡潔・実用・テンポよく、今すぐ答えてください。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
+function buildStep1Think(topic: string): string {
+  return `以下のテーマについて、論理的に深く思考し、多角的な視点から分析・解説してください。
+
+【テーマ】
+${topic}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ 思考モード：論理・熟考・多角分析の方針
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【思考Step 1：テーマの本質を定義する】
+「このテーマの核心は何か」「なぜこれが重要なのか」「前提として何を理解すべきか」を論理的に整理してください。
+
+【思考Step 2：多角的な視点で考察する】
+賛否・メリット・デメリット・短期と長期・専門家と初心者・楽観論と悲観論など、あらゆる角度から検討してください。
+
+【思考Step 3：根拠に基づいて論を展開する】
+「なぜそう言えるのか」という根拠・データ・事例を常に示しながら、論理の飛躍なく丁寧に進めてください。
+
+【思考Step 4：矛盾・例外・落とし穴を明示する】
+一般論が当てはまらないケースや、見落とされがちな例外・リスクも積極的に示してください。
+
+【思考Step 5：結論と推奨アクションを提示する】
+深い思考の末に導いた最も合理的な結論と、具体的な次の行動を示してください。
+
+【出力条件】
+・「思い込み」や「常識」に疑問を呈することをいとわない
+・論理構造が視覚的に分かる見出し・構成で書く（Canva資料化を前提とする）
+・深く・丁寧に・誠実に、熟考して答える
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+それでは、時間をかけて深く考え、今すぐ出力してください。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+}
+
 // ── ユーティリティ ───────────────────────────────────────────────
 function stripInterim(text: string) {
   return text.replace(new RegExp(`\\s*${INTERIM_MARKER.trim()}.*$`), '').trimEnd();
@@ -86,8 +152,11 @@ export default function PromptArchitect() {
   const [text, setText] = useState('');
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState('');
+  const [promptMode, setPromptMode] = useState<PromptMode>('standard');
   const [copied1, setCopied1] = useState(false);
   const [copied2, setCopied2] = useState(false);
+  const [copiedPro, setCopiedPro] = useState(false);
+  const [copiedThink, setCopiedThink] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -274,7 +343,11 @@ export default function PromptArchitect() {
 
   // ── 派生値 ──────────────────────────────────────────────────
   const cleanText = stripInterim(text).trim();
-  const prompt1 = cleanText ? buildStep1(cleanText) : '';
+  const prompt1 =
+    !cleanText ? '' :
+    promptMode === 'pro'   ? buildStep1Pro(cleanText) :
+    promptMode === 'think' ? buildStep1Think(cleanText) :
+                             buildStep1(cleanText);
   const prompt2 = cleanText ? buildStep2() : '';
   const charCount = cleanText.length;
   const isActive = voiceState === 'recording' || voiceState === 'paused';
@@ -528,8 +601,85 @@ export default function PromptArchitect() {
         </section>
 
         {/* プロンプト出力 */}
-        {prompt1 && (
+        {cleanText && (
           <div className="space-y-4">
+
+            {/* ── モード切り替えバー ── */}
+            <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 tracking-wide">STEP 1 のモードを選択してコピー</p>
+
+              <div className="grid grid-cols-3 gap-2">
+                {/* 標準モード */}
+                <button
+                  onClick={() => {
+                    setPromptMode('standard');
+                    copyToClipboard(buildStep1(cleanText), setCopied1, cleanText);
+                  }}
+                  className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl border text-center transition-all ${
+                    promptMode === 'standard'
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-indigo-300 hover:bg-indigo-50'
+                  }`}
+                >
+                  <span className="text-lg">📋</span>
+                  <span className="text-xs font-bold leading-none">標準</span>
+                  <span className={`text-[9px] leading-tight ${promptMode === 'standard' ? 'text-indigo-100' : 'text-gray-400'}`}>
+                    網羅・大ボリューム
+                  </span>
+                  {copied1 && promptMode === 'standard' && (
+                    <span className="text-[9px] font-semibold text-green-300">✓ コピー済み</span>
+                  )}
+                </button>
+
+                {/* プロモード */}
+                <button
+                  onClick={() => {
+                    setPromptMode('pro');
+                    copyToClipboard(buildStep1Pro(cleanText), setCopiedPro, cleanText);
+                  }}
+                  className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl border text-center transition-all ${
+                    promptMode === 'pro'
+                      ? 'bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-200'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-amber-300 hover:bg-amber-50'
+                  }`}
+                >
+                  <span className="text-lg">⚡</span>
+                  <span className="text-xs font-bold leading-none">プロ</span>
+                  <span className={`text-[9px] leading-tight ${promptMode === 'pro' ? 'text-amber-100' : 'text-gray-400'}`}>
+                    結論優先・実務直結
+                  </span>
+                  {copiedPro && promptMode === 'pro' && (
+                    <span className="text-[9px] font-semibold text-green-300">✓ コピー済み</span>
+                  )}
+                </button>
+
+                {/* 思考モード */}
+                <button
+                  onClick={() => {
+                    setPromptMode('think');
+                    copyToClipboard(buildStep1Think(cleanText), setCopiedThink, cleanText);
+                  }}
+                  className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl border text-center transition-all ${
+                    promptMode === 'think'
+                      ? 'bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-200'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-purple-300 hover:bg-purple-50'
+                  }`}
+                >
+                  <span className="text-lg">🧠</span>
+                  <span className="text-xs font-bold leading-none">思考</span>
+                  <span className={`text-[9px] leading-tight ${promptMode === 'think' ? 'text-purple-100' : 'text-gray-400'}`}>
+                    論理・多角分析
+                  </span>
+                  {copiedThink && promptMode === 'think' && (
+                    <span className="text-[9px] font-semibold text-green-300">✓ コピー済み</span>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-[10px] text-gray-400 text-center">
+                タップで即コピー ＆ 下のSTEP 1プレビューが切り替わります
+              </p>
+            </section>
 
             {/* STEP 1 */}
             <section className="bg-white rounded-2xl border border-indigo-100 shadow-sm overflow-hidden">
@@ -537,8 +687,21 @@ export default function PromptArchitect() {
                 <div className="flex items-center gap-2">
                   <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">1</span>
                   <div>
-                    <p className="text-xs font-bold text-indigo-700">STEP 1 — Geminiに貼り付ける</p>
-                    <p className="text-[10px] text-indigo-400">ディープリサーチ・完全解説書の執筆依頼</p>
+                    <p className="text-xs font-bold text-indigo-700">
+                      STEP 1 — Geminiに貼り付ける
+                      <span className={`ml-2 px-1.5 py-0.5 rounded-md text-[9px] font-bold ${
+                        promptMode === 'pro'   ? 'bg-amber-100 text-amber-700' :
+                        promptMode === 'think' ? 'bg-purple-100 text-purple-700' :
+                                                 'bg-indigo-100 text-indigo-600'
+                      }`}>
+                        {promptMode === 'pro' ? '⚡ プロ' : promptMode === 'think' ? '🧠 思考' : '📋 標準'}
+                      </span>
+                    </p>
+                    <p className="text-[10px] text-indigo-400">
+                      {promptMode === 'pro'   ? '結論優先・実務直結型' :
+                       promptMode === 'think' ? '論理・多角分析型' :
+                                               'ディープリサーチ・完全解説書型'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -583,7 +746,7 @@ export default function PromptArchitect() {
         )}
 
         {/* 使い方ガイド（テキストが空のとき） */}
-        {!text && (
+        {!cleanText && (
           <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">使い方</h2>
             <ol className="space-y-3">
