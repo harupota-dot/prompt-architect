@@ -186,9 +186,11 @@ export default function PromptArchitect() {
   // ── 音声認識 Refs ─────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
-  // ユーザーが意図的に止めたか（onend でのステート変更制御のみに使用）
+  // true = ユーザーが意図的に止めた → onend で再起動しない
   const isUserStoppedRef = useRef(true);
   const currentTextRef = useRef('');
+  // 自動再起動タイマー（1つだけ管理・必ず clearTimeout してから再セット）
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // チャット用音声認識（別インスタンス）
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chatRecognitionRef = useRef<any>(null);
@@ -278,12 +280,27 @@ export default function PromptArchitect() {
     };
 
     r.onend = () => {
-      // 暫定テキストを除去
       setText(prev => stripInterim(prev));
-      // ユーザーが意図的に止めていない場合（ブラウザが予期せず終了）のみ idle に戻す
-      if (!isUserStoppedRef.current) {
-        setVoiceState('idle');
-      }
+
+      // ユーザーが意図的に止めた場合は何もしない
+      if (isUserStoppedRef.current) return;
+
+      // ブラウザが勝手に終了した（Safari・Android の無音タイムアウトなど）
+      // → 600ms 待ってから静かに再起動（ディレイでスパム判定・ポーン音ループを防止）
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = setTimeout(() => {
+        restartTimerRef.current = null;
+        if (isUserStoppedRef.current) return; // 待機中にユーザーが止めた
+        try {
+          r.start();
+        } catch (e: unknown) {
+          // InvalidStateError = すでに起動中（問題なし、録音は継続している）
+          if ((e as Error)?.name !== 'InvalidStateError') {
+            // それ以外の失敗は静かに idle へ（エラーバナーは出さない）
+            setVoiceState('idle');
+          }
+        }
+      }, 600);
     };
 
     recognitionRef.current = r;
@@ -297,6 +314,8 @@ export default function PromptArchitect() {
       setVoiceError('このブラウザは音声認識に対応していません（Chrome / Edge を推奨）。');
       return;
     }
+    // 保留中の再起動タイマーをキャンセル（二重起動防止）
+    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     setVoiceError('');
     isUserStoppedRef.current = false;
     try {
@@ -315,6 +334,7 @@ export default function PromptArchitect() {
 
   const pauseListening = useCallback(() => {
     isUserStoppedRef.current = true;
+    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     recognitionRef.current?.stop();
     setText(prev => stripInterim(prev));
     setVoiceState('paused');
@@ -343,6 +363,7 @@ export default function PromptArchitect() {
 
   const stopListening = useCallback(async () => {
     isUserStoppedRef.current = true;
+    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     recognitionRef.current?.stop();
     const raw = currentTextRef.current || stripInterim(text);
     setText(raw);
@@ -375,6 +396,7 @@ export default function PromptArchitect() {
   useEffect(() => {
     return () => {
       isUserStoppedRef.current = true;
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
       recognitionRef.current?.stop();
       chatRecognitionRef.current?.stop();
     };
