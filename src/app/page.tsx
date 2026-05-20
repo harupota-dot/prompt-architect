@@ -361,20 +361,13 @@ export default function PromptArchitect() {
     }
   }, [initRecognition]);
 
-  const stopListening = useCallback(async () => {
-    isUserStoppedRef.current = true;
-    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
-    recognitionRef.current?.stop();
-    const raw = currentTextRef.current || stripInterim(text);
-    setText(raw);
-
-    if (!raw.trim()) { setVoiceState('idle'); return; }
-
+  // ── 共通：Gemini 校正処理（音声・テキスト両ルートで呼ばれる） ──────
+  const handleProcessText = useCallback(async (raw: string) => {
+    if (!raw.trim()) return;
     setRawText(raw);
     setProofreadText('');
     setProofreadError('');
     setVoiceState('proofreading');
-
     try {
       const res = await fetch('/api/proofread', {
         method: 'POST',
@@ -389,8 +382,18 @@ export default function PromptArchitect() {
     } finally {
       setVoiceState('idle');
     }
+  }, []);
+
+  const stopListening = useCallback(async () => {
+    isUserStoppedRef.current = true;
+    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
+    recognitionRef.current?.stop();
+    const raw = currentTextRef.current || stripInterim(text);
+    setText(raw);
+    if (!raw.trim()) { setVoiceState('idle'); return; }
+    await handleProcessText(raw);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text]);
+  }, [text, handleProcessText]);
 
   // アンマウント時クリーンアップ
   useEffect(() => {
@@ -781,7 +784,13 @@ export default function PromptArchitect() {
                   <textarea
                     value={text}
                     onChange={e => setText(e.target.value)}
-                    placeholder={'例：「副業でYouTubeを始めて収益化するまでの手順」\n\n話したテキストが自動でここに入ります。手入力でも使えます。'}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey && cleanText && voiceState === 'idle') {
+                        e.preventDefault();
+                        handleProcessText(cleanText);
+                      }
+                    }}
+                    placeholder={'例：「副業でYouTubeを始めて収益化するまでの手順」\n\n話したテキストが自動でここに入ります。手入力でも使えます。\nEnterで送信 / Shift+Enterで改行'}
                     rows={5}
                     className="w-full px-4 py-3 pr-10 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
                   />
@@ -798,10 +807,10 @@ export default function PromptArchitect() {
                 {/* 手入力テキストがある場合の「次へ」ボタン */}
                 {cleanText && !proofreadText && voiceState === 'idle' && (
                   <button
-                    onClick={() => confirmTopic(cleanText)}
+                    onClick={() => handleProcessText(cleanText)}
                     className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-all"
                   >
-                    このテキストで次のステップへ →
+                    AIで編集・校正する →
                   </button>
                 )}
               </section>
@@ -818,7 +827,7 @@ export default function PromptArchitect() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-indigo-700">Geminiが校正・整理中...</p>
-                  <p className="text-xs text-gray-400 mt-0.5">話した内容を自然な文章に変換しています</p>
+                  <p className="text-xs text-gray-400 mt-0.5">入力テキストを自然な文章に整えています</p>
                 </div>
               </section>
             )}
