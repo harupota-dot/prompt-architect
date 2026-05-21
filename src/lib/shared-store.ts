@@ -226,29 +226,129 @@ export function saveSchoolSchedule(slots: SchoolSlot[]): void {
   save(SCHOOL_KEY, slots);
 }
 
-/** Free time blocks for a date, outside school hours (within 06:30–22:00). */
+/** Split a free block into hourly (or N-minute) time slots. */
+function getHourlySlots(startTime: string, endTime: string, intervalMin = 60): string[] {
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  const startMins = sh * 60 + sm;
+  const endMins   = eh * 60 + em;
+  const result: string[] = [];
+  for (let t = startMins; t + intervalMin <= endMins; t += intervalMin) {
+    result.push(
+      `${Math.floor(t / 60).toString().padStart(2, '0')}:${(t % 60).toString().padStart(2, '0')}`
+    );
+  }
+  return result;
+}
+
+/** Free time blocks for a date, outside school hours (within 07:00–22:00).
+ *  Detects lunch breaks and any other intra-day gaps between periods. */
 export function getFreeSlotsForDate(dateStr: string): { start: string; end: string; label: string }[] {
   const dow = new Date(dateStr).getDay();
   const daySlots = getSchoolSchedule().filter(s => s.day === dow);
 
   if (daySlots.length === 0) {
-    return [{ start: '07:00', end: '22:00', label: '終日フリー' }];
+    return [
+      { start: '07:00', end: '12:00', label: '午前フリー' },
+      { start: '12:00', end: '13:30', label: '昼フリー' },
+      { start: '13:30', end: '22:00', label: '午後フリー' },
+    ];
   }
 
-  const sorted  = daySlots.map(s => s.period).sort((a, b) => a - b);
-  const schoolStart = PERIOD_TIMES[sorted[0]].start;
-  const schoolEnd   = PERIOD_TIMES[sorted[sorted.length - 1]].end;
-
+  const periods = daySlots.map(s => s.period).sort((a, b) => a - b);
   const free: { start: string; end: string; label: string }[] = [];
-  if (schoolStart > '07:00') {
-    free.push({ start: '07:00', end: schoolStart, label: '登校前' });
+
+  // Before school
+  const firstStart = PERIOD_TIMES[periods[0]].start;
+  if (firstStart > '07:00') {
+    free.push({ start: '07:00', end: firstStart, label: '登校前' });
   }
-  free.push({ start: schoolEnd, end: '22:00', label: '放課後' });
+
+  // Gaps between consecutive periods (e.g. lunch break ≥ 20 min)
+  for (let i = 0; i < periods.length - 1; i++) {
+    const thisEnd   = PERIOD_TIMES[periods[i]].end;
+    const nextStart = PERIOD_TIMES[periods[i + 1]].start;
+    const [h1, m1] = thisEnd.split(':').map(Number);
+    const [h2, m2] = nextStart.split(':').map(Number);
+    if ((h2 * 60 + m2) - (h1 * 60 + m1) >= 20) {
+      free.push({ start: thisEnd, end: nextStart, label: '昼休み' });
+    }
+  }
+
+  // After school → 22:00
+  const lastEnd = PERIOD_TIMES[periods[periods.length - 1]].end;
+  free.push({ start: lastEnd, end: '22:00', label: '放課後' });
+
   return free;
+}
+
+// ── Daily Quotes ──────────────────────────────────────────────────────
+
+export interface QuoteEntry {
+  name: string;
+  quote: string;
+  role: string;
+  emoji: string;
+  /** Tailwind gradient-from color (e.g. 'from-gray-700') */
+  gradFrom: string;
+  /** Tailwind gradient-to color (e.g. 'to-gray-900') */
+  gradTo: string;
+  initial: string;
+}
+
+const CREATOR_QUOTES: QuoteEntry[] = [
+  { name: 'スティーブ・ジョブズ', quote: '自分が死ぬとわかっていると、何かを失うかもという恐れが消える。残るのは本当に大切なものだけだ。', role: 'Apple 共同創業者', emoji: '🍎', gradFrom: 'from-gray-600', gradTo: 'to-gray-900', initial: 'J' },
+  { name: '宮崎駿', quote: '生きるということは、くだらないことと、すばらしいことがごちゃ混ぜになっているんだよ。どちらかだけって世の中はないんだ。', role: 'アニメーション監督', emoji: '🌿', gradFrom: 'from-emerald-700', gradTo: 'to-emerald-950', initial: '宮' },
+  { name: 'ウォルト・ディズニー', quote: '夢を持つことと夢を信じることさえできれば、すべては実現できる。', role: 'Disney 創業者', emoji: '✨', gradFrom: 'from-blue-700', gradTo: 'to-indigo-950', initial: 'D' },
+  { name: 'イーロン・マスク', quote: '失敗は選択肢の一つだ。何も失敗しないとすれば、それは革新的なことに取り組んでいない証拠だ。', role: 'Tesla / SpaceX CEO', emoji: '🚀', gradFrom: 'from-red-700', gradTo: 'to-red-950', initial: 'M' },
+  { name: '本田宗一郎', quote: '人生に失敗が多いのは、成功するまでにあきらめるからだ。', role: 'Honda 創業者', emoji: '🏍️', gradFrom: 'from-amber-600', gradTo: 'to-amber-950', initial: '本' },
+  { name: '稲盛和夫', quote: 'たいした才能はなくとも、強い熱意をもって物事に取り組んでいる人が最後に勝つ。', role: 'Kyocera 創業者', emoji: '🔥', gradFrom: 'from-violet-700', gradTo: 'to-violet-950', initial: '稲' },
+  { name: '松下幸之助', quote: '困難に直面したときほど、人間の真価が現れる。失敗を活かさないことが恥だ。', role: 'Panasonic 創業者', emoji: '💡', gradFrom: 'from-teal-700', gradTo: 'to-teal-950', initial: '松' },
+  { name: 'ビル・ゲイツ', quote: '成功を祝うのはいいことだが、もっと大切なのは失敗から学ぶことだ。', role: 'Microsoft 共同創業者', emoji: '💻', gradFrom: 'from-blue-700', gradTo: 'to-blue-950', initial: 'G' },
+  { name: 'マーク・ザッカーバーグ', quote: '最大のリスクは、リスクを取らないことだ。', role: 'Meta CEO', emoji: '👤', gradFrom: 'from-blue-600', gradTo: 'to-indigo-900', initial: 'Z' },
+  { name: 'ジェフ・ベゾス', quote: '今日が常に史上最高の日だ。昨日ではなく、今日何をするかが重要だ。', role: 'Amazon 創業者', emoji: '📦', gradFrom: 'from-amber-500', gradTo: 'to-amber-900', initial: 'B' },
+  { name: '手塚治虫', quote: '夢をもて。夢がなければ努力する方向を見失う。', role: '漫画の神様', emoji: '✏️', gradFrom: 'from-slate-600', gradTo: 'to-slate-900', initial: '手' },
+  { name: '岡本太郎', quote: '芸術は爆発だ！自分の中に毒を持て。それが生きるということだ。', role: '芸術家・思想家', emoji: '💥', gradFrom: 'from-red-600', gradTo: 'to-red-950', initial: '岡' },
+  { name: '黒澤明', quote: '完璧主義者になれ。妥協した瞬間、作品は死ぬ。', role: '映画監督', emoji: '🎬', gradFrom: 'from-slate-700', gradTo: 'to-slate-950', initial: '黒' },
+  { name: 'パブロ・ピカソ', quote: '全ての子供は芸術家だ。問題は、大人になっても芸術家でいられるかどうかだ。', role: '芸術家', emoji: '🎨', gradFrom: 'from-purple-700', gradTo: 'to-purple-950', initial: 'P' },
+  { name: 'アルベルト・アインシュタイン', quote: '想像力は知識よりも重要だ。知識は有限だが、想像力は世界を包み込む。', role: '物理学者', emoji: '🧪', gradFrom: 'from-cyan-700', gradTo: 'to-cyan-950', initial: 'E' },
+];
+
+const ANIME_QUOTES: QuoteEntry[] = [
+  { name: 'うずまきナルト', quote: '失敗を恐れることはない。失敗しても諦めなければ負けじゃない！オレは諦めないってばよ！', role: 'NARUTO', emoji: '🍥', gradFrom: 'from-orange-500', gradTo: 'to-orange-800', initial: 'ナ' },
+  { name: 'モンキー・D・ルフィ', quote: 'おれは助けてもらわないと生きていけない自信がある！だから仲間が必要なんだ！', role: 'ONE PIECE', emoji: '🍖', gradFrom: 'from-red-500', gradTo: 'to-red-900', initial: 'ル' },
+  { name: '竈門炭治郎', quote: 'どんなに傷ついても、折れるな。心を燃やせ。諦めなければ、必ず道は開ける。', role: '鬼滅の刃', emoji: '🔥', gradFrom: 'from-rose-600', gradTo: 'to-rose-950', initial: '炭' },
+  { name: '煉獄杏寿郎', quote: '老いることも死ぬことも人間という儚い生き物の美しさだ。老いるからこそ、死ぬからこそ、堪らなく愛おしく尊いのだ！', role: '鬼滅の刃', emoji: '🌊', gradFrom: 'from-amber-500', gradTo: 'to-amber-800', initial: '煉' },
+  { name: '孫悟空', quote: 'オラ、わくわくすっぞ！強い奴と戦えるなら、死んでもいいくらいだ！', role: 'ドラゴンボール', emoji: '⚡', gradFrom: 'from-amber-500', gradTo: 'to-orange-900', initial: '悟' },
+  { name: '安西先生', quote: '諦めたら、そこで試合終了ですよ。', role: 'SLAM DUNK', emoji: '🏀', gradFrom: 'from-blue-700', gradTo: 'to-blue-950', initial: '安' },
+  { name: 'エレン・イェーガー', quote: '戦え！戦え！戦え！このクソッタレな世界に——！壁の外の自由を奪い返すために！', role: '進撃の巨人', emoji: '⚔️', gradFrom: 'from-slate-600', gradTo: 'to-slate-900', initial: 'エ' },
+  { name: 'リヴァイ・アッカーマン', quote: '選択はいつも誰にでも出来る。後悔しない選択など存在しないが、それでも選ばなければならない。', role: '進撃の巨人', emoji: '⚔️', gradFrom: 'from-gray-600', gradTo: 'to-gray-950', initial: 'リ' },
+  { name: 'オールマイト', quote: '大丈夫だ。なぜなら、私が来た！', role: '僕のヒーローアカデミア', emoji: '💪', gradFrom: 'from-yellow-500', gradTo: 'to-blue-900', initial: 'オ' },
+  { name: '緑谷出久', quote: '逃げていい。でも、逃げた先で、また夢を持て。立ち止まらない限り負けじゃない。', role: '僕のヒーローアカデミア', emoji: '🌿', gradFrom: 'from-green-600', gradTo: 'to-green-950', initial: '緑' },
+  { name: 'エドワード・エルリック', quote: '人間が一番輝くのは、限界を超えようとした瞬間だ。', role: '鋼の錬金術師', emoji: '⚗️', gradFrom: 'from-amber-600', gradTo: 'to-red-900', initial: 'エ' },
+  { name: '坂田銀時', quote: '人間が一番輝くのは諦めそうになった瞬間に諦めなかった時だ！', role: '銀魂', emoji: '🍭', gradFrom: 'from-slate-500', gradTo: 'to-slate-800', initial: '銀' },
+  { name: 'うちはイタチ', quote: '自分が何者かは自分が決めることだ。他人に決めさせるな。', role: 'NARUTO', emoji: '🌙', gradFrom: 'from-indigo-700', gradTo: 'to-indigo-950', initial: 'イ' },
+  { name: '日向翔陽', quote: '俺が飛べるって、信じてもらえますか？バレーは諦めたら終わりだ！', role: 'ハイキュー!!', emoji: '🏐', gradFrom: 'from-orange-600', gradTo: 'to-orange-900', initial: '日' },
+  { name: 'ルルーシュ・ランペルージ', quote: '世界を変えたいなら、まず自分が変わらなければならない。そして行動しろ！', role: 'コードギアス', emoji: '👁️', gradFrom: 'from-violet-700', gradTo: 'to-violet-950', initial: 'ル' },
+];
+
+function dayOfYear(): number {
+  const now   = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  return Math.floor((now.getTime() - start.getTime()) / 86_400_000);
+}
+
+export function getDailyQuotes(): { creator: QuoteEntry; anime: QuoteEntry } {
+  const day = dayOfYear();
+  return {
+    creator: CREATOR_QUOTES[day % CREATOR_QUOTES.length],
+    anime:   ANIME_QUOTES[day % ANIME_QUOTES.length],
+  };
 }
 
 /**
  * Assign unscheduled TODO tasks into free time slots over the next N days.
+ * Each free block is split into 1-hour increments so multiple tasks fit.
  * Returns the number of tasks that were scheduled.
  */
 export function autoSchedulePendingTasks(days = 7): number {
@@ -261,13 +361,18 @@ export function autoSchedulePendingTasks(days = 7): number {
   for (let d = 0; d < days && idx < pending.length; d++) {
     const dt = new Date();
     dt.setDate(dt.getDate() + d);
-    const dateStr = dt.toISOString().split('T')[0];
-    const freeSlots = getFreeSlotsForDate(dateStr);
+    const dateStr    = dt.toISOString().split('T')[0];
+    const freeSlots  = getFreeSlotsForDate(dateStr);
 
     for (const slot of freeSlots) {
+      // Break each free block into 60-min slots to fit multiple tasks
+      const times = getHourlySlots(slot.start, slot.end, 60);
+      for (const time of times) {
+        if (idx >= pending.length) break;
+        updates.set(pending[idx].id, { scheduledDate: dateStr, scheduledTime: time });
+        idx++;
+      }
       if (idx >= pending.length) break;
-      updates.set(pending[idx].id, { scheduledDate: dateStr, scheduledTime: slot.start });
-      idx++;
     }
   }
 

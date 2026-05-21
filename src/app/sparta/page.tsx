@@ -7,7 +7,7 @@ import {
   getTasks, addTask, updateTaskStatus, deleteTask,
   getTasksForDate, priorityColor, priorityLabel, today,
   getSchoolSchedule, saveSchoolSchedule, autoSchedulePendingTasks,
-  getFreeSlotsForDate,
+  getFreeSlotsForDate, getDailyQuotes,
 } from '@/lib/shared-store';
 
 // ── 定数 ─────────────────────────────────────────────────────────
@@ -142,7 +142,10 @@ export default function SpartaPage() {
   }, []);
 
   const triggerVoiceTaunt = () => {
+    const { creator, anime } = getDailyQuotes();
+    const quoteSnippet = creator.quote.slice(0, 25);
     let msg = '';
+
     if (overdueTasks.length > 0) {
       const walkingOverdue = overdueTasks.find(t => t.title.includes('ウォーキング'));
       const exerciseOverdue = overdueTasks.find(t => t.category === 'health' && !t.title.includes('ウォーキング'));
@@ -151,8 +154,8 @@ export default function SpartaPage() {
       } else if (exerciseOverdue) {
         msg = 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！';
       } else {
-        msg = `スパルタ警告！期限切れのタスクが${overdueTasks.length}件ある！` +
-              `${overdueTasks.map(t => t.title).join('、')}、今すぐやれ！言い訳は要らない！`;
+        msg = `おい！今日の${creator.name}の言葉を見たか！？「${quoteSnippet}」だ！` +
+              `${overdueTasks.length}件も期限切れにして何やってる！今すぐやれ！言い訳は要らない！`;
       }
     } else if (todoToday.length > 0) {
       const walkingTask = todoToday.find(t => t.title.includes('ウォーキング'));
@@ -162,11 +165,12 @@ export default function SpartaPage() {
       } else if (exerciseTask) {
         msg = 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！';
       } else {
-        msg = `今日のタスクは${todoToday.length}件だ！` +
-              `${todoToday[0].title}、まずそこから取りかかれ！サボったら承知しないぞ！`;
+        msg = `今日の${anime.name}も言っている。「${anime.quote.slice(0, 20)}」だ！` +
+              `今日のタスク${todoToday.length}件、${todoToday[0].title}から今すぐ取りかかれ！サボったら承知しないぞ！`;
       }
     } else {
-      msg = 'タスクなし？それならすぐ新しい目標を立てろ！立ち止まった瞬間に負けだ！';
+      msg = `タスクなし？それなら今日の${creator.name}の言葉を胸に刻め！「${quoteSnippet}」` +
+            '立ち止まった瞬間に負けだ！すぐ新しい目標を立てろ！';
     }
     speakSpartan(msg);
   };
@@ -205,18 +209,19 @@ export default function SpartaPage() {
 
         const isWalking = task.title.includes('ウォーキング');
         const isExercise = task.category === 'health' && !isWalking;
+        const { creator } = getDailyQuotes();
         const notifTitle = isWalking ? '🚶 ウォーキングの時間だ！' :
                            isExercise ? '💪 宅トレの時間だ！' : '🔥 スパルタ警告！';
         const notifBody = isWalking
           ? 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！'
           : isExercise
           ? 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開け！'
-          : `まもなく「${task.title}」の時間です！準備しろ！`;
+          : `まもなく「${task.title}」の時間！${creator.name}「${creator.quote.slice(0, 20)}」今すぐ準備しろ！`;
         const speakBody = isWalking
           ? 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！'
           : isExercise
           ? 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！'
-          : `まもなく${task.title}の時間です！準備しろ！`;
+          : `まもなく${task.title}の時間です！${creator.name}の言葉を胸に！準備しろ！`;
 
         // Service Worker 経由で通知スケジュール（バックグラウンドOK）
         if ('serviceWorker' in navigator) {

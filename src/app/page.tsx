@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { addTask, getDailyRecord, getDoneExercises, today as todayStr, getSpartanComment } from '@/lib/shared-store';
+import { DailyQuoteSection } from '@/components/DailyQuoteSection';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
@@ -1091,6 +1092,9 @@ export default function SpartaAI() {
                 </details>
               </section>
             )}
+
+            {/* ── 日替わり名言 ── */}
+            {!cleanText && !confirmedTopic && <DailyQuoteSection />}
 
             {/* ── ヘルスデータウィジェット ── */}
             {!cleanText && !confirmedTopic && (
