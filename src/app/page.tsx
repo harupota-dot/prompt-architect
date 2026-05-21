@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { addTask, getDailyRecord, getDoneExercises, today as todayStr, getSpartanComment } from '@/lib/shared-store';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
@@ -299,15 +300,22 @@ export default function SpartaAI() {
   }, [chatMessages, isLoadingChat]);
 
   // ── ヘルスデータ取得 ──────────────────────────────────────────
-  const fetchHealth = useCallback(async () => {
-    if (healthData || isLoadingHealth) return;
-    setIsLoadingHealth(true);
-    try {
-      const res = await fetch('/api/health');
-      if (res.ok) setHealthData(await res.json());
-    } catch { /* ignore */ }
-    finally { setIsLoadingHealth(false); }
-  }, [healthData, isLoadingHealth]);
+  const fetchHealth = useCallback(() => {
+    if (healthData) return;
+    const record = getDailyRecord(todayStr());
+    const done = getDoneExercises(todayStr());
+    setHealthData({
+      today: {
+        date: todayStr(),
+        steps: record.steps ?? 0,
+        activeMinutes: done.length * 15,
+        calories: record.calBurned ?? 0,
+        source: 'mock',
+      },
+      spartanComment: getSpartanComment(record.steps, done.length),
+      note: '運動アプリ（/sports）で記録したデータがリアルタイム反映されます',
+    });
+  }, [healthData]);
 
   // ── 音声認識：初期化 ──────────────────────────────────────────
   const initRecognition = useCallback(() => {
@@ -582,6 +590,23 @@ export default function SpartaAI() {
       const existing: ScheduleItem[] = JSON.parse(localStorage.getItem(SCHEDULE_KEY) ?? '[]');
       localStorage.setItem(SCHEDULE_KEY, JSON.stringify([...existing, ...scheduledItems]));
     } catch { /* ignore */ }
+    // Also write to sparta-tasks-v2 (compatible with スパルタマネージャー)
+    scheduledItems.forEach(item => {
+      addTask({
+        title: item.title,
+        description: item.description,
+        priority: 'MEDIUM',
+        status: 'TODO',
+        scheduledDate: item.startDate,
+        scheduledTime: item.time,
+        estimatedMin: item.duration,
+        recurrence: item.recurrence === 'monthly' ? 'none' : item.recurrence,
+        category: item.category,
+        source: 'ai-parsed',
+        externalId: item.id,
+        metadata: item.metadata,
+      });
+    });
     setIsScheduleConfirmed(true);
     saveToHistory(confirmedTopic);
   };
