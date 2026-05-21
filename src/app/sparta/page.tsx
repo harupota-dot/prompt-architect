@@ -144,11 +144,27 @@ export default function SpartaPage() {
   const triggerVoiceTaunt = () => {
     let msg = '';
     if (overdueTasks.length > 0) {
-      msg = `スパルタ警告！期限切れのタスクが${overdueTasks.length}件ある！` +
-            `${overdueTasks.map(t => t.title).join('、')}、今すぐやれ！言い訳は要らない！`;
+      const walkingOverdue = overdueTasks.find(t => t.title.includes('ウォーキング'));
+      const exerciseOverdue = overdueTasks.find(t => t.category === 'health' && !t.title.includes('ウォーキング'));
+      if (walkingOverdue) {
+        msg = 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！';
+      } else if (exerciseOverdue) {
+        msg = 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！';
+      } else {
+        msg = `スパルタ警告！期限切れのタスクが${overdueTasks.length}件ある！` +
+              `${overdueTasks.map(t => t.title).join('、')}、今すぐやれ！言い訳は要らない！`;
+      }
     } else if (todoToday.length > 0) {
-      msg = `今日のタスクは${todoToday.length}件だ！` +
-            `${todoToday[0].title}、まずそこから取りかかれ！サボったら承知しないぞ！`;
+      const walkingTask = todoToday.find(t => t.title.includes('ウォーキング'));
+      const exerciseTask = todoToday.find(t => t.category === 'health' && !t.title.includes('ウォーキング'));
+      if (walkingTask) {
+        msg = 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！';
+      } else if (exerciseTask) {
+        msg = 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！';
+      } else {
+        msg = `今日のタスクは${todoToday.length}件だ！` +
+              `${todoToday[0].title}、まずそこから取りかかれ！サボったら承知しないぞ！`;
+      }
     } else {
       msg = 'タスクなし？それならすぐ新しい目標を立てろ！立ち止まった瞬間に負けだ！';
     }
@@ -187,24 +203,39 @@ export default function SpartaPage() {
       if (delay > 0 && delay < 12 * 60 * 60 * 1000) {
         scheduledNotifRef.current.add(key);
 
+        const isWalking = task.title.includes('ウォーキング');
+        const isExercise = task.category === 'health' && !isWalking;
+        const notifTitle = isWalking ? '🚶 ウォーキングの時間だ！' :
+                           isExercise ? '💪 宅トレの時間だ！' : '🔥 スパルタ警告！';
+        const notifBody = isWalking
+          ? 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！'
+          : isExercise
+          ? 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開け！'
+          : `まもなく「${task.title}」の時間です！準備しろ！`;
+        const speakBody = isWalking
+          ? 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！'
+          : isExercise
+          ? 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！'
+          : `まもなく${task.title}の時間です！準備しろ！`;
+
         // Service Worker 経由で通知スケジュール（バックグラウンドOK）
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.ready.then(sw => {
             sw.active?.postMessage({
               type: 'SCHEDULE_NOTIFY',
-              title: '🔥 スパルタ警告！',
-              body: `まもなく「${task.title}」の時間です！準備しろ！`,
+              title: notifTitle,
+              body: notifBody,
               delay,
               tag: key,
             });
           });
         } else {
           setTimeout(() => {
-            new Notification('🔥 スパルタ警告！', {
-              body: `まもなく「${task.title}」の時間です！準備しろ！`,
+            new Notification(notifTitle, {
+              body: notifBody,
               icon: '/favicon.ico',
             });
-            speakSpartan(`まもなく${task.title}の時間です！準備しろ！`);
+            speakSpartan(speakBody);
           }, delay);
         }
       }
@@ -511,7 +542,13 @@ export default function SpartaPage() {
                     <div className="px-4 py-2 bg-red-50 border-t border-red-100 flex items-center justify-between">
                       <p className="text-[10px] text-red-600 font-medium">🚨 期限切れ！今すぐ取りかかれ！</p>
                       <button
-                        onClick={() => speakSpartan(`${task.title}、期限切れだ！今すぐやれ！言い訳は要らない！`)}
+                        onClick={() => speakSpartan(
+                          task.title.includes('ウォーキング')
+                            ? 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！'
+                            : task.category === 'health'
+                            ? 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！'
+                            : `${task.title}、期限切れだ！今すぐやれ！言い訳は要らない！`
+                        )}
                         className="text-[10px] px-2 py-0.5 bg-red-100 text-red-600 rounded-lg font-bold hover:bg-red-200 transition-all"
                       >
                         🔊 喝
