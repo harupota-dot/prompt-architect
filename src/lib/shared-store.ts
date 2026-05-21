@@ -195,3 +195,87 @@ export function priorityColor(p: TaskPriority): string {
 export function priorityLabel(p: TaskPriority): string {
   return p === 'CRITICAL' ? '最重要' : p === 'HIGH' ? '高' : p === 'MEDIUM' ? '中' : '低';
 }
+
+// ── School Schedule ───────────────────────────────────────────────────
+
+export interface SchoolSlot {
+  id: string;
+  day: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, ..., 6=Sat
+  period: 1 | 2 | 3 | 4 | 5 | 6;
+  subject: string;
+}
+
+export const PERIOD_TIMES: Record<number, { start: string; end: string }> = {
+  1: { start: '08:45', end: '09:35' },
+  2: { start: '09:45', end: '10:35' },
+  3: { start: '10:45', end: '11:35' },
+  4: { start: '11:45', end: '12:35' },
+  5: { start: '13:25', end: '14:15' },
+  6: { start: '14:25', end: '15:15' },
+};
+
+export const DAY_NAMES_SHORT = ['日', '月', '火', '水', '木', '金', '土'];
+
+const SCHOOL_KEY = 'sparta-school-v1';
+
+export function getSchoolSchedule(): SchoolSlot[] {
+  return load<SchoolSlot[]>(SCHOOL_KEY, []);
+}
+
+export function saveSchoolSchedule(slots: SchoolSlot[]): void {
+  save(SCHOOL_KEY, slots);
+}
+
+/** Free time blocks for a date, outside school hours (within 06:30–22:00). */
+export function getFreeSlotsForDate(dateStr: string): { start: string; end: string; label: string }[] {
+  const dow = new Date(dateStr).getDay();
+  const daySlots = getSchoolSchedule().filter(s => s.day === dow);
+
+  if (daySlots.length === 0) {
+    return [{ start: '07:00', end: '22:00', label: '終日フリー' }];
+  }
+
+  const sorted  = daySlots.map(s => s.period).sort((a, b) => a - b);
+  const schoolStart = PERIOD_TIMES[sorted[0]].start;
+  const schoolEnd   = PERIOD_TIMES[sorted[sorted.length - 1]].end;
+
+  const free: { start: string; end: string; label: string }[] = [];
+  if (schoolStart > '07:00') {
+    free.push({ start: '07:00', end: schoolStart, label: '登校前' });
+  }
+  free.push({ start: schoolEnd, end: '22:00', label: '放課後' });
+  return free;
+}
+
+/**
+ * Assign unscheduled TODO tasks into free time slots over the next N days.
+ * Returns the number of tasks that were scheduled.
+ */
+export function autoSchedulePendingTasks(days = 7): number {
+  const pending = getTasks().filter(t => t.status === 'TODO' && !t.scheduledDate);
+  if (pending.length === 0) return 0;
+
+  const updates = new Map<string, { scheduledDate: string; scheduledTime: string }>();
+  let idx = 0;
+
+  for (let d = 0; d < days && idx < pending.length; d++) {
+    const dt = new Date();
+    dt.setDate(dt.getDate() + d);
+    const dateStr = dt.toISOString().split('T')[0];
+    const freeSlots = getFreeSlotsForDate(dateStr);
+
+    for (const slot of freeSlots) {
+      if (idx >= pending.length) break;
+      updates.set(pending[idx].id, { scheduledDate: dateStr, scheduledTime: slot.start });
+      idx++;
+    }
+  }
+
+  const now = new Date().toISOString();
+  saveTasks(getTasks().map(t => {
+    const u = updates.get(t.id);
+    return u ? { ...t, ...u, updatedAt: now } : t;
+  }));
+
+  return idx;
+}

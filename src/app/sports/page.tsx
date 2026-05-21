@@ -7,7 +7,7 @@ import {
   addWeightRecord, getSpartanComment, today, addTask,
 } from '@/lib/shared-store';
 
-// ── 日替わりトレーニングメニュー ──────────────────────────────
+// ── 運動メニュー定義（YouTube検索リンク付き） ──────────────────
 interface Exercise {
   id: string;
   name: string;
@@ -16,6 +16,7 @@ interface Exercise {
   sets?: number;
   duration?: number; // minutes
   calBurned: number;
+  youtubeUrl: string;
 }
 
 interface DayMenu {
@@ -24,80 +25,81 @@ interface DayMenu {
   exercises: Exercise[];
 }
 
+const YT = (q: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+
 const WEEKLY_MENU: DayMenu[] = [
   {
     theme: '全身ストレッチ & 休息',
     emoji: '🧘',
     exercises: [
-      { id: 'sun-1', name: '全身ストレッチ',  bodyPart: '全身', duration: 15, calBurned: 40 },
-      { id: 'sun-2', name: '腹式深呼吸',       bodyPart: '体幹', duration: 10, calBurned: 20 },
-      { id: 'sun-3', name: 'ウォーキング',      bodyPart: '下半身', duration: 20, calBurned: 80 },
+      { id: 'sun-1', name: '全身ストレッチ',  bodyPart: '全身',   duration: 15, calBurned: 40,  youtubeUrl: YT('全身ストレッチ 10分 初心者 朝') },
+      { id: 'sun-2', name: '腹式深呼吸',       bodyPart: '体幹',   duration: 10, calBurned: 20,  youtubeUrl: YT('腹式呼吸 やり方 瞑想') },
+      { id: 'sun-3', name: 'ウォーキング',      bodyPart: '下半身', duration: 20, calBurned: 80,  youtubeUrl: YT('ウォーキング 正しいフォーム 痩せる') },
     ],
   },
   {
     theme: '胸 & 二頭筋トレーニング',
     emoji: '💪',
     exercises: [
-      { id: 'mon-1', name: '腕立て伏せ',       bodyPart: '胸',    reps: 15, sets: 3, calBurned: 45 },
-      { id: 'mon-2', name: 'ワイドプッシュアップ', bodyPart: '胸', reps: 12, sets: 3, calBurned: 40 },
-      { id: 'mon-3', name: 'ダンベルカール',    bodyPart: '二頭筋', reps: 12, sets: 3, calBurned: 30 },
-      { id: 'mon-4', name: 'ハンマーカール',    bodyPart: '二頭筋', reps: 10, sets: 3, calBurned: 25 },
+      { id: 'mon-1', name: '腕立て伏せ',          bodyPart: '胸',    reps: 15, sets: 3, calBurned: 45, youtubeUrl: YT('腕立て伏せ 正しいフォーム 初心者') },
+      { id: 'mon-2', name: 'ワイドプッシュアップ', bodyPart: '胸',    reps: 12, sets: 3, calBurned: 40, youtubeUrl: YT('ワイドプッシュアップ やり方 大胸筋') },
+      { id: 'mon-3', name: 'ダンベルカール',        bodyPart: '二頭筋', reps: 12, sets: 3, calBurned: 30, youtubeUrl: YT('ダンベルカール 正しいフォーム 二頭筋') },
+      { id: 'mon-4', name: 'ハンマーカール',        bodyPart: '二頭筋', reps: 10, sets: 3, calBurned: 25, youtubeUrl: YT('ハンマーカール やり方 前腕') },
     ],
   },
   {
     theme: '下半身 & 脚トレーニング',
     emoji: '🦵',
     exercises: [
-      { id: 'tue-1', name: 'スクワット',        bodyPart: '大腿', reps: 20, sets: 4, calBurned: 80 },
-      { id: 'tue-2', name: 'ランジ',            bodyPart: '大腿', reps: 15, sets: 3, calBurned: 60 },
-      { id: 'tue-3', name: 'カーフレイズ',      bodyPart: 'ふくらはぎ', reps: 25, sets: 3, calBurned: 30 },
-      { id: 'tue-4', name: 'ヒップリフト',      bodyPart: 'お尻',  reps: 20, sets: 3, calBurned: 40 },
+      { id: 'tue-1', name: 'スクワット',   bodyPart: '大腿',       reps: 20, sets: 4, calBurned: 80, youtubeUrl: YT('スクワット 正しいやり方 初心者') },
+      { id: 'tue-2', name: 'ランジ',       bodyPart: '大腿',       reps: 15, sets: 3, calBurned: 60, youtubeUrl: YT('ランジ やり方 初心者 下半身') },
+      { id: 'tue-3', name: 'カーフレイズ', bodyPart: 'ふくらはぎ', reps: 25, sets: 3, calBurned: 30, youtubeUrl: YT('カーフレイズ やり方 ふくらはぎ') },
+      { id: 'tue-4', name: 'ヒップリフト', bodyPart: 'お尻',       reps: 20, sets: 3, calBurned: 40, youtubeUrl: YT('ヒップリフト ブリッジ やり方 お尻') },
     ],
   },
   {
     theme: '体幹 & コアトレーニング',
     emoji: '🔥',
     exercises: [
-      { id: 'wed-1', name: 'プランク',          bodyPart: '体幹', duration: 1, calBurned: 15 },
-      { id: 'wed-2', name: 'クランチ',          bodyPart: '腹筋', reps: 25, sets: 3, calBurned: 35 },
-      { id: 'wed-3', name: 'レッグレイズ',      bodyPart: '腹筋', reps: 15, sets: 3, calBurned: 30 },
-      { id: 'wed-4', name: 'バードドッグ',      bodyPart: '体幹', reps: 12, sets: 3, calBurned: 25 },
+      { id: 'wed-1', name: 'プランク',         bodyPart: '体幹', duration: 1,  calBurned: 15, youtubeUrl: YT('プランク 正しいやり方 体幹 初心者') },
+      { id: 'wed-2', name: 'クランチ',         bodyPart: '腹筋', reps: 25, sets: 3, calBurned: 35, youtubeUrl: YT('クランチ 腹筋 正しいやり方') },
+      { id: 'wed-3', name: 'レッグレイズ',     bodyPart: '腹筋', reps: 15, sets: 3, calBurned: 30, youtubeUrl: YT('レッグレイズ やり方 下腹筋') },
+      { id: 'wed-4', name: 'バードドッグ',     bodyPart: '体幹', reps: 12, sets: 3, calBurned: 25, youtubeUrl: YT('バードドッグ 体幹トレーニング やり方') },
     ],
   },
   {
     theme: '背中 & 三頭筋トレーニング',
     emoji: '🏋️',
     exercises: [
-      { id: 'thu-1', name: '懸垂 or 斜め懸垂',  bodyPart: '背中', reps: 8,  sets: 3, calBurned: 60 },
-      { id: 'thu-2', name: 'バックエクステンション', bodyPart: '背中', reps: 15, sets: 3, calBurned: 30 },
-      { id: 'thu-3', name: 'トライセプスDIP',   bodyPart: '三頭筋', reps: 12, sets: 3, calBurned: 35 },
-      { id: 'thu-4', name: 'スカルクラッシャー', bodyPart: '三頭筋', reps: 10, sets: 3, calBurned: 25 },
+      { id: 'thu-1', name: '斜め懸垂',            bodyPart: '背中',   reps: 8,  sets: 3, calBurned: 60, youtubeUrl: YT('斜め懸垂 チンニング 初心者 やり方') },
+      { id: 'thu-2', name: 'バックエクステンション', bodyPart: '背中',   reps: 15, sets: 3, calBurned: 30, youtubeUrl: YT('バックエクステンション 腰 背中 やり方') },
+      { id: 'thu-3', name: 'トライセプスDIP',      bodyPart: '三頭筋', reps: 12, sets: 3, calBurned: 35, youtubeUrl: YT('ディップス 三頭筋 椅子 やり方') },
+      { id: 'thu-4', name: 'スカルクラッシャー',   bodyPart: '三頭筋', reps: 10, sets: 3, calBurned: 25, youtubeUrl: YT('スカルクラッシャー 三頭筋 やり方') },
     ],
   },
   {
     theme: '肩 & 有酸素トレーニング',
     emoji: '⚡',
     exercises: [
-      { id: 'fri-1', name: 'ショルダープレス',  bodyPart: '肩',   reps: 12, sets: 3, calBurned: 40 },
-      { id: 'fri-2', name: 'サイドレイズ',      bodyPart: '肩',   reps: 15, sets: 3, calBurned: 30 },
-      { id: 'fri-3', name: 'バーピー',          bodyPart: '全身', reps: 10, sets: 3, calBurned: 80 },
-      { id: 'fri-4', name: 'マウンテンクライマー', bodyPart: '体幹', reps: 20, sets: 3, calBurned: 60 },
+      { id: 'fri-1', name: 'ショルダープレス',    bodyPart: '肩',   reps: 12, sets: 3, calBurned: 40, youtubeUrl: YT('ショルダープレス 自重 やり方 初心者') },
+      { id: 'fri-2', name: 'サイドレイズ',        bodyPart: '肩',   reps: 15, sets: 3, calBurned: 30, youtubeUrl: YT('サイドレイズ やり方 肩 初心者') },
+      { id: 'fri-3', name: 'バーピー',            bodyPart: '全身', reps: 10, sets: 3, calBurned: 80, youtubeUrl: YT('バーピー やり方 初心者 有酸素') },
+      { id: 'fri-4', name: 'マウンテンクライマー', bodyPart: '体幹', reps: 20, sets: 3, calBurned: 60, youtubeUrl: YT('マウンテンクライマー やり方 体幹 有酸素') },
     ],
   },
   {
     theme: '有酸素 & 柔軟性',
     emoji: '🏃',
     exercises: [
-      { id: 'sat-1', name: 'ジョギング',        bodyPart: '全身', duration: 20, calBurned: 150 },
-      { id: 'sat-2', name: 'ジャンピングジャック', bodyPart: '全身', reps: 30, sets: 3, calBurned: 60 },
-      { id: 'sat-3', name: 'ヨガフロー',        bodyPart: '全身', duration: 15, calBurned: 50 },
+      { id: 'sat-1', name: 'ジョギング',          bodyPart: '全身', duration: 20, calBurned: 150, youtubeUrl: YT('ジョギング 正しいフォーム 初心者') },
+      { id: 'sat-2', name: 'ジャンピングジャック', bodyPart: '全身', reps: 30, sets: 3, calBurned: 60,  youtubeUrl: YT('ジャンピングジャック やり方 有酸素') },
+      { id: 'sat-3', name: 'ヨガフロー',          bodyPart: '全身', duration: 15, calBurned: 50,  youtubeUrl: YT('ヨガ 初心者 10分 全身 柔軟') },
     ],
   },
 ];
 
 function getMenuForDate(date: string): DayMenu {
-  const dow = new Date(date).getDay();
-  return WEEKLY_MENU[dow];
+  return WEEKLY_MENU[new Date(date).getDay()];
 }
 
 // ── メインコンポーネント ──────────────────────────────────────
@@ -109,6 +111,7 @@ export default function SportsPage() {
   const [weight, setWeight] = useState('');
   const [tab, setTab]       = useState<'today' | 'history'>('today');
   const [saved, setSaved]   = useState<'steps' | 'weight' | null>(null);
+  const [weekRegistered, setWeekRegistered] = useState(false);
 
   const menu = getMenuForDate(todayStr);
   const weekHistory = getWeightHistory().slice(0, 7);
@@ -126,10 +129,7 @@ export default function SportsPage() {
       ? (unmarkExerciseDone(todayStr, ex.id), done.filter(d => d !== ex.id))
       : (markExerciseDone(todayStr, ex.id), [...done, ex.id]);
     setDone(newDone);
-
-    // 消費カロリーを更新
-    const doneExercises = menu.exercises.filter(e => newDone.includes(e.id));
-    const totalCal = doneExercises.reduce((sum, e) => sum + e.calBurned, 0);
+    const totalCal = menu.exercises.filter(e => newDone.includes(e.id)).reduce((s, e) => s + e.calBurned, 0);
     saveDailyRecord(todayStr, { exerciseCal: totalCal });
     setRecord(getDailyRecord(todayStr));
   };
@@ -138,8 +138,7 @@ export default function SportsPage() {
   const saveSteps = () => {
     const n = Number(steps);
     if (!n || n < 0) return;
-    const calBurned = Math.round(n * 0.03);
-    saveDailyRecord(todayStr, { steps: n, calBurned });
+    saveDailyRecord(todayStr, { steps: n, calBurned: Math.round(n * 0.03) });
     setRecord(getDailyRecord(todayStr));
     setSteps('');
     setSaved('steps');
@@ -156,8 +155,6 @@ export default function SportsPage() {
     setWeight('');
     setSaved('weight');
     setTimeout(() => setSaved(null), 2000);
-
-    // スパルタタスクとしても登録（健康カテゴリ）
     addTask({
       title: `体重記録 ${w}kg`,
       priority: 'MEDIUM',
@@ -169,10 +166,35 @@ export default function SportsPage() {
     });
   };
 
-  const doneCount       = done.length;
-  const totalMenuCount  = menu.exercises.length;
-  const totalCalBurned  = (record.exerciseCal ?? 0) + (record.calBurned ?? 0);
-  const spartanComment  = getSpartanComment(record.steps, doneCount);
+  // ── 今週のメニューをスパルタカレンダーに一括登録 ─────────
+  const registerWeekToCalendar = () => {
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const m = getMenuForDate(dateStr);
+      addTask({
+        title: `${m.emoji} ${m.theme}`,
+        description: m.exercises.map(e => e.name).join('、'),
+        priority: 'HIGH',
+        scheduledDate: dateStr,
+        scheduledTime: '18:00',
+        estimatedMin: 45,
+        recurrence: 'none',
+        category: 'health',
+        source: 'exercise-app',
+        status: 'TODO',
+      });
+    }
+    setWeekRegistered(true);
+    setTimeout(() => setWeekRegistered(false), 3000);
+  };
+
+  const doneCount      = done.length;
+  const totalMenuCount = menu.exercises.length;
+  const totalCalBurned = (record.exerciseCal ?? 0) + (record.calBurned ?? 0);
+  const spartanComment = getSpartanComment(record.steps, doneCount);
 
   // ── レンダー ────────────────────────────────────────────────
   return (
@@ -180,19 +202,24 @@ export default function SportsPage() {
 
       {/* ── ヘッダー ── */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <span className="text-xl">💪</span>
-          <div className="flex-1">
-            <h1 className="text-base font-black text-gray-900">運動トラッキング</h1>
-            <p className="text-[10px] text-gray-400">
-              {menu.emoji} 今日のテーマ：{menu.theme}
-            </p>
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">💪</span>
+            <div>
+              <h1 className="text-base font-black text-gray-900">運動トラッキング</h1>
+              <p className="text-[10px] text-gray-400">{menu.emoji} 今日：{menu.theme}</p>
+            </div>
           </div>
-          {/* 完了率 */}
-          <div className="flex items-center gap-1 px-3 py-1.5 bg-orange-50 border border-orange-100 rounded-xl">
-            <span className="text-sm font-black text-orange-600">{doneCount}/{totalMenuCount}</span>
-            <span className="text-[10px] text-orange-400">完了</span>
-          </div>
+          <button
+            onClick={registerWeekToCalendar}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              weekRegistered
+                ? 'bg-green-500 text-white'
+                : 'bg-red-600 hover:bg-red-700 text-white'
+            }`}
+          >
+            {weekRegistered ? '✓ 登録完了！' : '🔥 今週をスパルタ登録'}
+          </button>
         </div>
       </div>
 
@@ -208,10 +235,10 @@ export default function SportsPage() {
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: '歩数',     value: (record.steps ?? 0).toLocaleString(), unit: '歩',  color: 'bg-blue-50 text-blue-600' },
-            { label: '消費kcal', value: totalCalBurned,                         unit: 'kcal', color: 'bg-orange-50 text-orange-600' },
-            { label: '体重',     value: record.weight ? `${record.weight}` : '—', unit: 'kg', color: 'bg-green-50 text-green-600' },
+            { label: '消費kcal', value: String(totalCalBurned),                 unit: 'kcal', color: 'bg-orange-50 text-orange-600' },
+            { label: '体重',     value: record.weight ? String(record.weight) : '—', unit: 'kg', color: 'bg-green-50 text-green-600' },
           ].map(s => (
-            <div key={s.label} className={`rounded-2xl p-3 text-center ${s.color} bg-opacity-80`}>
+            <div key={s.label} className={`rounded-2xl p-3 text-center ${s.color}`}>
               <p className="text-xl font-black">{s.value}<span className="text-xs ml-0.5">{s.unit}</span></p>
               <p className="text-[10px] text-gray-500 mt-0.5">{s.label}</p>
             </div>
@@ -220,18 +247,15 @@ export default function SportsPage() {
 
         {/* ── タブ ── */}
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-          {[
-            { key: 'today',   label: '今日のメニュー' },
-            { key: 'history', label: '体重履歴' },
-          ].map(t => (
+          {(['today', 'history'] as const).map(t => (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key as typeof tab)}
+              key={t}
+              onClick={() => setTab(t)}
               className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                tab === t.key ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                tab === t ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {t.label}
+              {t === 'today' ? '今日のメニュー' : '体重履歴'}
             </button>
           ))}
         </div>
@@ -239,13 +263,17 @@ export default function SportsPage() {
         {/* ── 今日のメニュータブ ── */}
         {tab === 'today' && (
           <>
-            {/* 日替わり運動メニュー */}
             <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 bg-gradient-to-r from-orange-50 to-red-50 border-b border-gray-100 flex items-center gap-2">
-                <span className="text-base">{menu.emoji}</span>
-                <div>
-                  <p className="text-xs font-bold text-orange-700">{menu.theme}</p>
-                  <p className="text-[10px] text-gray-400">{doneCount}/{totalMenuCount} 種目完了</p>
+              <div className="px-4 py-3 bg-gradient-to-r from-orange-50 to-red-50 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{menu.emoji}</span>
+                  <div>
+                    <p className="text-xs font-bold text-orange-700">{menu.theme}</p>
+                    <p className="text-[10px] text-gray-400">{doneCount}/{totalMenuCount} 種目完了</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 px-2.5 py-1 bg-orange-100 rounded-xl">
+                  <span className="text-sm font-black text-orange-600">{doneCount}/{totalMenuCount}</span>
                 </div>
               </div>
 
@@ -263,33 +291,41 @@ export default function SportsPage() {
                 {menu.exercises.map(ex => {
                   const isDone = done.includes(ex.id);
                   return (
-                    <li key={ex.id} className="px-4 py-3 flex items-center gap-3">
+                    <li key={ex.id} className={`px-4 py-3 flex items-center gap-3 transition-colors ${isDone ? 'bg-green-50' : ''}`}>
+                      {/* 完了チェック */}
                       <button
                         onClick={() => toggleExercise(ex)}
                         className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${
-                          isDone
-                            ? 'bg-green-500 border-green-500 text-white'
-                            : 'border-gray-300 hover:border-orange-400'
+                          isDone ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-orange-400'
                         }`}
                       >
                         {isDone ? '✓' : ''}
                       </button>
+
+                      {/* 運動情報 */}
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-semibold ${isDone ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                           {ex.name}
                         </p>
                         <p className="text-[10px] text-gray-400">
                           {ex.bodyPart}
-                          {ex.reps && ex.sets && ` · ${ex.reps}回 × ${ex.sets}セット`}
+                          {ex.reps && ex.sets && ` · ${ex.reps}回×${ex.sets}セット`}
                           {ex.duration && ` · ${ex.duration}分`}
                           {' · '}約{ex.calBurned}kcal
                         </p>
                       </div>
-                      <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                        isDone ? 'bg-green-100 text-green-600' : 'bg-orange-50 text-orange-500'
-                      }`}>
-                        {isDone ? '完了！' : `${ex.calBurned}kcal`}
-                      </span>
+
+                      {/* YouTube ボタン */}
+                      <a
+                        href={ex.youtubeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-bold transition-all border border-red-100"
+                        title={`${ex.name}のYouTube解説を見る`}
+                      >
+                        ▶ 動画
+                      </a>
                     </li>
                   );
                 })}
@@ -297,10 +333,27 @@ export default function SportsPage() {
 
               {doneCount === totalMenuCount && totalMenuCount > 0 && (
                 <div className="px-4 pb-4 pt-3 bg-green-50 border-t border-green-100 text-center">
-                  <p className="text-sm font-black text-green-600">🎉 全種目クリア！素晴らしい！その調子で続けろ！</p>
+                  <p className="text-sm font-black text-green-600">🎉 全種目クリア！その調子で毎日やりきれ！</p>
                 </div>
               )}
             </section>
+
+            {/* ── 一括YouTube ── */}
+            <div className="flex items-center gap-3 p-3 bg-red-600 rounded-2xl text-white">
+              <span className="text-lg">▶</span>
+              <div className="flex-1">
+                <p className="text-xs font-bold">今日のテーマ動画をまとめて検索</p>
+                <p className="text-[10px] text-red-200">{menu.theme}</p>
+              </div>
+              <a
+                href={YT(menu.theme + ' トレーニング やり方')}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 bg-white text-red-600 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
+              >
+                YouTube検索
+              </a>
+            </div>
 
             {/* 歩数入力 */}
             <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
@@ -336,7 +389,7 @@ export default function SportsPage() {
                 {[3000, 5000, 8000, 10000].map(n => (
                   <button
                     key={n}
-                    onClick={() => { setSteps(String(n)); }}
+                    onClick={() => setSteps(String(n))}
                     className="text-xs px-3 py-1.5 rounded-full bg-gray-100 hover:bg-orange-50 hover:text-orange-600 text-gray-500 transition-all"
                   >
                     {n.toLocaleString()}歩
@@ -403,8 +456,7 @@ export default function SportsPage() {
                             <span className={`text-[10px] font-semibold ${
                               diff < 0 ? 'text-green-500' : diff > 0 ? 'text-red-500' : 'text-gray-400'
                             }`}>
-                              {diff < 0 ? `↓ ${Math.abs(diff).toFixed(1)}` :
-                               diff > 0 ? `↑ ${diff.toFixed(1)}` : '→'}
+                              {diff < 0 ? `↓${Math.abs(diff).toFixed(1)}` : diff > 0 ? `↑${diff.toFixed(1)}` : '→'}
                             </span>
                           )}
                         </div>

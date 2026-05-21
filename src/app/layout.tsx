@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import Link from "next/link";
+import { SWRegister } from "./_sw-register";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -28,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="ja" className={`${geist.variable} h-full`}>
       <body className="min-h-full bg-gray-50 antialiased pb-16">
+        <SWRegister />
         {children}
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200">
           <div className="max-w-3xl mx-auto flex">
