@@ -58,6 +58,61 @@ function isOverdue(task: LocalTask): boolean {
   return false;
 }
 
+// ── 07:00-22:00 デイタイムライン ────────────────────────────────
+type TLBlock = {
+  start: string; end: string; label: string;
+  type: 'school' | 'task-done' | 'task-todo' | 'task-over' | 'free';
+  task?: LocalTask;
+};
+function timeToMin(t: string): number {
+  const [h, m] = t.split(':').map(Number); return h * 60 + m;
+}
+function minToTime(n: number): string {
+  return `${Math.floor(n / 60).toString().padStart(2, '0')}:${(n % 60).toString().padStart(2, '0')}`;
+}
+function durationLabel(s: string, e: string): string {
+  const d = timeToMin(e) - timeToMin(s);
+  if (d <= 0) return '';
+  return d >= 60
+    ? `${Math.floor(d / 60)}時間${d % 60 > 0 ? `${d % 60}分` : ''}`
+    : `${d}分`;
+}
+function buildDayTimeline(tasks: LocalTask[], dateStr: string): TLBlock[] {
+  const START = 7 * 60, END = 22 * 60;
+  const dow = new Date(dateStr).getDay();
+  type Ev = { startMin: number; endMin: number; label: string; type: TLBlock['type']; task?: LocalTask };
+  const events: Ev[] = [];
+  // 学校の時限
+  getSchoolSchedule()
+    .filter(s => s.day === dow)
+    .forEach(s => {
+      const { start, end } = PERIOD_TIMES[s.period];
+      events.push({ startMin: timeToMin(start), endMin: timeToMin(end), label: `${s.period}限 ${s.subject || '—'}`, type: 'school' });
+    });
+  // 当日タスク
+  tasks.forEach(t => {
+    if (!t.scheduledTime) return;
+    const sm = timeToMin(t.scheduledTime);
+    if (sm < START || sm >= END) return;
+    const em = Math.min(sm + (t.estimatedMin ?? 60), END);
+    const type: TLBlock['type'] = t.status === 'COMPLETED' ? 'task-done' : isOverdue(t) ? 'task-over' : 'task-todo';
+    events.push({ startMin: sm, endMin: em, label: t.title, type, task: t });
+  });
+  events.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  const blocks: TLBlock[] = [];
+  let cursor = START;
+  for (const ev of events) {
+    const es = Math.max(ev.startMin, cursor);
+    const ee = Math.min(ev.endMin, END);
+    if (es >= ee || es >= END) continue;
+    if (cursor < es) blocks.push({ start: minToTime(cursor), end: minToTime(es), label: '空き時間', type: 'free' });
+    blocks.push({ start: minToTime(es), end: minToTime(ee), label: ev.label, type: ev.type, task: ev.task });
+    cursor = ee;
+  }
+  if (cursor < END) blocks.push({ start: minToTime(cursor), end: '22:00', label: '空き時間', type: 'free' });
+  return blocks;
+}
+
 // ── 学校グリッド型 ───────────────────────────────────────────────
 type SchoolGrid = string[][]; // [dayIdx 0-5: Mon-Sat][periodIdx 0-5: period 1-6]
 
@@ -121,6 +176,7 @@ export default function SpartaPage() {
   const doneTasks    = tasks.filter(t => t.status === 'COMPLETED');
   const overdueTasks = todayTasks.filter(isOverdue);
   const todoToday    = todayTasks.filter(t => t.status !== 'COMPLETED');
+  const dayTimeline  = buildDayTimeline(todayTasks, todayStr);
 
   const displayTasks =
     tab === 'today' ? todayTasks :
@@ -204,7 +260,8 @@ export default function SpartaPage() {
       taskTime.setHours(h, m - 5, 0, 0); // 5分前通知
       const delay = taskTime.getTime() - now.getTime();
 
-      if (delay > 0 && delay < 12 * 60 * 60 * 1000) {
+      // 16h window: covers 06:00→22:00 — ensures evening tasks get registered from morning
+      if (delay > 0 && delay < 16 * 60 * 60 * 1000) {
         scheduledNotifRef.current.add(key);
 
         const isWalking = task.title.includes('ウォーキング');
@@ -459,6 +516,88 @@ export default function SpartaPage() {
             </button>
           ))}
         </div>
+
+        {/* ── 本日のタイムライン 07:00-22:00 ── */}
+        {tab === 'today' && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 bg-gradient-to-r from-slate-700 to-slate-900 flex items-center gap-2">
+              <span className="text-sm">📅</span>
+              <p className="text-xs font-black text-white">本日のタイムライン</p>
+              <span className="ml-auto text-[10px] font-mono text-slate-300">07:00 → 22:00</span>
+            </div>
+            <div className="divide-y divide-gray-50 max-h-[28rem] overflow-y-auto overscroll-contain">
+              {dayTimeline.map((block, i) => {
+                const now     = new Date();
+                const nowMin  = now.getHours() * 60 + now.getMinutes();
+                const bStart  = timeToMin(block.start);
+                const bEnd    = timeToMin(block.end);
+                const isNow   = nowMin >= bStart && nowMin < bEnd;
+                const isPast  = bEnd <= nowMin;
+                return (
+                  <div key={i} className={`flex items-stretch ${isNow ? 'ring-1 ring-inset ring-yellow-400' : ''}`}>
+                    {/* 時刻列 */}
+                    <div className="w-[3.25rem] flex-shrink-0 flex flex-col items-end justify-center px-2 py-2 bg-gray-50 border-r border-gray-100">
+                      <span className="text-[9px] font-mono font-bold text-gray-600 leading-none">{block.start}</span>
+                      <span className="text-[8px] font-mono text-gray-300 leading-none mt-0.5">↓{block.end}</span>
+                    </div>
+                    {/* カラーバー */}
+                    <div className={`w-[3px] flex-shrink-0 ${
+                      block.type === 'school'    ? 'bg-red-500' :
+                      block.type === 'task-todo' ? 'bg-blue-500' :
+                      block.type === 'task-done' ? 'bg-green-500' :
+                      block.type === 'task-over' ? 'bg-orange-500' :
+                      isNow ? 'bg-yellow-400' : 'bg-gray-100'
+                    }`} />
+                    {/* コンテンツ */}
+                    <div className={`flex-1 flex items-center gap-2 px-3 py-2 min-w-0 ${
+                      isPast && block.type !== 'free' ? 'opacity-50' : ''
+                    } ${
+                      block.type === 'school'    ? 'bg-red-50' :
+                      block.type === 'task-todo' ? 'bg-blue-50' :
+                      block.type === 'task-done' ? 'bg-green-50' :
+                      block.type === 'task-over' ? 'bg-orange-50' :
+                      isNow ? 'bg-yellow-50' : 'bg-white'
+                    }`}>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs leading-tight font-medium truncate ${block.type === 'free' ? 'text-gray-400' : 'text-gray-800'}`}>
+                          {block.label}
+                        </p>
+                        <p className="text-[9px] text-gray-400 leading-none mt-0.5">{durationLabel(block.start, block.end)}</p>
+                      </div>
+                      {isNow && (
+                        <span className="flex-shrink-0 text-[9px] text-yellow-700 bg-yellow-200 px-1.5 py-0.5 rounded-full font-black animate-pulse">NOW</span>
+                      )}
+                      {block.type === 'free' && !isNow && (
+                        <span className="flex-shrink-0 text-[9px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full">空き</span>
+                      )}
+                      {block.type === 'task-over' && (
+                        <span className="flex-shrink-0 text-[9px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded-full font-bold">遅延!</span>
+                      )}
+                      {block.type === 'school' && (
+                        <span className="flex-shrink-0 text-[9px] text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">授業</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* 凡例 */}
+            <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex items-center gap-3 flex-wrap">
+              {[
+                { color: 'bg-red-500',    label: '授業' },
+                { color: 'bg-blue-500',   label: 'タスク' },
+                { color: 'bg-orange-500', label: '遅延' },
+                { color: 'bg-green-500',  label: '完了' },
+                { color: 'bg-gray-200',   label: '空き' },
+              ].map(({ color, label }) => (
+                <span key={label} className="flex items-center gap-1">
+                  <span className={`w-2 h-2 rounded-full ${color}`} />
+                  <span className="text-[9px] text-gray-500">{label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── タスクリスト ── */}
         {tab !== 'school' && (
