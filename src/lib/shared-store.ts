@@ -201,17 +201,27 @@ export function priorityLabel(p: TaskPriority): string {
 export interface SchoolSlot {
   id: string;
   day: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, ..., 6=Sat
-  period: 1 | 2 | 3 | 4 | 5 | 6;
+  /** 1–6: 授業時限  7–13: 放課後・夜間スロット（〜22:00） */
+  period: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
   subject: string;
 }
 
 export const PERIOD_TIMES: Record<number, { start: string; end: string }> = {
-  1: { start: '08:45', end: '09:35' },
-  2: { start: '09:45', end: '10:35' },
-  3: { start: '10:45', end: '11:35' },
-  4: { start: '11:45', end: '12:35' },
-  5: { start: '13:25', end: '14:15' },
-  6: { start: '14:25', end: '15:15' },
+  // ── 授業時間 ──
+  1:  { start: '08:45', end: '09:35' },
+  2:  { start: '09:45', end: '10:35' },
+  3:  { start: '10:45', end: '11:35' },
+  4:  { start: '11:45', end: '12:35' },
+  5:  { start: '13:25', end: '14:15' },
+  6:  { start: '14:25', end: '15:15' },
+  // ── 放課後・夜間（22:00まで） ──
+  7:  { start: '15:30', end: '16:30' },
+  8:  { start: '16:30', end: '17:30' },
+  9:  { start: '17:30', end: '18:30' },
+  10: { start: '18:30', end: '19:30' },
+  11: { start: '19:30', end: '20:30' },
+  12: { start: '20:30', end: '21:30' },
+  13: { start: '21:30', end: '22:00' },
 };
 
 export const DAY_NAMES_SHORT = ['日', '月', '火', '水', '木', '金', '土'];

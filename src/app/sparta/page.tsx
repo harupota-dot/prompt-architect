@@ -24,7 +24,12 @@ const WEEK_DAYS: { idx: 1|2|3|4|5|6; label: string }[] = [
   { idx: 1, label: '月' }, { idx: 2, label: '火' }, { idx: 3, label: '水' },
   { idx: 4, label: '木' }, { idx: 5, label: '金' }, { idx: 6, label: '土' },
 ];
-const PERIODS = [1, 2, 3, 4, 5, 6] as const;
+/** 授業1〜6限 + 放課後・夜間7〜13スロット（15:30〜22:00） */
+const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as const;
+const PERIOD_LABELS: Record<number, string> = {
+  1: '1限', 2: '2限', 3: '3限', 4: '4限', 5: '5限', 6: '6限',
+  7: '放1', 8: '放2', 9: '夜1', 10: '夜2', 11: '夜3', 12: '夜4', 13: '夜5',
+};
 
 // ── 型 ───────────────────────────────────────────────────────────
 interface AddTaskForm {
@@ -114,10 +119,10 @@ function buildDayTimeline(tasks: LocalTask[], dateStr: string): TLBlock[] {
 }
 
 // ── 学校グリッド型 ───────────────────────────────────────────────
-type SchoolGrid = string[][]; // [dayIdx 0-5: Mon-Sat][periodIdx 0-5: period 1-6]
+type SchoolGrid = string[][]; // [dayIdx 0-5: Mon-Sat][periodIdx 0-12: period 1-13]
 
 function slotsToGrid(slots: SchoolSlot[]): SchoolGrid {
-  const grid: SchoolGrid = Array(6).fill(null).map(() => Array(6).fill(''));
+  const grid: SchoolGrid = Array(6).fill(null).map(() => Array(13).fill(''));
   slots.forEach(s => { grid[s.day - 1][s.period - 1] = s.subject; });
   return grid;
 }
@@ -724,7 +729,7 @@ export default function SpartaPage() {
                 </button>
               </div>
 
-              {/* 時間割グリッド */}
+              {/* 時間割グリッド (07:00-22:00) */}
               <div className="p-3 overflow-x-auto">
                 <table className="w-full text-center border-collapse">
                   <thead>
@@ -736,36 +741,58 @@ export default function SpartaPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {PERIODS.map(period => (
-                      <tr key={period}>
-                        <td className="py-1 pr-1">
-                          <div className="text-[9px] text-gray-400 font-semibold leading-tight">
-                            <div>{period}限</div>
-                            <div className="text-gray-300">{PERIOD_TIMES[period].start}</div>
-                          </div>
-                        </td>
-                        {WEEK_DAYS.map(d => (
-                          <td key={d.idx} className="p-0.5">
-                            <input
-                              type="text"
-                              value={schoolGrid[d.idx - 1][period - 1]}
-                              onChange={e => {
-                                const next = schoolGrid.map(row => [...row]);
-                                next[d.idx - 1][period - 1] = e.target.value;
-                                setSchoolGrid(next);
-                              }}
-                              placeholder="　"
-                              maxLength={6}
-                              className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[10px] text-center text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-transparent bg-white placeholder-gray-200"
-                            />
+                    {PERIODS.map(period => {
+                      const isEvening = period >= 7;
+                      return (
+                        <tr key={period} className={period === 7 ? 'border-t-2 border-indigo-200' : ''}>
+                          <td className="py-0.5 pr-1">
+                            <div className="leading-tight text-center">
+                              <div className={`text-[9px] font-bold ${isEvening ? 'text-indigo-500' : 'text-gray-500'}`}>
+                                {PERIOD_LABELS[period]}
+                              </div>
+                              <div className={`text-[8px] ${isEvening ? 'text-indigo-300' : 'text-gray-300'}`}>
+                                {PERIOD_TIMES[period].start}
+                              </div>
+                            </div>
                           </td>
-                        ))}
-                      </tr>
-                    ))}
+                          {WEEK_DAYS.map(d => (
+                            <td key={d.idx} className="p-0.5">
+                              <input
+                                type="text"
+                                value={schoolGrid[d.idx - 1][period - 1]}
+                                onChange={e => {
+                                  const next = schoolGrid.map(row => [...row]);
+                                  next[d.idx - 1][period - 1] = e.target.value;
+                                  setSchoolGrid(next);
+                                }}
+                                placeholder="…"
+                                maxLength={6}
+                                className={`w-full px-1 py-1.5 border rounded-lg text-[10px] text-center focus:outline-none focus:ring-1 focus:border-transparent ${
+                                  isEvening
+                                    ? 'border-indigo-100 bg-indigo-50/40 text-indigo-800 placeholder-indigo-200 focus:ring-indigo-400'
+                                    : 'border-gray-200 bg-white text-gray-800 placeholder-gray-200 focus:ring-indigo-400'
+                                }`}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
+              {/* 凡例 */}
+              <div className="px-4 pb-3 flex items-center gap-4 text-[9px] text-gray-400">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-sm bg-white border border-gray-300" />
+                  1〜6限: 授業
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-sm bg-indigo-100 border border-indigo-300" />
+                  放1〜夜5: 放課後・夜間（〜22:00）
+                </span>
+              </div>
               <div className="px-4 pb-3 text-[9px] text-gray-400 text-center">
                 ヒント：数学→「数」、英語→「英」のように略称で入力するとスッキリします
               </div>
