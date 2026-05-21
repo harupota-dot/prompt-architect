@@ -5,14 +5,42 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
 type PromptMode = 'standard' | 'pro' | 'think';
-type AppPhase = 'input' | 'catchball' | 'result';
+type AppPhase = 'input' | 'catchball' | 'result' | 'scheduling';
+
 interface ChatMsg { role: 'user' | 'ai'; text: string }
 interface HistoryEntry { id: string; topic: string; createdAt: number }
 
+// Open schema — extensible for external-app sync (externalId / metadata).
+interface ScheduleItem {
+  id: string;
+  title: string;
+  description?: string;
+  startDate: string;
+  endDate?: string;
+  time?: string;
+  duration?: number;
+  recurrence: 'none' | 'daily' | 'weekly' | 'monthly';
+  recurrenceDays?: number[];
+  category: 'study' | 'work' | 'health' | 'other';
+  source: 'manual' | 'ai-parsed' | 'external-app';
+  externalId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface HealthSnapshot {
+  date: string;
+  steps: number;
+  activeMinutes: number;
+  calories: number;
+  source: 'google-health' | 'mock';
+}
+
 // ── 定数 ────────────────────────────────────────────────────────
-const HISTORY_KEY = 'prompt-architect-history';
-const MAX_HISTORY = 30;
+const HISTORY_KEY  = 'prompt-architect-history';
+const SCHEDULE_KEY = 'sparta-ai-schedules';
+const MAX_HISTORY  = 30;
 const INTERIM_MARKER = '　【認識中…】';
+const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
 // ── プロンプトテンプレート ────────────────────────────────────────
 function buildStep1(topic: string): string {
@@ -144,10 +172,32 @@ function formatDate(ts: number) {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-// ── メインコンポーネント ──────────────────────────────────────
-export default function PromptArchitect() {
+function recurrenceLabel(item: ScheduleItem): string {
+  if (item.recurrence === 'none') return '一回のみ';
+  if (item.recurrence === 'daily') return '毎日';
+  if (item.recurrence === 'monthly') return '毎月';
+  if (item.recurrence === 'weekly') {
+    const days = (item.recurrenceDays ?? []).map(d => DAY_NAMES[d]).join('・');
+    return days ? `毎週（${days}）` : '毎週';
+  }
+  return item.recurrence;
+}
 
-  // ── テキスト入力 state ────────────────────────────────────
+function categoryColor(cat: ScheduleItem['category']) {
+  return cat === 'study'  ? 'bg-blue-100 text-blue-700'   :
+         cat === 'work'   ? 'bg-purple-100 text-purple-700' :
+         cat === 'health' ? 'bg-green-100 text-green-700'  :
+                            'bg-gray-100 text-gray-600';
+}
+
+function categoryLabel(cat: ScheduleItem['category']) {
+  return cat === 'study' ? '学習' : cat === 'work' ? '仕事' : cat === 'health' ? '健康' : 'その他';
+}
+
+// ── メインコンポーネント ──────────────────────────────────────
+export default function SpartaAI() {
+
+  // ── テキスト・音声 state ─────────────────────────────────────
   const [text, setText] = useState('');
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState('');
@@ -155,11 +205,11 @@ export default function PromptArchitect() {
   const [proofreadText, setProofreadText] = useState('');
   const [proofreadError, setProofreadError] = useState('');
 
-  // ── アプリフェーズ ────────────────────────────────────────
+  // ── アプリフェーズ ────────────────────────────────────────────
   const [appPhase, setAppPhase] = useState<AppPhase>('input');
   const [confirmedTopic, setConfirmedTopic] = useState('');
 
-  // ── キャッチボール ────────────────────────────────────────
+  // ── キャッチボール ────────────────────────────────────────────
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isLoadingChat, setIsLoadingChat] = useState(false);
@@ -168,7 +218,7 @@ export default function PromptArchitect() {
   const [chatVoiceActive, setChatVoiceActive] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // ── 結果 ─────────────────────────────────────────────────
+  // ── 結果 ───────────────────────────────────────────────────────
   const [promptMode, setPromptMode] = useState<PromptMode>('standard');
   const [finalStep1, setFinalStep1] = useState('');
   const [isGeneratingFinal, setIsGeneratingFinal] = useState(false);
@@ -177,25 +227,37 @@ export default function PromptArchitect() {
   const [copiedFinal2, setCopiedFinal2] = useState(false);
   const [isCatchballResult, setIsCatchballResult] = useState(false);
 
-  // ── 履歴 ─────────────────────────────────────────────────
+  // ── スケジュール ──────────────────────────────────────────────
+  const [scheduledItems, setScheduledItems] = useState<ScheduleItem[]>([]);
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [spartanMessage, setSpartanMessage] = useState('');
+  const [scheduleSummary, setScheduleSummary] = useState('');
+  const [isScheduleConfirmed, setIsScheduleConfirmed] = useState(false);
+
+  // ── ヘルスデータ ──────────────────────────────────────────────
+  const [healthData, setHealthData] = useState<{ today: HealthSnapshot; spartanComment: string; note: string } | null>(null);
+  const [showHealth, setShowHealth] = useState(false);
+  const [isLoadingHealth, setIsLoadingHealth] = useState(false);
+
+  // ── 履歴 ──────────────────────────────────────────────────────
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
 
-  // ── 音声認識 Refs ─────────────────────────────────────────
+  // ── 音声認識 Refs ─────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
-  // true = ユーザーが意図的に止めた → onend で再起動しない
-  const isUserStoppedRef = useRef(true);
-  const currentTextRef = useRef('');
-  // 自動再起動タイマー（1つだけ管理・必ず clearTimeout してから再セット）
-  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // チャット用音声認識（別インスタンス）
+  const isUserStoppedRef   = useRef(true);
+  const currentTextRef     = useRef('');
+  // Accumulated isFinal text across recognition sessions — prevents duplicate on restart.
+  const confirmedFinalRef  = useRef('');
+  const restartTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chatRecognitionRef = useRef<any>(null);
 
-  // ── 履歴ロード ────────────────────────────────────────────
+  // ── 履歴ロード ────────────────────────────────────────────────
   useEffect(() => {
     try {
       const saved = localStorage.getItem(HISTORY_KEY);
@@ -231,12 +293,23 @@ export default function PromptArchitect() {
     setExpandedId(null);
   };
 
-  // ── チャットスクロール ─────────────────────────────────────
+  // ── チャットスクロール ────────────────────────────────────────
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isLoadingChat]);
 
-  // ── 音声認識：初期化（① 修正: continuous=true のみ、自動再起動ループなし） ──
+  // ── ヘルスデータ取得 ──────────────────────────────────────────
+  const fetchHealth = useCallback(async () => {
+    if (healthData || isLoadingHealth) return;
+    setIsLoadingHealth(true);
+    try {
+      const res = await fetch('/api/health');
+      if (res.ok) setHealthData(await res.json());
+    } catch { /* ignore */ }
+    finally { setIsLoadingHealth(false); }
+  }, [healthData, isLoadingHealth]);
+
+  // ── 音声認識：初期化 ──────────────────────────────────────────
   const initRecognition = useCallback(() => {
     if (recognitionRef.current) return recognitionRef.current;
     if (typeof window === 'undefined') return null;
@@ -246,32 +319,40 @@ export default function PromptArchitect() {
 
     const r = new SR();
     r.lang = 'ja-JP';
-    r.continuous = true;      // ブラウザに連続認識を一任
-    r.interimResults = true;  // リアルタイム表示
+    r.continuous     = true;
+    r.interimResults = true;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onresult = (event: any) => {
-      let interim = '';
-      let final = '';
+      // Skip processing once the user has intentionally stopped — prevents
+      // the final event that fires just before onend from duplicating text.
+      if (isUserStoppedRef.current) return;
+
+      let newFinal = '';
+      let interim  = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) final += t;
+        if (event.results[i].isFinal) newFinal += t;
         else interim += t;
       }
-      setText(prev => {
-        const base = stripInterim(prev);
-        const next = final
-          ? (base + (base ? '　' : '') + final).trimStart()
-          : (interim ? base + INTERIM_MARKER + interim : base);
-        currentTextRef.current = stripInterim(next);
-        return next;
-      });
+
+      // Append only newly confirmed (isFinal) text to the accumulator.
+      // This ref persists across session restarts so the same text is never added twice.
+      if (newFinal) {
+        confirmedFinalRef.current = confirmedFinalRef.current
+          ? confirmedFinalRef.current + '　' + newFinal
+          : newFinal;
+      }
+
+      const base    = confirmedFinalRef.current;
+      const display = interim ? base + INTERIM_MARKER + interim : base;
+      setText(display);
+      currentTextRef.current = base;
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onerror = (event: any) => {
       const err: string = event.error ?? 'unknown';
-      // マイク権限エラーのみハード停止、他は continuous=true で自動回復
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         isUserStoppedRef.current = true;
         setVoiceState('error');
@@ -281,24 +362,16 @@ export default function PromptArchitect() {
 
     r.onend = () => {
       setText(prev => stripInterim(prev));
-
-      // ユーザーが意図的に止めた場合は何もしない
       if (isUserStoppedRef.current) return;
-
-      // ブラウザが勝手に終了した（Safari・Android の無音タイムアウトなど）
-      // → 600ms 待ってから静かに再起動（ディレイでスパム判定・ポーン音ループを防止）
+      // Browser auto-stopped (Safari / Android timeout) — restart quietly after 600ms.
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
       restartTimerRef.current = setTimeout(() => {
         restartTimerRef.current = null;
-        if (isUserStoppedRef.current) return; // 待機中にユーザーが止めた
+        if (isUserStoppedRef.current) return;
         try {
           r.start();
         } catch (e: unknown) {
-          // InvalidStateError = すでに起動中（問題なし、録音は継続している）
-          if ((e as Error)?.name !== 'InvalidStateError') {
-            // それ以外の失敗は静かに idle へ（エラーバナーは出さない）
-            setVoiceState('idle');
-          }
+          if ((e as Error)?.name !== 'InvalidStateError') setVoiceState('idle');
         }
       }, 600);
     };
@@ -314,7 +387,10 @@ export default function PromptArchitect() {
       setVoiceError('このブラウザは音声認識に対応していません（Chrome / Edge を推奨）。');
       return;
     }
-    // 保留中の再起動タイマーをキャンセル（二重起動防止）
+    // Fresh recording session — reset accumulated text and UI.
+    confirmedFinalRef.current = '';
+    currentTextRef.current    = '';
+    setText('');
     if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     setVoiceError('');
     isUserStoppedRef.current = false;
@@ -323,7 +399,7 @@ export default function PromptArchitect() {
       setVoiceState('recording');
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'InvalidStateError') {
-        setVoiceState('recording'); // すでに起動中
+        setVoiceState('recording');
       } else {
         setVoiceState('error');
         setVoiceError('マイクの起動に失敗しました。ページを再読み込みして試してください。');
@@ -336,18 +412,24 @@ export default function PromptArchitect() {
     isUserStoppedRef.current = true;
     if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     recognitionRef.current?.stop();
-    setText(prev => stripInterim(prev));
+    setText(prev => {
+      const clean = stripInterim(prev);
+      // Sync the accumulator so manual edits made while paused are picked up on resume.
+      confirmedFinalRef.current = clean;
+      return clean;
+    });
     setVoiceState('paused');
   }, []);
 
   const resumeListening = useCallback(() => {
+    // Sync accumulator from current text in case user edited it while paused.
+    confirmedFinalRef.current = stripInterim(text);
     setVoiceError('');
     isUserStoppedRef.current = false;
     try {
       recognitionRef.current?.start();
       setVoiceState('recording');
     } catch {
-      // 同一インスタンスで再起動できない場合は新規作成
       recognitionRef.current = null;
       const r = initRecognition();
       if (r) {
@@ -359,9 +441,9 @@ export default function PromptArchitect() {
         }
       }
     }
-  }, [initRecognition]);
+  }, [initRecognition, text]);
 
-  // ── 共通：Gemini 校正処理（音声・テキスト両ルートで呼ばれる） ──────
+  // ── 共通：AI校正処理（音声・テキスト両ルートで呼ばれる） ────────
   const handleProcessText = useCallback(async (raw: string) => {
     if (!raw.trim()) return;
     setRawText(raw);
@@ -388,7 +470,8 @@ export default function PromptArchitect() {
     isUserStoppedRef.current = true;
     if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
     recognitionRef.current?.stop();
-    const raw = currentTextRef.current || stripInterim(text);
+    const raw = confirmedFinalRef.current || currentTextRef.current || stripInterim(text);
+    confirmedFinalRef.current = ''; // reset after use
     setText(raw);
     if (!raw.trim()) { setVoiceState('idle'); return; }
     await handleProcessText(raw);
@@ -405,7 +488,7 @@ export default function PromptArchitect() {
     };
   }, []);
 
-  // ── テキスト確定 ─────────────────────────────────────────
+  // ── テキスト確定 ──────────────────────────────────────────────
   const confirmTopic = (topic: string) => {
     const t = topic.trim();
     setConfirmedTopic(t);
@@ -415,7 +498,7 @@ export default function PromptArchitect() {
     setProofreadError('');
   };
 
-  // ── 全リセット ────────────────────────────────────────────
+  // ── 全リセット ────────────────────────────────────────────────
   const resetAll = () => {
     setText('');
     setConfirmedTopic('');
@@ -432,10 +515,17 @@ export default function PromptArchitect() {
     setVoiceError('');
     setIsCatchballResult(false);
     setIsGeneratingFinal(false);
-    currentTextRef.current = '';
+    setScheduledItems([]);
+    setIsScheduling(false);
+    setScheduleError('');
+    setSpartanMessage('');
+    setScheduleSummary('');
+    setIsScheduleConfirmed(false);
+    confirmedFinalRef.current = '';
+    currentTextRef.current    = '';
   };
 
-  // ── ② キャッチボール開始 ─────────────────────────────────
+  // ── キャッチボール開始 ────────────────────────────────────────
   const startCatchball = async () => {
     setAppPhase('catchball');
     setChatMessages([]);
@@ -454,24 +544,58 @@ export default function PromptArchitect() {
       setAiTurnCount(1);
     } catch (e) {
       setChatError(e instanceof Error ? e.message : 'エラーが発生しました');
-      setAppPhase('input'); // 失敗時は入力画面に戻る
+      setAppPhase('input');
     } finally {
       setIsLoadingChat(false);
     }
   };
 
-  // ── チャットメッセージ送信 ────────────────────────────────
+  // ── スパルタ・スケジュール登録 ────────────────────────────────
+  const startSchedule = async () => {
+    setAppPhase('scheduling');
+    setScheduledItems([]);
+    setScheduleError('');
+    setSpartanMessage('');
+    setIsScheduleConfirmed(false);
+    setIsScheduling(true);
+    try {
+      const res = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: confirmedTopic }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'APIエラー');
+      setScheduledItems(data.items ?? []);
+      setSpartanMessage(data.spartanMessage ?? '');
+      setScheduleSummary(data.summary ?? '');
+    } catch (e) {
+      setScheduleError(e instanceof Error ? e.message : 'スケジュール解析に失敗しました');
+    } finally {
+      setIsScheduling(false);
+    }
+  };
+
+  // スケジュールを LocalStorage に保存して確定
+  const confirmSchedule = () => {
+    try {
+      const existing: ScheduleItem[] = JSON.parse(localStorage.getItem(SCHEDULE_KEY) ?? '[]');
+      localStorage.setItem(SCHEDULE_KEY, JSON.stringify([...existing, ...scheduledItems]));
+    } catch { /* ignore */ }
+    setIsScheduleConfirmed(true);
+    saveToHistory(confirmedTopic);
+  };
+
+  // ── チャットメッセージ送信 ─────────────────────────────────────
   const sendChatMessage = async () => {
     const msg = chatInput.trim();
     if (!msg || isLoadingChat) return;
-
     const userMsg: ChatMsg = { role: 'user', text: msg };
     const newMsgs: ChatMsg[] = [...chatMessages, userMsg];
     setChatMessages(newMsgs);
     setChatInput('');
     setIsLoadingChat(true);
     setChatError('');
-
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -479,7 +603,7 @@ export default function PromptArchitect() {
         body: JSON.stringify({
           mode: 'continue',
           topic: confirmedTopic,
-          messages: chatMessages, // ユーザーメッセージ前のリスト
+          messages: chatMessages,
           userMessage: msg,
         }),
       });
@@ -494,7 +618,7 @@ export default function PromptArchitect() {
     }
   };
 
-  // ── キャッチボールから最強プロンプト生成 ─────────────────
+  // ── キャッチボールから最強プロンプト生成 ──────────────────────
   const finalizeCatchball = async (mode: PromptMode) => {
     setPromptMode(mode);
     setIsGeneratingFinal(true);
@@ -523,7 +647,7 @@ export default function PromptArchitect() {
     }
   };
 
-  // ── 直接生成（キャッチボールなし） ───────────────────────
+  // ── 直接生成（キャッチボールなし） ───────────────────────────
   const generateDirectly = (mode: PromptMode) => {
     setPromptMode(mode);
     const step1 =
@@ -536,34 +660,27 @@ export default function PromptArchitect() {
     saveToHistory(confirmedTopic);
   };
 
-  // ── チャット用 音声入力（ワンショット） ───────────────────
+  // ── チャット用音声入力（ワンショット） ────────────────────────
   const toggleChatVoice = () => {
     if (typeof window === 'undefined') return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     if (!SR) return;
-
-    if (chatVoiceActive) {
-      chatRecognitionRef.current?.stop();
-      setChatVoiceActive(false);
-      return;
-    }
+    if (chatVoiceActive) { chatRecognitionRef.current?.stop(); setChatVoiceActive(false); return; }
     const r = new SR();
-    r.lang = 'ja-JP';
-    r.continuous = false;
-    r.interimResults = false;
+    r.lang = 'ja-JP'; r.continuous = false; r.interimResults = false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     r.onresult = (event: any) => {
       const t = event.results[0]?.[0]?.transcript ?? '';
       if (t) setChatInput(prev => prev + (prev ? '　' : '') + t);
     };
-    r.onend = () => setChatVoiceActive(false);
+    r.onend  = () => setChatVoiceActive(false);
     r.onerror = () => setChatVoiceActive(false);
     chatRecognitionRef.current = r;
     try { r.start(); setChatVoiceActive(true); } catch { setChatVoiceActive(false); }
   };
 
-  // ── コピー ────────────────────────────────────────────────
+  // ── コピー ────────────────────────────────────────────────────
   const copyText = (content: string, setCopied: (v: boolean) => void) => {
     navigator.clipboard.writeText(content).then(() => {
       setCopied(true);
@@ -580,51 +697,52 @@ export default function PromptArchitect() {
     });
   };
 
-  // ── 派生値 ────────────────────────────────────────────────
-  const cleanText = stripInterim(text).trim();
-  const isActive = voiceState === 'recording' || voiceState === 'paused' || voiceState === 'proofreading';
+  // ── 派生値 ────────────────────────────────────────────────────
+  const cleanText     = stripInterim(text).trim();
+  const isActive      = voiceState === 'recording' || voiceState === 'paused' || voiceState === 'proofreading';
   const hasUserReplied = chatMessages.some(m => m.role === 'user');
-  const step2 = buildStep2();
-  const modeLabel = promptMode === 'pro' ? '⚡ プロ' : promptMode === 'think' ? '🧠 思考' : '📋 標準';
+  const step2         = buildStep2();
+  const modeLabel     = promptMode === 'pro' ? 'Pro' : promptMode === 'think' ? 'Think' : '標準';
 
-  // ── レンダー ──────────────────────────────────────────────
+  // ── レンダー ──────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
 
-      {/* ヘッダー */}
+      {/* ── ヘッダー ── */}
       <header className="sticky top-0 z-20 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-sm">P</span>
+          <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-black text-sm">S</span>
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-bold text-gray-900 leading-none">Prompt Architect</h1>
+            <h1 className="text-base font-black text-gray-900 leading-none">SPARTA AI</h1>
             <p className="text-xs text-gray-400 mt-0.5 truncate">
-              {appPhase === 'catchball' ? 'AIとキャッチボール中…' :
-               appPhase === 'result'    ? 'プロンプト生成完了' :
-               'AIヒアリング→5大条件プロンプト自動生成'}
+              {appPhase === 'catchball'  ? 'スパルタAIと深掘り中…'       :
+               appPhase === 'result'    ? 'プロンプト生成完了！'          :
+               appPhase === 'scheduling' ? 'スパルタ・スケジュール登録中…' :
+               '話す or 打つ → AIが磨く → 行動へ'}
             </p>
           </div>
-          {/* 履歴ボタン（inputフェーズのみ表示） */}
+
+          {/* 履歴ボタン */}
           {appPhase === 'input' && (
             <button
               onClick={() => setShowHistory(v => !v)}
               className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                showHistory
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+                showHistory ? 'bg-red-600 text-white border-red-600'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-red-300 hover:text-red-600'
               }`}
             >
               <span>📋</span>
               <span className="hidden sm:inline">履歴</span>
               {history.length > 0 && (
                 <span className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
-                  showHistory ? 'bg-white text-indigo-600' : 'bg-indigo-600 text-white'
+                  showHistory ? 'bg-white text-red-600' : 'bg-red-600 text-white'
                 }`}>{history.length > 9 ? '9+' : history.length}</span>
               )}
             </button>
           )}
-          {/* リセットボタン（input以外） */}
+          {/* リセットボタン */}
           {appPhase !== 'input' && (
             <button
               onClick={resetAll}
@@ -651,13 +769,11 @@ export default function PromptArchitect() {
                     過去の履歴 <span className="text-gray-400 font-normal">({history.length}件)</span>
                   </h2>
                   {history.length > 0 && (
-                    <button onClick={clearAllHistory} className="text-xs text-red-400 hover:text-red-600 transition-colors">
-                      すべて削除
-                    </button>
+                    <button onClick={clearAllHistory} className="text-xs text-red-400 hover:text-red-600 transition-colors">すべて削除</button>
                   )}
                 </div>
                 {history.length === 0 ? (
-                  <p className="px-5 py-6 text-xs text-gray-400 text-center">まだ履歴がありません。プロンプトをコピーすると自動保存されます。</p>
+                  <p className="px-5 py-6 text-xs text-gray-400 text-center">まだ履歴がありません。</p>
                 ) : (
                   <ul className="divide-y divide-gray-50">
                     {history.map(entry => {
@@ -674,18 +790,14 @@ export default function PromptArchitect() {
                               <p className="text-[10px] text-gray-400 mt-0.5">{formatDate(entry.createdAt)}</p>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                              <span
-                                role="button" tabIndex={0}
+                              <span role="button" tabIndex={0}
                                 onClick={e => { e.stopPropagation(); confirmTopic(entry.topic); setShowHistory(false); }}
                                 onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), confirmTopic(entry.topic), setShowHistory(false))}
-                                className="text-[10px] px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
-                              >再利用</span>
-                              <span
-                                role="button" tabIndex={0}
+                                className="text-[10px] px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors">再利用</span>
+                              <span role="button" tabIndex={0}
                                 onClick={e => { e.stopPropagation(); deleteHistoryEntry(entry.id); }}
                                 onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), deleteHistoryEntry(entry.id))}
-                                className="text-[10px] text-gray-300 hover:text-red-400 transition-colors"
-                              >✕</span>
+                                className="text-[10px] text-gray-300 hover:text-red-400 transition-colors">✕</span>
                             </div>
                           </button>
                           {isExpanded && (
@@ -710,19 +822,19 @@ export default function PromptArchitect() {
               </section>
             )}
 
-            {/* テーマが未確定の場合: 音声入力セクション */}
+            {/* テーマ未確定：音声入力セクション */}
             {!confirmedTopic && (
               <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">0</span>
-                  <h2 className="text-sm font-semibold text-gray-700">テーマを入力</h2>
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-700 text-xs font-bold">0</span>
+                  <h2 className="text-sm font-semibold text-gray-700">何を相談・解決したい？</h2>
                 </div>
 
                 {/* 音声ボタン群 */}
                 <div className="flex flex-col items-center gap-3">
                   {(voiceState === 'idle' || voiceState === 'error') && (
                     <button onClick={startListening}
-                      className="relative w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:ring-offset-2"
+                      className="relative w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-red-600 hover:bg-red-700 text-white font-semibold shadow-lg transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-red-300 focus:ring-offset-2"
                       aria-label="音声入力を開始">
                       <span className="text-2xl">🎤</span>
                       <span className="text-xs">話す</span>
@@ -749,7 +861,7 @@ export default function PromptArchitect() {
                   {voiceState === 'paused' && (
                     <div className="flex flex-col items-center gap-3 w-full">
                       <button onClick={resumeListening}
-                        className="w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-lg transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-indigo-300 focus:ring-offset-2"
+                        className="w-24 h-24 rounded-full flex flex-col items-center justify-center gap-1 bg-red-600 hover:bg-red-700 text-white font-semibold shadow-lg transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-red-300 focus:ring-offset-2"
                         aria-label="録音を再開">
                         <span className="text-2xl">▶</span>
                         <span className="text-xs">再開</span>
@@ -774,7 +886,6 @@ export default function PromptArchitect() {
                   </div>
                 )}
 
-                {/* エラー */}
                 {voiceState === 'error' && voiceError && (
                   <p className="text-xs text-red-500 text-center bg-red-50 rounded-xl px-4 py-2">⚠️ {voiceError}</p>
                 )}
@@ -790,9 +901,9 @@ export default function PromptArchitect() {
                         handleProcessText(cleanText);
                       }
                     }}
-                    placeholder={'例：「副業でYouTubeを始めて収益化するまでの手順」\n\n話したテキストが自動でここに入ります。手入力でも使えます。\nEnterで送信 / Shift+Enterで改行'}
+                    placeholder={'例：「副業でYouTubeを始めて収益化するまでの手順」\n「FP2級を3ヶ月で取る勉強スケジュールを組みたい」\n\n話したテキストが自動でここに入ります。手入力でもOK。\nEnterで送信 / Shift+Enterで改行'}
                     rows={5}
-                    className="w-full px-4 py-3 pr-10 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                    className="w-full px-4 py-3 pr-10 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent transition-all"
                   />
                   {text && (
                     <button onClick={() => { setText(''); setVoiceError(''); if (!isActive) setVoiceState('idle'); }}
@@ -804,30 +915,30 @@ export default function PromptArchitect() {
                   <p className="text-xs text-gray-400 text-right">{cleanText.length}文字</p>
                 )}
 
-                {/* 手入力テキストがある場合の「次へ」ボタン */}
+                {/* 手入力用ボタン */}
                 {cleanText && !proofreadText && voiceState === 'idle' && (
                   <button
                     onClick={() => handleProcessText(cleanText)}
-                    className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-all"
+                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-all"
                   >
-                    AIで編集・校正する →
+                    AIが編集・校正する →
                   </button>
                 )}
               </section>
             )}
 
-            {/* 校正中スピナー */}
+            {/* AI校正中スピナー */}
             {voiceState === 'proofreading' && (
-              <section className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5 flex items-center gap-4">
+              <section className="bg-white rounded-2xl border border-red-100 shadow-sm p-5 flex items-center gap-4">
                 <div className="flex-shrink-0 flex gap-1">
                   {[0, 1, 2].map(i => (
-                    <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"
+                    <div key={i} className="w-2 h-2 rounded-full bg-red-400 animate-bounce"
                       style={{ animationDelay: `${i * 0.15}s` }} />
                   ))}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-indigo-700">Geminiが校正・整理中...</p>
-                  <p className="text-xs text-gray-400 mt-0.5">入力テキストを自然な文章に整えています</p>
+                  <p className="text-sm font-semibold text-red-700">AIが編集・校正中...</p>
+                  <p className="text-xs text-gray-400 mt-0.5">入力テキストを自然な文章に磨いています</p>
                 </div>
               </section>
             )}
@@ -838,7 +949,7 @@ export default function PromptArchitect() {
                 <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
                   <span className="text-base">✨</span>
                   <div>
-                    <p className="text-xs font-bold text-emerald-700">Geminiによる校正結果</p>
+                    <p className="text-xs font-bold text-emerald-700">AIによる校正結果</p>
                     <p className="text-[10px] text-emerald-500">採用するとこの内容でプロンプトが生成されます</p>
                   </div>
                 </div>
@@ -880,22 +991,20 @@ export default function PromptArchitect() {
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
                   <button onClick={() => confirmTopic(rawText)}
-                    className="text-xs px-3 py-1 rounded-lg bg-amber-600 text-white">
-                    このまま続ける
-                  </button>
+                    className="text-xs px-3 py-1 rounded-lg bg-amber-600 text-white">このまま続ける</button>
                   <button onClick={() => setProofreadError('')} className="text-amber-400 hover:text-amber-600 text-xs">✕</button>
                 </div>
               </div>
             )}
 
-            {/* ② テーマ確定後：アクション選択 */}
+            {/* ── 確定後：2分岐ボタン ── */}
             {confirmedTopic && !proofreadText && (
               <section className="space-y-4">
                 {/* 確定テーマ表示 */}
-                <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm p-4 flex items-start gap-3">
+                <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-4 flex items-start gap-3">
                   <span className="text-xl flex-shrink-0">📌</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] text-indigo-500 font-semibold uppercase tracking-wide mb-1">確定テーマ</p>
+                    <p className="text-[10px] text-red-500 font-semibold uppercase tracking-wide mb-1">確定テーマ</p>
                     <p className="text-sm text-gray-800 leading-relaxed">{confirmedTopic}</p>
                   </div>
                   <button onClick={() => { setConfirmedTopic(''); setText(confirmedTopic); }}
@@ -904,41 +1013,46 @@ export default function PromptArchitect() {
                   </button>
                 </div>
 
-                {/* アクション選択 */}
-                <div className="space-y-3">
-                  <p className="text-xs text-center text-gray-500 font-medium">どちらで進めますか？</p>
+                {/* ── メイン2分岐ボタン ── */}
+                <div>
+                  <p className="text-xs text-center text-gray-500 font-medium mb-3">次のアクションを選んでください</p>
+                  <div className="grid grid-cols-2 gap-3">
 
-                  {/* キャッチボール（推奨） */}
-                  <button
-                    onClick={startCatchball}
-                    className="w-full p-5 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white text-left hover:opacity-95 active:scale-[0.99] transition-all shadow-lg shadow-indigo-200"
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-2xl">🎯</span>
-                      <div>
-                        <p className="font-bold text-base">AIとキャッチボール</p>
-                        <span className="text-[10px] bg-white/20 rounded px-1.5 py-0.5">おすすめ</span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-indigo-100 leading-relaxed">
-                      AIが2〜3回質問してあなたの意図を100%引き出します。
-                      人生相談・複雑な悩み・細かい要件も完全対応。
-                      ヒアリング後に「あなた専用の最強プロンプト」を自動生成します。
-                    </p>
-                  </button>
+                    {/* ① AIにさらに質問する */}
+                    <button
+                      onClick={startCatchball}
+                      className="p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white text-left hover:opacity-95 active:scale-[0.99] transition-all shadow-md"
+                    >
+                      <span className="text-2xl block mb-2">💬</span>
+                      <p className="font-bold text-sm leading-tight">AIにさらに<br/>質問する</p>
+                      <p className="text-[10px] text-indigo-200 mt-1 leading-tight">スパルタAIが深掘り&amp;最強プロンプト生成</p>
+                    </button>
 
-                  {/* 直接生成 */}
-                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-lg">⚡</span>
-                      <p className="text-sm font-semibold text-gray-700">すぐにプロンプト生成</p>
-                      <span className="text-[10px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">テンプレート版</span>
-                    </div>
+                    {/* ② スパルタにスケジュール登録 */}
+                    <button
+                      onClick={startSchedule}
+                      className="p-4 rounded-2xl bg-gradient-to-br from-red-600 to-orange-500 text-white text-left hover:opacity-95 active:scale-[0.99] transition-all shadow-md"
+                    >
+                      <span className="text-2xl block mb-2">🔥</span>
+                      <p className="font-bold text-sm leading-tight">スパルタに<br/>スケジュール登録</p>
+                      <p className="text-[10px] text-red-100 mt-1 leading-tight">AIが自動解析→カレンダー一括登録</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* テンプレート直接生成（折りたたみ） */}
+                <details className="group">
+                  <summary className="text-xs text-center text-gray-400 cursor-pointer hover:text-gray-600 list-none flex items-center justify-center gap-1 py-1">
+                    <span className="group-open:hidden">▼</span>
+                    <span className="hidden group-open:inline">▲</span>
+                    テンプレートで直接プロンプト生成（上級者向け）
+                  </summary>
+                  <div className="mt-3 bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
                     <div className="grid grid-cols-3 gap-2">
                       {[
                         { mode: 'standard' as PromptMode, icon: '📋', label: '標準', desc: '網羅・大ボリューム', color: 'bg-indigo-600 hover:bg-indigo-700' },
-                        { mode: 'pro' as PromptMode,      icon: '⚡', label: 'プロ',  desc: '結論優先・実務',    color: 'bg-amber-500 hover:bg-amber-600' },
-                        { mode: 'think' as PromptMode,    icon: '🧠', label: '思考',  desc: '論理・多角分析',   color: 'bg-purple-600 hover:bg-purple-700' },
+                        { mode: 'pro'      as PromptMode, icon: '⚡', label: 'プロ',  desc: '結論優先・実務',    color: 'bg-amber-500 hover:bg-amber-600' },
+                        { mode: 'think'    as PromptMode, icon: '🧠', label: '思考',  desc: '論理・多角分析',   color: 'bg-purple-600 hover:bg-purple-700' },
                       ].map(item => (
                         <button key={item.mode} onClick={() => generateDirectly(item.mode)}
                           className={`flex flex-col items-center gap-1 py-3 rounded-xl text-white ${item.color} transition-all`}>
@@ -949,23 +1063,75 @@ export default function PromptArchitect() {
                       ))}
                     </div>
                   </div>
-                </div>
+                </details>
               </section>
             )}
 
-            {/* 使い方ガイド（テキストが空のとき） */}
+            {/* ── ヘルスデータウィジェット ── */}
+            {!cleanText && !confirmedTopic && (
+              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <button
+                  onClick={() => { setShowHealth(v => !v); if (!showHealth) fetchHealth(); }}
+                  className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
+                >
+                  <span className="text-lg">🏃</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-gray-700">今日の活動データ</p>
+                    <p className="text-[10px] text-gray-400">Google Health連携枠（現在モックデータ）</p>
+                  </div>
+                  <span className="text-gray-400 text-xs">{showHealth ? '▲' : '▼'}</span>
+                </button>
+                {showHealth && (
+                  <div className="px-5 pb-5 border-t border-gray-100">
+                    {isLoadingHealth && (
+                      <div className="flex items-center gap-2 py-4 text-gray-400 text-xs">
+                        <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" />
+                        <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0.15s' }} />
+                        <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0.3s' }} />
+                        <span>読み込み中...</span>
+                      </div>
+                    )}
+                    {healthData && !isLoadingHealth && (
+                      <div className="pt-4 space-y-3">
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="text-center p-3 bg-blue-50 rounded-xl">
+                            <p className="text-xl font-black text-blue-600">{healthData.today.steps.toLocaleString()}</p>
+                            <p className="text-[10px] text-blue-400 mt-0.5">歩数</p>
+                          </div>
+                          <div className="text-center p-3 bg-green-50 rounded-xl">
+                            <p className="text-xl font-black text-green-600">{healthData.today.activeMinutes}</p>
+                            <p className="text-[10px] text-green-400 mt-0.5">活動(分)</p>
+                          </div>
+                          <div className="text-center p-3 bg-orange-50 rounded-xl">
+                            <p className="text-xl font-black text-orange-600">{healthData.today.calories}</p>
+                            <p className="text-[10px] text-orange-400 mt-0.5">消費kcal</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
+                          <span className="text-sm flex-shrink-0">🔥</span>
+                          <p className="text-xs text-red-700 font-medium leading-relaxed">{healthData.spartanComment}</p>
+                        </div>
+                        <p className="text-[10px] text-gray-400 text-center">{healthData.note}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* 使い方ガイド */}
             {!cleanText && !confirmedTopic && (
               <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                <h2 className="text-sm font-semibold text-gray-700 mb-4">使い方</h2>
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">SPARTA AIの使い方</h2>
                 <ol className="space-y-3">
                   {[
-                    { n: 1, title: 'テーマを音声 or テキストで入力', desc: '「話す」ボタンで録音。停止後にGeminiが自動校正します。手入力でもOK。' },
-                    { n: 2, title: 'AIとキャッチボール（おすすめ）', desc: 'Geminiが2〜3回質問してあなたの意図を深掘り。複雑な相談も完全対応。' },
-                    { n: 3, title: '最強プロンプトをコピーしてGeminiへ', desc: 'ヒアリング内容を反映した「あなた専用の5大条件プロンプト」が生成されます。' },
-                    { n: 4, title: 'Gemini回答後にSTEP2を貼る', desc: 'Canva拡張機能が起動し、A4サイズの印刷用PDF資料が完成します。' },
+                    { n: 1, title: '相談内容を話す or 打ち込む', desc: 'マイクで録音 or テキスト入力。AIが自然な文章に校正します。' },
+                    { n: 2, title: '2つのルートから選ぶ', desc: '「AIにさらに質問する」で深掘り、または「スパルタにスケジュール登録」で即行動！' },
+                    { n: 3, title: 'スパルタAIが叱咤激励', desc: '生ぬるい計画は許さない。具体的なスケジュールに落とし込んで一括登録！' },
+                    { n: 4, title: 'サボったら承知しないぞ！', desc: 'カレンダーに刻み込んで、毎日逃げられない環境を作れ！' },
                   ].map(item => (
                     <li key={item.n} className="flex gap-3">
-                      <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold mt-0.5">{item.n}</span>
+                      <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-red-100 text-red-700 text-xs font-bold mt-0.5">{item.n}</span>
                       <div>
                         <p className="text-sm font-medium text-gray-800">{item.title}</p>
                         <p className="text-xs text-gray-400 mt-0.5">{item.desc}</p>
@@ -976,6 +1142,142 @@ export default function PromptArchitect() {
               </section>
             )}
           </>
+        )}
+
+        {/* ════════════════════════════════════════
+            SCHEDULING フェーズ
+        ════════════════════════════════════════ */}
+        {appPhase === 'scheduling' && (
+          <section className="space-y-4">
+            {/* トピックバー */}
+            <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+              <span className="text-sm flex-shrink-0">📌</span>
+              <p className="text-xs text-red-700 font-medium flex-1 min-w-0 line-clamp-2">{confirmedTopic}</p>
+              <span className="flex-shrink-0 text-[10px] text-red-400 bg-red-100 rounded-lg px-2 py-1 whitespace-nowrap">スパルタ解析</span>
+            </div>
+
+            {/* ローディング */}
+            {isScheduling && (
+              <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-6 flex items-center gap-4">
+                <div className="flex gap-1">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="w-2 h-2 rounded-full bg-red-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                  ))}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-red-700">スパルタAIが解析中...</p>
+                  <p className="text-xs text-gray-400 mt-0.5">タスクを抽出してスケジュールに変換しています</p>
+                </div>
+              </div>
+            )}
+
+            {/* エラー */}
+            {scheduleError && !isScheduling && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-3">
+                <p className="text-sm text-red-700 font-semibold">⚠️ 解析に失敗しました</p>
+                <p className="text-xs text-red-600">{scheduleError}</p>
+                <div className="flex gap-2">
+                  <button onClick={startSchedule} className="text-xs px-4 py-2 rounded-xl bg-red-600 text-white font-semibold">再試行</button>
+                  <button onClick={() => setAppPhase('input')} className="text-xs px-4 py-2 rounded-xl border border-gray-200 text-gray-500">戻る</button>
+                </div>
+              </div>
+            )}
+
+            {/* 登録完了後 */}
+            {isScheduleConfirmed && !isScheduling && (
+              <div className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
+                <div className="p-6 text-center space-y-4">
+                  <div className="text-5xl">🔥</div>
+                  <p className="text-lg font-black text-red-600">スケジュール登録完了！</p>
+                  {spartanMessage && (
+                    <div className="p-4 bg-gradient-to-br from-red-600 to-orange-500 rounded-2xl text-white">
+                      <p className="text-sm font-bold leading-relaxed">{spartanMessage}</p>
+                    </div>
+                  )}
+                  {scheduleSummary && (
+                    <p className="text-xs text-gray-500">{scheduleSummary}</p>
+                  )}
+                  <button
+                    onClick={resetAll}
+                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition-all"
+                  >
+                    新しい相談を始める
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 解析結果 */}
+            {!isScheduling && !isScheduleConfirmed && scheduledItems.length > 0 && (
+              <>
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 bg-gradient-to-r from-red-50 to-orange-50 border-b border-gray-100 flex items-center gap-2">
+                    <span className="text-sm">📅</span>
+                    <p className="text-xs font-bold text-red-700">解析されたスケジュール（{scheduledItems.length}件）</p>
+                  </div>
+                  <ul className="divide-y divide-gray-50">
+                    {scheduledItems.map(item => (
+                      <li key={item.id} className="px-5 py-4 space-y-1.5">
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900">{item.title}</p>
+                            {item.description && (
+                              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{item.description}</p>
+                            )}
+                          </div>
+                          <span className={`flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${categoryColor(item.category)}`}>
+                            {categoryLabel(item.category)}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-gray-100 rounded-lg px-2 py-0.5">
+                            📆 {item.startDate}
+                          </span>
+                          {item.time && (
+                            <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-gray-100 rounded-lg px-2 py-0.5">
+                              🕐 {item.time}
+                            </span>
+                          )}
+                          {item.duration && (
+                            <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-gray-100 rounded-lg px-2 py-0.5">
+                              ⏱ {item.duration}分
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-gray-100 rounded-lg px-2 py-0.5">
+                            🔁 {recurrenceLabel(item)}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* スパルタメッセージ */}
+                {spartanMessage && (
+                  <div className="p-4 bg-gradient-to-br from-red-600 to-orange-500 rounded-2xl text-white flex items-start gap-3">
+                    <span className="text-xl flex-shrink-0">🔥</span>
+                    <p className="text-sm font-bold leading-relaxed">{spartanMessage}</p>
+                  </div>
+                )}
+
+                {/* 確定ボタン */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={confirmSchedule}
+                    className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-red-600 to-orange-500 hover:opacity-95 text-white text-sm font-black transition-all shadow-lg"
+                  >
+                    🔥 このスケジュールで登録！
+                  </button>
+                  <button
+                    onClick={() => setAppPhase('input')}
+                    className="px-5 py-4 rounded-2xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm transition-all"
+                  >
+                    戻る
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
         )}
 
         {/* ════════════════════════════════════════
@@ -996,20 +1298,17 @@ export default function PromptArchitect() {
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-4 py-3 bg-gradient-to-r from-indigo-50 to-violet-50 border-b border-gray-100 flex items-center gap-2">
                 <span className="text-sm">💬</span>
-                <p className="text-xs font-semibold text-indigo-700">AIとのキャッチボール</p>
+                <p className="text-xs font-semibold text-indigo-700">スパルタAIとのキャッチボール</p>
                 <p className="text-[10px] text-gray-400 ml-auto">意図を引き出したら「最強プロンプト生成」へ</p>
               </div>
 
-              {/* メッセージリスト */}
               <div className="p-4 space-y-4 min-h-[200px] max-h-[50vh] overflow-y-auto">
-
-                {/* 初期ロード中 */}
                 {isLoadingChat && chatMessages.length === 0 && (
                   <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-sm">🤖</div>
+                    <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-sm">🔥</div>
                     <div className="flex gap-1 items-center bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
                       {[0, 1, 2].map(i => (
-                        <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                        <div key={i} className="w-2 h-2 rounded-full bg-red-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
                       ))}
                     </div>
                   </div>
@@ -1018,7 +1317,7 @@ export default function PromptArchitect() {
                 {chatMessages.map((msg, idx) => (
                   <div key={idx} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                     {msg.role === 'ai' ? (
-                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-sm">🤖</div>
+                      <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-sm">🔥</div>
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-sm">🙋</div>
                     )}
@@ -1032,37 +1331,31 @@ export default function PromptArchitect() {
                   </div>
                 ))}
 
-                {/* AI思考中ローダー */}
                 {isLoadingChat && chatMessages.length > 0 && (
                   <div className="flex items-start gap-3">
-                    <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-sm">🤖</div>
+                    <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-sm">🔥</div>
                     <div className="flex gap-1 items-center bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
                       {[0, 1, 2].map(i => (
-                        <div key={i} className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                        <div key={i} className="w-2 h-2 rounded-full bg-red-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* スクロール anchor */}
                 <div ref={chatEndRef} />
               </div>
 
-              {/* チャットエラー */}
               {chatError && (
                 <div className="mx-4 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
                   ⚠️ {chatError}
                 </div>
               )}
 
-              {/* 入力エリア */}
               <div className="border-t border-gray-100 p-3 flex gap-2 items-end">
                 <button
                   onClick={toggleChatVoice}
                   className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                    chatVoiceActive
-                      ? 'bg-red-500 text-white animate-pulse'
-                      : 'bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600'
+                    chatVoiceActive ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600'
                   }`}
                   title="音声で入力"
                 >
@@ -1074,12 +1367,12 @@ export default function PromptArchitect() {
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
                   placeholder="AIの質問に答えてください… (Enterで送信)"
                   rows={2}
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent"
                 />
                 <button
                   onClick={sendChatMessage}
                   disabled={!chatInput.trim() || isLoadingChat}
-                  className="flex-shrink-0 w-9 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 text-white flex items-center justify-center transition-all"
+                  className="flex-shrink-0 w-9 h-9 rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-gray-200 text-white flex items-center justify-center transition-all"
                 >
                   ➤
                 </button>
@@ -1094,19 +1387,16 @@ export default function PromptArchitect() {
                   {hasUserReplied ? '最強プロンプトを生成する' : '返答するとプロンプトを生成できます'}
                 </p>
               </div>
-
               {finalError && (
                 <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2 mb-3">⚠️ {finalError}</p>
               )}
-
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { mode: 'standard' as PromptMode, icon: '📋', label: '標準', desc: '網羅・丁寧', color: 'bg-indigo-600 hover:bg-indigo-700' },
-                  { mode: 'pro' as PromptMode,      icon: '⚡', label: 'プロ',  desc: '結論優先', color: 'bg-amber-500 hover:bg-amber-600' },
-                  { mode: 'think' as PromptMode,    icon: '🧠', label: '思考',  desc: '深く多角的', color: 'bg-purple-600 hover:bg-purple-700' },
+                  { mode: 'pro'      as PromptMode, icon: '⚡', label: 'プロ',  desc: '結論優先', color: 'bg-amber-500 hover:bg-amber-600' },
+                  { mode: 'think'    as PromptMode, icon: '🧠', label: '思考',  desc: '深く多角的', color: 'bg-purple-600 hover:bg-purple-700' },
                 ].map(item => (
-                  <button
-                    key={item.mode}
+                  <button key={item.mode}
                     onClick={() => finalizeCatchball(item.mode)}
                     disabled={!hasUserReplied || isGeneratingFinal}
                     className={`relative flex flex-col items-center gap-1 py-3 rounded-xl text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed ${item.color}`}
@@ -1120,11 +1410,8 @@ export default function PromptArchitect() {
                   </button>
                 ))}
               </div>
-
               {!hasUserReplied && (
-                <p className="text-[10px] text-gray-400 text-center mt-2">
-                  まずAIの質問に1回以上回答してください
-                </p>
+                <p className="text-[10px] text-gray-400 text-center mt-2">まずAIの質問に1回以上回答してください</p>
               )}
             </div>
           </section>
@@ -1147,7 +1434,7 @@ export default function PromptArchitect() {
                   }`}>{modeLabel}</span>
                   {isCatchballResult && (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                      🎯 AIキャッチボール最適化済み
+                      🎯 スパルタAI最適化済み
                     </span>
                   )}
                 </div>
@@ -1163,7 +1450,7 @@ export default function PromptArchitect() {
                   <div>
                     <p className="text-xs font-bold text-indigo-700">STEP 1 — Geminiに貼り付ける</p>
                     <p className="text-[10px] text-indigo-400">
-                      {isCatchballResult ? 'あなた専用・AIヒアリング反映済み' : 'ディープリサーチ・5大条件テンプレート'}
+                      {isCatchballResult ? 'スパルタAIヒアリング反映済み' : 'ディープリサーチ・5大条件テンプレート'}
                     </p>
                   </div>
                 </div>
@@ -1212,8 +1499,8 @@ export default function PromptArchitect() {
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { mode: 'standard' as PromptMode, icon: '📋', label: '標準', color: 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100' },
-                    { mode: 'pro' as PromptMode,      icon: '⚡', label: 'プロ',  color: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' },
-                    { mode: 'think' as PromptMode,    icon: '🧠', label: '思考',  color: 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100' },
+                    { mode: 'pro'      as PromptMode, icon: '⚡', label: 'プロ',  color: 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100' },
+                    { mode: 'think'    as PromptMode, icon: '🧠', label: '思考',  color: 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100' },
                   ].map(item => (
                     <button key={item.mode}
                       onClick={() => generateDirectly(item.mode)}
@@ -1225,7 +1512,6 @@ export default function PromptArchitect() {
               </div>
             )}
 
-            {/* キャッチボール結果の場合のやり直しオプション */}
             {isCatchballResult && (
               <button
                 onClick={() => { setAppPhase('catchball'); setFinalStep1(''); setFinalError(''); }}
