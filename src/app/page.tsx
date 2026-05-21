@@ -209,6 +209,8 @@ export default function SpartaAI() {
 
   // ── アプリフェーズ ────────────────────────────────────────────
   const [appPhase, setAppPhase] = useState<AppPhase>('input');
+  /** スケジュール登録後に「戻る」で返るフェーズ */
+  const [prevPhase, setPrevPhase] = useState<AppPhase>('input');
   const [confirmedTopic, setConfirmedTopic] = useState('');
 
   // ── キャッチボール ────────────────────────────────────────────
@@ -512,6 +514,7 @@ export default function SpartaAI() {
     setText('');
     setConfirmedTopic('');
     setAppPhase('input');
+    setPrevPhase('input');
     setChatMessages([]);
     setChatInput('');
     setFinalStep1('');
@@ -559,8 +562,21 @@ export default function SpartaAI() {
     }
   };
 
+  // ── チャット会話全体をスケジュール登録用テキストに変換 ─────────
+  const buildChatScheduleText = useCallback((): string => {
+    const parts: string[] = [`【相談テーマ】\n${confirmedTopic}`];
+    chatMessages.forEach(m => {
+      if (m.role === 'ai')   parts.push(`【AIの提案・回答】\n${m.text}`);
+      else                   parts.push(`【ユーザーの条件・要望】\n${m.text}`);
+    });
+    return parts.join('\n\n');
+  }, [confirmedTopic, chatMessages]);
+
   // ── スパルタ・スケジュール登録 ────────────────────────────────
-  const startSchedule = async () => {
+  /** textToSchedule を省略すると confirmedTopic を使用 */
+  const startSchedule = async (textToSchedule?: string) => {
+    const src = textToSchedule ?? confirmedTopic;
+    setPrevPhase(appPhase);          // 呼び出し元フェーズを記憶
     setAppPhase('scheduling');
     setScheduledItems([]);
     setScheduleError('');
@@ -571,7 +587,7 @@ export default function SpartaAI() {
       const res = await fetch('/api/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: confirmedTopic }),
+        body: JSON.stringify({ text: src }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'APIエラー');
@@ -1056,7 +1072,7 @@ export default function SpartaAI() {
 
                     {/* ② スパルタにスケジュール登録 */}
                     <button
-                      onClick={startSchedule}
+                      onClick={() => startSchedule()}
                       className="p-4 rounded-2xl bg-gradient-to-br from-red-600 to-orange-500 text-white text-left hover:opacity-95 active:scale-[0.99] transition-all shadow-md"
                     >
                       <span className="text-2xl block mb-2">🔥</span>
@@ -1206,7 +1222,7 @@ export default function SpartaAI() {
                 <p className="text-sm text-red-700 font-semibold">⚠️ 解析に失敗しました</p>
                 <p className="text-xs text-red-600">{scheduleError}</p>
                 <div className="flex gap-2">
-                  <button onClick={startSchedule} className="text-xs px-4 py-2 rounded-xl bg-red-600 text-white font-semibold">再試行</button>
+                  <button onClick={() => startSchedule()} className="text-xs px-4 py-2 rounded-xl bg-red-600 text-white font-semibold">再試行</button>
                   <button onClick={() => setAppPhase('input')} className="text-xs px-4 py-2 rounded-xl border border-gray-200 text-gray-500">戻る</button>
                 </div>
               </div>
@@ -1298,7 +1314,7 @@ export default function SpartaAI() {
                     🔥 このスケジュールで登録！
                   </button>
                   <button
-                    onClick={() => setAppPhase('input')}
+                    onClick={() => setAppPhase(prevPhase)}
                     className="px-5 py-4 rounded-2xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm transition-all"
                   >
                     戻る
@@ -1344,19 +1360,34 @@ export default function SpartaAI() {
                 )}
 
                 {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    {msg.role === 'ai' ? (
-                      <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-sm">🔥</div>
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-sm">🙋</div>
-                    )}
-                    <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                      msg.role === 'ai'
-                        ? 'bg-gray-100 text-gray-800 rounded-tl-sm'
-                        : 'bg-indigo-600 text-white rounded-tr-sm'
-                    }`}>
-                      {msg.text}
+                  <div key={idx} className="flex flex-col gap-1.5">
+                    {/* メッセージ本体 */}
+                    <div className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                      {msg.role === 'ai' ? (
+                        <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 text-sm">🔥</div>
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-sm">🙋</div>
+                      )}
+                      <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                        msg.role === 'ai'
+                          ? 'bg-gray-100 text-gray-800 rounded-tl-sm'
+                          : 'bg-indigo-600 text-white rounded-tr-sm'
+                      }`}>
+                        {msg.text}
+                      </div>
                     </div>
+                    {/* AI メッセージの下にスケジュール登録ボタン */}
+                    {msg.role === 'ai' && !isLoadingChat && (
+                      <div className="ml-10">
+                        <button
+                          onClick={() => startSchedule(msg.text)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-xl bg-gradient-to-r from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100 text-red-600 border border-red-200 transition-all"
+                          title="このAIの回答内容をスケジュール解析して登録します"
+                        >
+                          🔥 この内容をスパルタ登録
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
 
@@ -1443,6 +1474,31 @@ export default function SpartaAI() {
                 <p className="text-[10px] text-gray-400 text-center mt-2">まずAIの質問に1回以上回答してください</p>
               )}
             </div>
+
+            {/* 会話全体からスケジュール登録パネル */}
+            {hasUserReplied && (
+              <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-5 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0">🔥</span>
+                  <div>
+                    <p className="text-sm font-black text-gray-900">会話内容からスパルタ登録</p>
+                    <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                      AIとの相談でまとまった勉強プランや計画を、そのままスケジュールに一括登録します。
+                      各AIメッセージの「🔥 この内容をスパルタ登録」ボタン、または下のボタンで会話全体を解析します。
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => startSchedule(buildChatScheduleText())}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-red-600 to-orange-500 hover:opacity-95 active:scale-[0.99] text-white text-sm font-black transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  🔥 会話全体をスパルタにスケジュール登録！
+                </button>
+                <p className="text-[10px] text-gray-400 text-center">
+                  ※ テーマ＋AI提案＋あなたの条件をまとめてGeminiに解析させます
+                </p>
+              </div>
+            )}
           </section>
         )}
 
