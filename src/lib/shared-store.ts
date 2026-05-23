@@ -17,6 +17,7 @@
 export type TaskStatus   = 'TODO' | 'IN_PROGRESS' | 'COMPLETED' | 'ESCAPED' | 'OVERDUE';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type TaskRecurrence = 'none' | 'daily' | 'weekly';
+export type NotifyTiming = 'task-time' | 'daily' | 'weekly' | '1hour' | 'custom';
 
 export interface LocalTask {
   id: string;
@@ -35,8 +36,25 @@ export interface LocalTask {
   source?: 'ai-parsed' | 'manual' | 'exercise-app' | 'external-app';
   externalId?: string;
   metadata?: Record<string, unknown>;
+  // Notification settings per task
+  notifyEnabled?: boolean;       // default true
+  notifyTiming?: NotifyTiming;   // default 'task-time'
+  notifyCustomMin?: number;      // used when notifyTiming === 'custom'
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Memo (永久保存メモ) ──────────────────────────────────────────
+
+export interface MemoEntry {
+  id: string;
+  text: string;
+  title?: string;
+  notifyEnabled: boolean;
+  notifyTiming: NotifyTiming;
+  notifyCustomMin?: number;
+  pinned?: boolean;
+  createdAt: string;
 }
 
 // Daily fitness record (matches ダイエットアプリ's sf_record_* format)
@@ -90,6 +108,8 @@ export function addTask(
   const now = new Date().toISOString();
   const task: LocalTask = {
     tauntTimings: ['30min'],
+    notifyEnabled: true,
+    notifyTiming: 'task-time',
     ...payload,
     id: `hub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     userId: 'hub-user',
@@ -104,6 +124,14 @@ export function updateTaskStatus(id: string, status: TaskStatus): void {
   saveTasks(
     getTasks().map(t =>
       t.id === id ? { ...t, status, updatedAt: new Date().toISOString() } : t
+    )
+  );
+}
+
+export function updateTask(id: string, patch: Partial<LocalTask>): void {
+  saveTasks(
+    getTasks().map(t =>
+      t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t
     )
   );
 }
@@ -124,6 +152,35 @@ export function getTasksForDate(date: string): LocalTask[] {
     const diff = Math.round((target.getTime() - base.getTime()) / 86_400_000);
     return diff % 7 === 0;
   });
+}
+
+// ── Memo CRUD ─────────────────────────────────────────────────────────
+
+const MEMOS_KEY = 'sparta-memos-v1';
+
+export function getMemos(): MemoEntry[] {
+  return load<MemoEntry[]>(MEMOS_KEY, []);
+}
+
+export function addMemo(
+  payload: Omit<MemoEntry, 'id' | 'createdAt'>
+): MemoEntry {
+  const now = new Date().toISOString();
+  const memo: MemoEntry = {
+    ...payload,
+    id: `memo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    createdAt: now,
+  };
+  save(MEMOS_KEY, [memo, ...getMemos()]);
+  return memo;
+}
+
+export function deleteMemo(id: string): void {
+  save(MEMOS_KEY, getMemos().filter(m => m.id !== id));
+}
+
+export function updateMemo(id: string, patch: Partial<MemoEntry>): void {
+  save(MEMOS_KEY, getMemos().map(m => m.id === id ? { ...m, ...patch } : m));
 }
 
 // ── Fitness / daily record (sf_* keys — compatible with ダイエットアプリ) ──
@@ -201,27 +258,27 @@ export function priorityLabel(p: TaskPriority): string {
 export interface SchoolSlot {
   id: string;
   day: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, ..., 6=Sat
-  /** 1–6: 授業時限  7–13: 放課後・夜間スロット（〜22:00） */
-  period: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+  /** 1–6: 授業時限  7–9: 夜間スロット（19:30〜22:00） */
+  period: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
   subject: string;
 }
 
+/**
+ * 学校時間割（ユーザー指定の時間）
+ * 1限: 9:10~10:40 / 2限: 10:50~12:20 / 3限: 12:50~14:20
+ * 4限: 14:30~16:00 / 5限: 16:10~17:40 / 6限: 17:50~19:20
+ * 夜1: 19:30~20:30 / 夜2: 20:30~21:30 / 夜3: 21:30~22:00
+ */
 export const PERIOD_TIMES: Record<number, { start: string; end: string }> = {
-  // ── 授業時間 ──
-  1:  { start: '08:45', end: '09:35' },
-  2:  { start: '09:45', end: '10:35' },
-  3:  { start: '10:45', end: '11:35' },
-  4:  { start: '11:45', end: '12:35' },
-  5:  { start: '13:25', end: '14:15' },
-  6:  { start: '14:25', end: '15:15' },
-  // ── 放課後・夜間（22:00まで） ──
-  7:  { start: '15:30', end: '16:30' },
-  8:  { start: '16:30', end: '17:30' },
-  9:  { start: '17:30', end: '18:30' },
-  10: { start: '18:30', end: '19:30' },
-  11: { start: '19:30', end: '20:30' },
-  12: { start: '20:30', end: '21:30' },
-  13: { start: '21:30', end: '22:00' },
+  1: { start: '09:10', end: '10:40' },
+  2: { start: '10:50', end: '12:20' },
+  3: { start: '12:50', end: '14:20' },
+  4: { start: '14:30', end: '16:00' },
+  5: { start: '16:10', end: '17:40' },
+  6: { start: '17:50', end: '19:20' },
+  7: { start: '19:30', end: '20:30' },
+  8: { start: '20:30', end: '21:30' },
+  9: { start: '21:30', end: '22:00' },
 };
 
 export const DAY_NAMES_SHORT = ['日', '月', '火', '水', '木', '金', '土'];
@@ -251,8 +308,7 @@ function getHourlySlots(startTime: string, endTime: string, intervalMin = 60): s
   return result;
 }
 
-/** Free time blocks for a date, outside school hours (within 07:00–22:00).
- *  Detects lunch breaks and any other intra-day gaps between periods. */
+/** Free time blocks for a date, outside school hours (within 07:00–22:00). */
 export function getFreeSlotsForDate(dateStr: string): { start: string; end: string; label: string }[] {
   const dow = new Date(dateStr).getDay();
   const daySlots = getSchoolSchedule().filter(s => s.day === dow);
@@ -287,9 +343,52 @@ export function getFreeSlotsForDate(dateStr: string): { start: string; end: stri
 
   // After school → 22:00
   const lastEnd = PERIOD_TIMES[periods[periods.length - 1]].end;
-  free.push({ start: lastEnd, end: '22:00', label: '放課後' });
+  if (lastEnd < '22:00') {
+    free.push({ start: lastEnd, end: '22:00', label: '放課後' });
+  }
 
   return free;
+}
+
+/** Check if a proposed time slot conflicts with school or existing tasks. */
+export function checkTimeConflict(
+  dateStr: string,
+  timeStr: string,
+  estimatedMin: number
+): { type: 'school' | 'task'; name: string } | null {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  const startMin = h * 60 + m;
+  const endMin   = startMin + Math.max(estimatedMin, 1);
+
+  // Check school schedule
+  const dow = new Date(dateStr).getDay();
+  for (const slot of getSchoolSchedule().filter(s => s.day === dow)) {
+    const { start, end } = PERIOD_TIMES[slot.period];
+    const [sh, sm2] = start.split(':').map(Number);
+    const [eh, em]  = end.split(':').map(Number);
+    const slotStart = sh * 60 + sm2;
+    const slotEnd   = eh * 60 + em;
+    if (startMin < slotEnd && endMin > slotStart) {
+      const label = slot.subject
+        ? `${slot.subject} (${start}〜${end})`
+        : `${slot.period}限 (${start}〜${end})`;
+      return { type: 'school', name: label };
+    }
+  }
+
+  // Check existing tasks on that date
+  for (const task of getTasksForDate(dateStr)) {
+    if (!task.scheduledTime) continue;
+    const [th, tm] = task.scheduledTime.split(':').map(Number);
+    const taskStart = th * 60 + tm;
+    const taskEnd   = taskStart + (task.estimatedMin ?? 60);
+    if (startMin < taskEnd && endMin > taskStart) {
+      return { type: 'task', name: task.title };
+    }
+  }
+
+  return null;
 }
 
 // ── Daily Quotes ──────────────────────────────────────────────────────
@@ -354,6 +453,52 @@ export function getDailyQuotes(): { creator: QuoteEntry; anime: QuoteEntry } {
     creator: CREATOR_QUOTES[day % CREATOR_QUOTES.length],
     anime:   ANIME_QUOTES[day % ANIME_QUOTES.length],
   };
+}
+
+// ── Daily Music Facts ─────────────────────────────────────────────────
+
+export interface MusicFact {
+  fact: string;
+  emoji: string;
+  category: string;
+}
+
+const MUSIC_FACTS: MusicFact[] = [
+  { fact: 'モーツァルトは3歳でピアノを弾き始め、5歳で最初の楽曲を作曲した。生涯で600曲以上を残した。', emoji: '🎹', category: '音楽史' },
+  { fact: 'ビートルズのジョン・レノンとポール・マッカートニーは、お互いのギターのチューニングを確かめることでバンドに入れるかを判断していた。', emoji: '🎸', category: 'バンド' },
+  { fact: '「A=440Hz」は1939年に国際標準として定められた。それ以前はオーケストラによって異なるチューニングが使われていた。', emoji: '🎵', category: '音楽理論' },
+  { fact: 'ドラムセットは20世紀初頭に発明された。それまでドラマーは一人で複数の楽器を別々に演奏していた。', emoji: '🥁', category: 'ドラム' },
+  { fact: 'ピアノの正式名称は「ピアノフォルテ」で、イタリア語で「弱く・強く」を意味する。音量の強弱を表現できる初めての鍵盤楽器だった。', emoji: '🎹', category: 'ピアノ' },
+  { fact: '人間の耳が聞こえる音の周波数は約20Hzから20,000Hz（20kHz）。年齢とともに高音域の聴力は低下していく。', emoji: '👂', category: '音響学' },
+  { fact: 'マイケル・ジャクソンの「スリラー」は史上最も売れたアルバムで、世界中で推定6,600万枚以上が売れた。', emoji: '🌙', category: '音楽史' },
+  { fact: 'レコーディングスタジオの「ボーカルブース」は、周囲の音を遮断するために壁が斜めに作られていることが多い。これにより音の反射（フラッターエコー）を防ぐ。', emoji: '🎙️', category: 'レコーディング' },
+  { fact: 'リズムの基本単位「BPM（Beats Per Minute）」で、人間の安静時の心拍数（60〜80BPM）と多くのポップスのテンポが近いのは偶然ではないという説がある。', emoji: '❤️', category: 'リズム' },
+  { fact: 'ギターの弦が6本なのは18世紀に標準化された。それ以前は4〜5本弦のものが主流だった。', emoji: '🎸', category: '楽器' },
+  { fact: '「絶対音感」を持つ人は世界人口の約0.01%程度とされ、幼少期（特に2〜6歳）の音楽トレーニングで身につきやすい。', emoji: '🎶', category: '音楽心理' },
+  { fact: 'Logic ProはAppleが開発したDAW（Digital Audio Workstation）で、1993年にEmagicが開発した「Notator Logic」が起源。Appleが2002年に買収した。', emoji: '🖥️', category: 'DTM' },
+  { fact: '「ボイストレーニング」における腹式呼吸は、横隔膜を使って深く息を吸い込む呼吸法。胸式呼吸より安定した長いフレーズを歌えるようになる。', emoji: '🫁', category: 'ボイス' },
+  { fact: 'CD（コンパクトディスク）のサンプリングレートが44,100Hz（44.1kHz）なのは、人間の可聴域上限（20kHz）の2倍以上が必要だという「ナイキストの定理」に基づく。', emoji: '💿', category: '音響工学' },
+  { fact: 'ドラムの「バスドラム」を足で踏むための「バスドラムペダル」は、1909年にWilliam F. Ludwigによって発明された。', emoji: '🦶', category: 'ドラム' },
+  { fact: '音楽において「コード進行」とは和音の連続のこと。多くのポップスで使われる「I-V-vi-IV」進行（例：Cメジャーキーでは C-G-Am-F）は「4コード進行」とも呼ばれる。', emoji: '🎵', category: '音楽理論' },
+  { fact: '声帯は1秒間に約100〜1000回振動して音を作る。高い音ほど振動数が増え、低い音ほど少なくなる。', emoji: '🗣️', category: 'ボイス' },
+  { fact: 'レコーディングで使われる「コンデンサーマイク」は繊細な音を拾えるが湿気に弱い。「ダイナミックマイク」はライブ向けで耐久性が高い。', emoji: '🎙️', category: 'レコーディング' },
+  { fact: '「バンドアレンジ」において、各楽器が同じ音域で演奏すると音が団子状になってしまう。音域を分散させる「ボイシング」が重要になる。', emoji: '🎸', category: 'アレンジ' },
+  { fact: 'ピアノの鍵盤は標準で88鍵（7オクターブ＋3音）。人間の可聴域のほぼ全体をカバーしている。', emoji: '🎹', category: 'ピアノ' },
+  { fact: '「ディクション」とはクラシック声楽における発音・滑舌の技術。母音と子音の正確な発音がプロの歌声の明瞭さを生む。', emoji: '🗣️', category: 'ボイス' },
+  { fact: '世界最古の楽器は「フルート」とされる。約4万年前の骨製フルートがドイツで発見されている。', emoji: '🪈', category: '音楽史' },
+  { fact: '「ミックスダウン」はレコーディングした多数のトラックをバランスよく合わせる作業。プロエンジニアは数日から数週間かけてこの作業を行う。', emoji: '🎚️', category: 'レコーディング' },
+  { fact: 'ジャズの即興演奏「インプロビゼーション」は、スケール（音階）とコードを基にリアルタイムで旋律を作り出す高度な技術。', emoji: '🎺', category: '音楽理論' },
+  { fact: 'ドラムの「スネアドラム」に付いている金属の弦は「スナッピー（響き線）」と呼ばれ、独特のシャリシャリした音を生み出す。', emoji: '🥁', category: 'ドラム' },
+  { fact: '人間が音楽を聴くと、脳の「報酬系」でドーパミンが分泌される。好きな曲を聴いた時に鳥肌が立つのもドーパミンの影響。', emoji: '🧠', category: '音楽心理' },
+  { fact: '「ADO」や現代のJ-POPアーティストが多用する「ミックスボイス」は、地声と裏声を融合させた中間的な発声法。習得に数ヶ月〜数年かかる。', emoji: '🎤', category: 'ボイス' },
+  { fact: 'スタジオレコーディングにおける「コンプレッサー」は音の大きさの差（ダイナミクス）を均一にする機材。ドラムやボーカルで特によく使われる。', emoji: '🎛️', category: 'レコーディング' },
+  { fact: 'バンドアンサンブルでは「ベースとドラムがリズムセクション」として機能し、他の楽器の土台を作る。この2つが揃っているだけで音楽として成立する。', emoji: '🎸', category: 'バンド' },
+  { fact: 'プロのミュージシャンは「1万時間の法則」を体現している。毎日3時間練習しても約9年かかる計算。継続こそが最強のスキルだ。', emoji: '⏰', category: '音楽哲学' },
+];
+
+export function getDailyMusicFact(): MusicFact {
+  const day = dayOfYear();
+  return MUSIC_FACTS[day % MUSIC_FACTS.length];
 }
 
 /**

@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { addTask, getDailyRecord, getDoneExercises, today as todayStr, getSpartanComment } from '@/lib/shared-store';
 import { DailyQuoteSection } from '@/components/DailyQuoteSection';
+import { WeatherWidget } from '@/components/WeatherWidget';
+import { MusicFactWidget } from '@/components/MusicFactWidget';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
@@ -1108,6 +1110,12 @@ export default function SpartaAI() {
                 </details>
               </section>
             )}
+
+            {/* ── 天気予報 ── */}
+            {!cleanText && !confirmedTopic && <WeatherWidget />}
+
+            {/* ── 日替わり音楽豆知識 ── */}
+            {!cleanText && !confirmedTopic && <MusicFactWidget />}
 
             {/* ── 日替わり名言 ── */}
             {!cleanText && !confirmedTopic && <DailyQuoteSection />}
