@@ -4,100 +4,100 @@ import { useState, useEffect, useCallback } from 'react';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 interface QuizOption {
-  text:   string;   // 英文
-  trans:  string;   // 日本語訳
+  text:    string;   // 英文
+  trans:   string;   // 日本語訳
   correct: boolean;
 }
 interface Exchange {
-  aiLine:  string;  // AI の英文セリフ
+  aiLine:  string;  // AIの英文セリフ
   aiTrans: string;  // 日本語訳
   options: QuizOption[];
 }
 interface Scenario {
   id:        string;
   title:     string;
-  situation: string;  // 状況説明（日本語）
+  situation: string;
   emoji:     string;
   exchanges: Exchange[];
 }
 
-// ── スパルタあおりメッセージ ──────────────────────────────────────
+// ── スパルタあおりメッセージ（基礎徹底） ─────────────────────────
 const TAUNT_MSGS = [
-  'そんな返答じゃ伝わらないぞ！もう一度考えろ！',
-  '英語で恥をかく前にちゃんと考えろ！やり直しだ！',
-  'ネイティブに笑われる前に正しい表現を身につけろ！',
-  'お前の英語は通じない！選び直せ！',
-  '甘えるな！正確な英語で答えるまでやり直しだ！',
+  'そんな基礎英語でつまずいてどうする！中学英語から叩き直せ！',
+  'A1レベルの英語も怪しいぞ！基礎こそが最強の武器だ！やり直せ！',
+  '海外に出る前に基本フレーズを完璧にしろ！もう一度考えて答えろ！',
+  'こんな基礎的な表現を間違えていては話にならない！しっかり覚えて出直せ！',
+  '旅行英語の基本だぞ！正しい文を選ぶまで何度でもやり直しだ！',
 ];
 
-// ── 12シナリオ × 10往復 ──────────────────────────────────────────
+// ── 12シナリオ × 10往復（初級〜中級 CEFR A1-B1） ─────────────────
 const SCENARIOS: Scenario[] = [
 
   // ─────────────────────────────────────────────────────────────
   // 1. ☕ Coffee Shop
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'coffee', title: 'Coffee Shop Order', situation: 'ニューヨークのカフェで注文をする', emoji: '☕',
+    id: 'coffee', title: 'Coffee Shop Order', situation: 'アメリカのカフェでコーヒーを注文する', emoji: '☕',
     exchanges: [
-      { aiLine: "Hi! Welcome in. What can I get for you today?", aiTrans: "いらっしゃいませ。本日はご注文は何にしますか？",
+      { aiLine: "Hi! What can I get for you today?", aiTrans: "いらっしゃいませ！ご注文はお決まりですか？",
         options: [
-          { text: "I'd like a medium latte, please.",            trans: "ミディアムラテをひとつお願いします。",     correct: true  },
-          { text: "Give me coffee.",                             trans: "コーヒーをくれ。",                         correct: false },
-          { text: "I am wanting to drink a latte.",              trans: "ラテが飲みたいです。",                     correct: false },
+          { text: "I'd like a latte, please.",     trans: "ラテをひとつお願いします。",       correct: true  },
+          { text: "I want latte, please.",          trans: "ラテが欲しいです。",               correct: false },
+          { text: "Give me a latte.",               trans: "ラテをくれ。",                    correct: false },
         ]},
-      { aiLine: "Hot or iced?", aiTrans: "ホットにしますかアイスにしますか？",
+      { aiLine: "Hot or iced?", aiTrans: "ホットにしますか？アイスにしますか？",
         options: [
-          { text: "Hot, please.",                                trans: "ホットでお願いします。",                   correct: true  },
-          { text: "Yes, I want it.",                             trans: "はい、それが欲しいです。",                 correct: false },
-          { text: "I prefer to have the hot one.",               trans: "ホットの方を好みます。",                   correct: false },
+          { text: "Hot, please.",                  trans: "ホットでお願いします。",           correct: true  },
+          { text: "I want it hot.",                trans: "ホットにしたいです。",             correct: false },
+          { text: "Please hot.",                   trans: "ホットにしてください。",           correct: false },
         ]},
-      { aiLine: "What size? Small, medium, or large?", aiTrans: "サイズはスモール・ミディアム・ラージのどれにしますか？",
+      { aiLine: "What size? Small, medium, or large?", aiTrans: "サイズはスモール・ミディアム・ラージのどれですか？",
         options: [
-          { text: "A large one, please.",                        trans: "ラージをお願いします。",                   correct: true  },
-          { text: "Give me the big coffee.",                     trans: "大きいコーヒーをくれ。",                   correct: false },
-          { text: "I will choose large size number.",            trans: "ラージサイズ番号を選びます。",             correct: false },
+          { text: "A medium, please.",             trans: "ミディアムをお願いします。",       correct: true  },
+          { text: "Medium, please.",               trans: "ミディアムをください。",           correct: false },
+          { text: "I choose medium size.",         trans: "ミディアムサイズを選びます。",     correct: false },
         ]},
-      { aiLine: "Would you like anything to eat with that?", aiTrans: "何かお食事はご一緒にいかがですか？",
+      { aiLine: "Anything to eat with that?", aiTrans: "何か食べ物もご一緒にいかがですか？",
         options: [
-          { text: "No, thank you. Just the coffee.",             trans: "いいえ、結構です。コーヒーだけで。",       correct: true  },
-          { text: "No I don't.",                                 trans: "いいえ、違います。",                       correct: false },
-          { text: "I am not eating anything now.",               trans: "今は何も食べません。",                     correct: false },
+          { text: "No, thank you. Just the drink.", trans: "いいえ、結構です。飲み物だけで。", correct: true },
+          { text: "No, I don't want food.",        trans: "いいえ、食べ物は要りません。",     correct: false },
+          { text: "Only drink is OK.",             trans: "飲み物だけで大丈夫です。",         correct: false },
         ]},
-      { aiLine: "Can I get a name for the order?", aiTrans: "ご注文のお名前をお聞きしてもよいですか？",
+      { aiLine: "Can I get a name for the order?", aiTrans: "お名前をいただけますか？",
         options: [
-          { text: "It's Alex. A-L-E-X.",                         trans: "アレックスです。A-L-E-X。",               correct: true  },
-          { text: "My name is very long, sorry.",                trans: "私の名前はとても長くて、すみません。",     correct: false },
-          { text: "I am called by the name Alex.",               trans: "私はアレックスと呼ばれています。",         correct: false },
+          { text: "It's Yuki!",                   trans: "ユキです！",                       correct: true  },
+          { text: "My name is Yuki.",              trans: "私の名前はユキです。",             correct: false },
+          { text: "I am called Yuki.",             trans: "私はユキと呼ばれています。",       correct: false },
         ]},
-      { aiLine: "That'll be $6.50. Cash or card?", aiTrans: "合計6ドル50セントです。現金ですかカードですか？",
+      { aiLine: "That'll be $5.50. Cash or card?", aiTrans: "5ドル50セントです。現金ですかカードですか？",
         options: [
-          { text: "Card, please.",                               trans: "カードでお願いします。",                   correct: true  },
-          { text: "Yes, I have money to pay.",                   trans: "はい、支払うお金があります。",             correct: false },
-          { text: "I will use my card for the paying.",          trans: "支払いにカードを使います。",               correct: false },
+          { text: "Card, please.",                 trans: "カードでお願いします。",           correct: true  },
+          { text: "I pay by card.",                trans: "カードで払います。",               correct: false },
+          { text: "I will use card.",              trans: "カードを使います。",               correct: false },
         ]},
-      { aiLine: "Just tap here. Perfect!", aiTrans: "こちらをタップするだけです。完璧です！",
+      { aiLine: "Just tap your card here.", aiTrans: "カードをこちらにタップしてください。",
         options: [
-          { text: "Great, thank you!",                           trans: "ありがとうございます！",                   correct: true  },
-          { text: "OK, I tap it now.",                           trans: "はい、今タップします。",                   correct: false },
-          { text: "The machine is tapped by me.",                trans: "機械は私にタップされました。",             correct: false },
+          { text: "Sure! All done.",               trans: "はい！できました。",               correct: true  },
+          { text: "OK, I tap it now.",             trans: "はい、今タップします。",           correct: false },
+          { text: "I am tapping now.",             trans: "今タップしています。",             correct: false },
         ]},
-      { aiLine: "Your order will be ready in about 3 minutes.", aiTrans: "ご注文は約3分でご用意できます。",
+      { aiLine: "Your order will be ready in about 3 minutes.", aiTrans: "ご注文は約3分でできます。",
         options: [
-          { text: "Sure, I'll wait right here. Thanks!",         trans: "わかりました、ここで待ちます。ありがとう！", correct: true },
-          { text: "3 minutes is too long time.",                 trans: "3分は長すぎます。",                       correct: false },
-          { text: "OK I am waiting for you here.",               trans: "はい、ここであなたを待ちます。",           correct: false },
+          { text: "No problem. I'll wait here.",   trans: "大丈夫です。ここで待ちます。",     correct: true  },
+          { text: "OK, I wait here.",              trans: "はい、ここで待ちます。",           correct: false },
+          { text: "3 minutes, I am waiting.",      trans: "3分、待っています。",             correct: false },
         ]},
-      { aiLine: "Alex! Your large hot latte is ready!", aiTrans: "アレックスさん！ラージホットラテができました！",
+      { aiLine: "Yuki! Your latte is ready!", aiTrans: "ユキさん！ラテができました！",
         options: [
-          { text: "That's me! Thank you so much.",               trans: "はい私です！ありがとうございます！",       correct: true  },
-          { text: "Yes, this is my coffee now.",                 trans: "はい、これは今の私のコーヒーです。",       correct: false },
-          { text: "I am Alex. Give me that.",                    trans: "私はアレックスです。それをください。",     correct: false },
+          { text: "That's me! Thank you so much.", trans: "はい私です！ありがとうございます！", correct: true },
+          { text: "Yes, this is for me.",          trans: "はい、これは私のものです。",       correct: false },
+          { text: "I am Yuki. Give me please.",    trans: "ユキです。ください。",             correct: false },
         ]},
-      { aiLine: "Enjoy your drink! Have a wonderful day!", aiTrans: "お飲み物をお楽しみください！素晴らしい一日を！",
+      { aiLine: "Enjoy your drink! Have a great day!", aiTrans: "お飲み物をお楽しみください！良い一日を！",
         options: [
-          { text: "Thanks! You too!",                            trans: "ありがとう！あなたも！",                   correct: true  },
-          { text: "OK, I will enjoy it slowly.",                 trans: "はい、ゆっくり楽しみます。",               correct: false },
-          { text: "Yes. Goodbye very much.",                     trans: "はい。たいへんさようなら。",               correct: false },
+          { text: "Thanks! You too!",              trans: "ありがとう！あなたも！",           correct: true  },
+          { text: "Thank you very much.",          trans: "どうもありがとうございます。",     correct: false },
+          { text: "Yes, same to you also.",        trans: "はい、あなたも同じく。",           correct: false },
         ]},
     ],
   },
@@ -106,67 +106,67 @@ const SCENARIOS: Scenario[] = [
   // 2. ✈️ Airport Check-in
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'airport', title: 'Airport Check-in', situation: 'JFK空港でチェックイン手続きをする', emoji: '✈️',
+    id: 'airport', title: 'Airport Check-in', situation: '空港でフライトのチェックインをする', emoji: '✈️',
     exchanges: [
-      { aiLine: "Good morning! Where are you flying to today?", aiTrans: "おはようございます！本日はどちらへ？",
+      { aiLine: "Good morning! Where are you flying today?", aiTrans: "おはようございます！本日はどちらへ？",
         options: [
-          { text: "I'm flying to Tokyo, Japan.",                 trans: "日本の東京に飛びます。",                   correct: true  },
-          { text: "I go to the Tokyo.",                          trans: "東京に行きます。",                         correct: false },
-          { text: "My destination is Tokyo in Japan country.",   trans: "目的地は日本国の東京です。",               correct: false },
+          { text: "I'm flying to Tokyo.",          trans: "東京に飛びます。",                 correct: true  },
+          { text: "I go to Tokyo.",                trans: "東京に行きます。",                 correct: false },
+          { text: "Tokyo is my destination.",      trans: "東京が目的地です。",               correct: false },
         ]},
-      { aiLine: "May I see your passport, please?", aiTrans: "パスポートを見せていただけますか？",
+      { aiLine: "Can I see your passport, please?", aiTrans: "パスポートを見せていただけますか？",
         options: [
-          { text: "Of course, here you go.",                     trans: "もちろんです、どうぞ。",                   correct: true  },
-          { text: "Yes I have my passport.",                     trans: "はい、パスポートを持っています。",         correct: false },
-          { text: "Please to take my passport.",                 trans: "私のパスポートを取って��ださい。",         correct: false },
+          { text: "Of course. Here you go.",       trans: "もちろんです。どうぞ。",           correct: true  },
+          { text: "Yes, I have my passport.",      trans: "はい、パスポートを持っています。", correct: false },
+          { text: "Please look my passport.",      trans: "私のパスポートを見てください。",   correct: false },
         ]},
-      { aiLine: "How many bags are you checking in today?", aiTrans: "本日は手荷物を何個お預けですか？",
+      { aiLine: "Are you checking any bags today?", aiTrans: "本日お荷物はお預けになりますか？",
         options: [
-          { text: "Just one bag, please.",                       trans: "スーツケースひとつだけです。",             correct: true  },
-          { text: "I have got the one bag with me.",             trans: "バッグを一つ持っています。",               correct: false },
-          { text: "My bags number is one.",                      trans: "私のバッグの数は一つです。",               correct: false },
+          { text: "Yes, just one bag.",            trans: "はい、スーツケース一つだけです。", correct: true  },
+          { text: "Yes, I have one bag.",          trans: "はい、バッグが一つあります。",     correct: false },
+          { text: "My bags are one.",              trans: "バッグは一つです。",               correct: false },
         ]},
       { aiLine: "Did you pack this bag yourself?", aiTrans: "このバッグはご自分で荷造りされましたか？",
         options: [
-          { text: "Yes, I packed it myself.",                    trans: "はい、自分で荷造りしました。",             correct: true  },
-          { text: "Yes, I am pack it.",                          trans: "はい、荷造りします。",                     correct: false },
-          { text: "Yes, the bag is packed by myself.",           trans: "はい、バッグは私自身によって荷造りされました。", correct: false },
+          { text: "Yes, I packed it myself.",      trans: "はい、自分で荷造りしました。",     correct: true  },
+          { text: "Yes, I pack it.",               trans: "はい、荷造りします。",             correct: false },
+          { text: "Yes, I am packed it.",          trans: "はい、荷造りしています。",         correct: false },
         ]},
-      { aiLine: "Would you prefer a window or aisle seat?", aiTrans: "窓側と通路側、どちらがよろしいですか？",
+      { aiLine: "Window or aisle seat?", aiTrans: "窓側と通路側どちらがよろしいですか？",
         options: [
-          { text: "A window seat would be great, thanks.",       trans: "窓側の席がいいです、ありがとう。",         correct: true  },
-          { text: "I want to sit at the window side.",           trans: "窓側に座りたいです。",                     correct: false },
-          { text: "Window is my preference for the sitting.",    trans: "窓は座るための私の好みです。",             correct: false },
+          { text: "A window seat, please.",        trans: "窓側の席をお願いします。",         correct: true  },
+          { text: "I want window side.",           trans: "窓側が欲しいです。",               correct: false },
+          { text: "Window is my choice.",          trans: "窓が私の選択です。",               correct: false },
         ]},
-      { aiLine: "Your flight boards at Gate B14 at 10:45.", aiTrans: "フライトはゲートB14から10時45分に搭乗開始です。",
+      { aiLine: "Your gate is B12. Boarding starts at 10:45.", aiTrans: "ゲートはB12です。搭乗は10時45分からです。",
         options: [
-          { text: "Got it. Thank you for letting me know.",      trans: "わかりました。教えていただきありがとう。", correct: true  },
-          { text: "I understand the gate is B14 and 10:45.",     trans: "ゲートがB14で10時45分と理解しています。", correct: false },
-          { text: "OK I go to gate B14 right now.",              trans: "はい、今すぐゲートB14に行きます。",       correct: false },
+          { text: "Got it. Thank you!",            trans: "わかりました。ありがとうございます！", correct: true },
+          { text: "I understand, gate B12.",       trans: "わかりました、ゲートB12。",         correct: false },
+          { text: "OK I go to gate now.",          trans: "はい、今ゲートに行きます。",       correct: false },
         ]},
-      { aiLine: "Your bag is 3 kilos overweight. There's a $60 excess fee.", aiTrans: "バッグが3キロ超過しています。超過料金60ドルかかります。",
+      { aiLine: "Your bag is 2 kilos over. There's a $30 fee.", aiTrans: "バッグが2キロ超過です。30ドルの料金がかかります。",
         options: [
-          { text: "I'll pay that. Can I use my card?",           trans: "払います。カードで支払えますか？",         correct: true  },
-          { text: "60 dollars is very expensive!",               trans: "60ドルはとても高い！",                     correct: false },
-          { text: "Why is my bag the overweight?",               trans: "なぜ私のバッグは超過なのですか？",         correct: false },
+          { text: "OK. I'll pay by card, please.", trans: "わかりました。カードで払います。", correct: true  },
+          { text: "OK, card payment.",             trans: "はい、カード支払いで。",           correct: false },
+          { text: "I use card for pay.",           trans: "支払いにカードを使います。",       correct: false },
         ]},
-      { aiLine: "Is there anything fragile or valuable in your checked bag?", aiTrans: "預け入れ荷物に壊れやすいものや貴重品はありますか？",
+      { aiLine: "Is this your first time flying internationally?", aiTrans: "国際線のフライトは初めてですか？",
         options: [
-          { text: "No, just clothes and everyday items.",        trans: "いいえ、衣類と日用品だけです。",           correct: true  },
-          { text: "I don't have the fragile things.",            trans: "壊れやすいものは持っていません。",         correct: false },
-          { text: "Nothing special and fragile is in there.",    trans: "特別で壊れやすいものはそこにありません。", correct: false },
+          { text: "No, I fly a few times a year.", trans: "いいえ、年に数回飛んでいます。",   correct: true  },
+          { text: "No, I fly some times in year.", trans: "いいえ、年に数回飛びます。",       correct: false },
+          { text: "No, I am flying often.",        trans: "いいえ、よく飛んでいます。",       correct: false },
         ]},
-      { aiLine: "Here are your boarding pass and passport. Have a safe flight!", aiTrans: "搭乗券とパスポートをどうぞ。安全なご旅行を！",
+      { aiLine: "Here's your boarding pass. Have everything?", aiTrans: "搭乗券です。お忘れ物はありませんか？",
         options: [
-          { text: "Thank you so much! I really appreciate it.",  trans: "本当にありがとうございます！",             correct: true  },
-          { text: "OK I take these things from you.",            trans: "はい、あなたからこれらをもらいます。",     correct: false },
-          { text: "Yes these things are belonging to me.",       trans: "はい、これらは私のものです。",             correct: false },
+          { text: "Yes, I think so. Thank you!",   trans: "はい、大丈夫だと思います。ありがとう！", correct: true },
+          { text: "Yes, I have all things.",       trans: "はい、全部持っています。",         correct: false },
+          { text: "Yes, everything is there.",     trans: "はい、全部ありますね。",           correct: false },
         ]},
-      { aiLine: "Security is just down the hall to your left.", aiTrans: "セキュリティチェックは廊下を進んで左です。",
+      { aiLine: "Enjoy your flight! Safe travels!", aiTrans: "フライトをお楽しみください！良いご旅行を！",
         options: [
-          { text: "Perfect, thank you! I'll head there now.",    trans: "わかりました、ありがとう！今から向かいます。", correct: true },
-          { text: "I understand the direction is left.",         trans: "方向が左だと理解しています。",             correct: false },
-          { text: "OK thank you very much for the help to me.",  trans: "はい、私への助けに大変ありがとう。",       correct: false },
+          { text: "Thank you! Have a great day!",  trans: "ありがとうございます！良い一日を！", correct: true },
+          { text: "Thank you. Bye bye.",           trans: "ありがとう。さようなら。",         correct: false },
+          { text: "Yes, goodbye for now.",         trans: "はい、今のところさようなら。",     correct: false },
         ]},
     ],
   },
@@ -175,136 +175,136 @@ const SCENARIOS: Scenario[] = [
   // 3. 🏨 Hotel Check-in
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'hotel', title: 'Hotel Check-in', situation: 'ホテルのフロントでチェックインをする', emoji: '🏨',
+    id: 'hotel', title: 'Hotel Check-in', situation: 'アメリカのホテルでチェックインする', emoji: '🏨',
     exchanges: [
-      { aiLine: "Good evening! Welcome to the Grand Hotel. Do you have a reservation?", aiTrans: "こんばんは！グランドホテルへようこそ。ご予約はございますか？",
+      { aiLine: "Welcome! Do you have a reservation?", aiTrans: "いらっしゃいませ！ご予約はございますか？",
         options: [
-          { text: "Yes, I have a reservation under Kim.",        trans: "はい、キムの名前で予約しています。",       correct: true  },
-          { text: "Yes I made reservation before.",              trans: "はい、前に予約しました。",                 correct: false },
-          { text: "The reservation is having by me, yes.",       trans: "予約は私によって持たれています。",         correct: false },
+          { text: "Yes, I do. My name is Yuki.",   trans: "はい、あります。ユキと申します。", correct: true  },
+          { text: "Yes, I have reservation.",      trans: "はい、予約があります。",           correct: false },
+          { text: "Yes, I reserved room.",         trans: "はい、部屋を予約しました。",       correct: false },
         ]},
-      { aiLine: "Could I see your ID or passport, please?", aiTrans: "IDまたはパスポートを拝見できますか？",
+      { aiLine: "Can I have your ID, please?", aiTrans: "身分証明書を見せていただけますか？",
         options: [
-          { text: "Sure, here's my passport.",                   trans: "もちろん、パスポートです。",               correct: true  },
-          { text: "Yes I will show you the ID.",                 trans: "はい、IDをお見せします。",                 correct: false },
-          { text: "My passport is this one here.",               trans: "パスポートはこちらのこれです。",           correct: false },
+          { text: "Sure, here you are.",           trans: "もちろんです。どうぞ。",           correct: true  },
+          { text: "Yes, I have my ID.",            trans: "はい、IDを持っています。",         correct: false },
+          { text: "Please see my ID card.",        trans: "私のIDを見てください。",           correct: false },
         ]},
-      { aiLine: "You've booked a double room for three nights. Is that correct?", aiTrans: "ダブルルームを3泊でご予約いただいています。よろしいですか？",
+      { aiLine: "How many nights are you staying?", aiTrans: "何泊のご予定ですか？",
         options: [
-          { text: "That's right, yes.",                          trans: "はい、その通りです。",                     correct: true  },
-          { text: "Yes it is the correct thing.",                trans: "はい、それが正しいことです。",             correct: false },
-          { text: "I booked the double room for three nights.",  trans: "ダブルルームを3泊予約しました。",         correct: false },
+          { text: "Three nights, please.",         trans: "3泊お願いします。",               correct: true  },
+          { text: "I stay three nights.",          trans: "3泊します。",                     correct: false },
+          { text: "My stay is three night.",       trans: "私の滞在は3泊です。",             correct: false },
         ]},
-      { aiLine: "Would you like a room with a city view or a garden view?", aiTrans: "シティビューとガーデンビュー、どちらのお部屋がよろしいですか？",
+      { aiLine: "I have a double room for you on the 5th floor.", aiTrans: "5階のダブルルームをご用意しています。",
         options: [
-          { text: "City view sounds great, please.",             trans: "シティビューがいいです、お願いします。",   correct: true  },
-          { text: "I want to see the city from my room.",        trans: "部屋から街を見たいです。",                 correct: false },
-          { text: "City view is my selected choice.",            trans: "シティビューが私の選んだ選択です。",       correct: false },
+          { text: "That sounds perfect. Thank you!", trans: "完璧ですね。ありがとうございます！", correct: true },
+          { text: "OK, 5th floor is good.",        trans: "はい、5階で大丈夫です。",         correct: false },
+          { text: "Yes, I take that room.",        trans: "はい、その部屋にします。",         correct: false },
         ]},
-      { aiLine: "Breakfast is served from 7 to 10 AM in the restaurant on the second floor.", aiTrans: "朝食は2階のレストランにて7時から10時まで提供しております。",
+      { aiLine: "Would you like a non-smoking room?", aiTrans: "禁煙室がよろしいですか？",
         options: [
-          { text: "Great, I'll keep that in mind. Thank you.",   trans: "わかりました、覚えておきます。ありがとう。", correct: true },
-          { text: "OK I understand the breakfast time.",         trans: "はい、朝食の時間を理解しました。",         correct: false },
-          { text: "Breakfast is at 7 to 10 on second floor.",    trans: "朝食は2階の7時から10時です。",             correct: false },
+          { text: "Yes, please. Non-smoking is great.", trans: "はい、お願いします。禁煙がいいです。", correct: true },
+          { text: "Yes, I don't smoke.",           trans: "はい、タバコを吸いません。",       correct: false },
+          { text: "Non-smoking please for me.",    trans: "私のために禁煙室をお願いします。", correct: false },
         ]},
-      { aiLine: "The Wi-Fi password is on the card in your room.",  aiTrans: "Wi-Fiのパスワードはお部屋の中のカードに記載されています。",
+      { aiLine: "Breakfast is served from 7 to 10 AM in the restaurant.", aiTrans: "朝食はレストランで7時から10時まで提供しています。",
         options: [
-          { text: "Perfect. Is there anything else I should know?", trans: "わかりました。他に知っておくことはありますか？", correct: true },
-          { text: "OK the password is on the card in my room.",  trans: "はい、パスワードは私の部屋のカードにあります。", correct: false },
-          { text: "I will look for the card with password.",     trans: "パスワード付きのカードを探します。",       correct: false },
+          { text: "Good to know. Is it included?", trans: "わかりました。朝食は含まれていますか？", correct: true },
+          { text: "OK, 7 to 10. I understand.",    trans: "はい、7時から10時。わかりました。", correct: false },
+          { text: "I eat breakfast at 8.",         trans: "朝食は8時に食べます。",           correct: false },
         ]},
-      { aiLine: "Check-out time is at noon. Late check-out is available for an extra fee.", aiTrans: "チェックアウトは正午です。レイトチェックアウトは追加料金で可能です。",
+      { aiLine: "There's free Wi-Fi. The password is on your key card.", aiTrans: "無料Wi-Fiがあります。パスワードはキーカードに書いてあります。",
         options: [
-          { text: "Good to know. I'll probably check out at noon.", trans: "わかりました。おそらく正午にチェックアウトします。", correct: true },
-          { text: "I understand check-out is 12 o'clock noon.", trans: "チェックアウトが正午12時と理解しました。",  correct: false },
-          { text: "Noon is the time I must leave the hotel.",    trans: "正午は私がホテルを去らなければならない時間です。", correct: false },
+          { text: "Great, thank you for letting me know!", trans: "ありがとうございます！教えていただいて助かります！", correct: true },
+          { text: "OK, I understand the Wi-Fi.",   trans: "はい、Wi-Fiを理解しました。",     correct: false },
+          { text: "Good. I need the internet.",    trans: "良いです。インターネットが必要です。", correct: false },
         ]},
-      { aiLine: "Here is your room key card. Your room is on the 8th floor, room 812.", aiTrans: "こちらがルームキーカードです。お部屋は8階の812号室です。",
+      { aiLine: "Do you need help with your luggage?", aiTrans: "お荷物のお手伝いはご必要ですか？",
         options: [
-          { text: "Thank you! Is the elevator nearby?",          trans: "ありがとうございます！エレベーターはそこにありますか？", correct: true },
-          { text: "OK I go to 8th floor room 812 now.",          trans: "はい、今すぐ8階812号室に行きます。",       correct: false },
-          { text: "My room is 812 on the 8th floor.",            trans: "私の部屋は8階の812です。",                 correct: false },
+          { text: "No, thank you. I can manage.",  trans: "いいえ、結構です。自分で大丈夫です。", correct: true },
+          { text: "No, I am fine.",                trans: "いいえ、大丈夫です。",             correct: false },
+          { text: "No, I carry by myself.",        trans: "いいえ、自分で運びます。",         correct: false },
         ]},
-      { aiLine: "The elevator is right around the corner to your left.", aiTrans: "エレベーターは左に曲がったすぐのところにございます。",
+      { aiLine: "Check-out is at 11 AM. Is that OK?", aiTrans: "チェックアウトは午前11時です。よろしいですか？",
         options: [
-          { text: "Great, thank you for all your help!",         trans: "ありがとうございます、いろいろ助かりました！", correct: true },
-          { text: "I see the elevator is to the left corner.",   trans: "エレベーターが左角にあるとわかります。",   correct: false },
-          { text: "OK I turn left and find the elevator.",       trans: "はい、左に曲がってエレベーターを見つけます。", correct: false },
+          { text: "That's fine. Thank you.",       trans: "大丈夫です。ありがとうございます。", correct: true },
+          { text: "11 AM is OK.",                  trans: "11時で大丈夫です。",               correct: false },
+          { text: "I check out at 11.",            trans: "11時にチェックアウトします。",     correct: false },
         ]},
-      { aiLine: "Enjoy your stay! Please let us know if you need anything.", aiTrans: "どうぞごゆっくりお過ごしください！何かご用があればお知らせください。",
+      { aiLine: "Here's your key card. Enjoy your stay!", aiTrans: "こちらがキーカードです。ごゆっくりお過ごしください！",
         options: [
-          { text: "Thank you so much! I'll definitely reach out if I need anything.", trans: "ありがとうございます！何かあればご連絡します。", correct: true },
-          { text: "OK I will tell you if I need something.",     trans: "はい、何か必要なら言います。",             correct: false },
-          { text: "Yes I enjoy staying and tell you if needing.", trans: "はい、滞在を楽しみ必要なら言います。",   correct: false },
+          { text: "Thank you! I'm sure I will.",   trans: "ありがとうございます！楽しみます！", correct: true },
+          { text: "Thank you. Goodbye.",           trans: "ありがとう。さようなら。",         correct: false },
+          { text: "Yes, I enjoy my room.",         trans: "はい、部屋を楽しみます。",         correct: false },
         ]},
     ],
   },
 
   // ─────────────────────────────────────────────────────────────
   // 4. 🍽️ Restaurant
-  // ─────────��───────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
   {
-    id: 'restaurant', title: 'At the Restaurant', situation: 'レストランで食事をする（席の案内から会計まで）', emoji: '🍽️',
+    id: 'restaurant', title: 'Restaurant Dining', situation: 'アメリカのレストランで夕食を食べる', emoji: '🍽️',
     exchanges: [
-      { aiLine: "Good evening! Do you have a reservation, or are you a walk-in?", aiTrans: "こんばんは！ご予約はありますか、それともウォークインですか？",
+      { aiLine: "Good evening! Do you have a reservation?", aiTrans: "こんばんは！ご予約はございますか？",
         options: [
-          { text: "We're a walk-in. A table for two, please.",   trans: "予約なしです。2名でお願いします。",         correct: true  },
-          { text: "We don't have reservation, two persons.",     trans: "予約はありません、2人です。",               correct: false },
-          { text: "We are coming without reservation, two.",     trans: "予約なしで来ました、2人です。",             correct: false },
+          { text: "Yes, for two people. My name is Yuki.", trans: "はい、2人です。ユキと申します。", correct: true },
+          { text: "Yes, two peoples.",             trans: "はい、2人です。",                 correct: false },
+          { text: "Yes, I reserved for 2 person.", trans: "はい、2人で予約しました。",       correct: false },
         ]},
-      { aiLine: "Right this way, please. Here are your menus.", aiTrans: "こちらへどうぞ。メニューです。",
+      { aiLine: "Can I get you something to drink?", aiTrans: "お飲み物はいかがですか？",
         options: [
-          { text: "Thank you! This place looks lovely.",         trans: "ありがとうございます！素敵なお店ですね。", correct: true  },
-          { text: "OK I take the menu now.",                     trans: "はい、今メニューをもらいます。",           correct: false },
-          { text: "The menus are given to us. Thank you.",       trans: "メニューが私たちに渡されました。ありがとう。", correct: false },
+          { text: "Water for me, please.",         trans: "お水をお願いします。",             correct: true  },
+          { text: "I want water.",                 trans: "水が欲しいです。",                 correct: false },
+          { text: "Please bring water.",           trans: "水を持ってきてください。",         correct: false },
         ]},
-      { aiLine: "Can I start you off with some drinks?", aiTrans: "最初にお飲み物をいかがですか？",
+      { aiLine: "Are you ready to order?", aiTrans: "ご注文はお決まりですか？",
         options: [
-          { text: "I'll have a sparkling water, please.",        trans: "スパークリングウォーターをお願いします。", correct: true  },
-          { text: "Yes water is good to drink.",                 trans: "はい、水は飲むのに良いです。",             correct: false },
-          { text: "I am wanting to drink sparkling water.",      trans: "スパークリングウォーターを飲みたいです。", correct: false },
+          { text: "Yes! I'd like the pasta, please.", trans: "はい！パスタをお願いします。", correct: true  },
+          { text: "Yes, I want pasta.",            trans: "はい、パスタが欲しいです。",       correct: false },
+          { text: "I order pasta.",                trans: "パスタを注文します。",             correct: false },
         ]},
-      { aiLine: "Are you ready to order, or do you need a few more minutes?", aiTrans: "ご注文はよろしいですか、それともしばらく時間が必要ですか？",
+      { aiLine: "How would you like your steak? Rare, medium, or well-done?", aiTrans: "ステーキの焼き加減はいかがですか？レア・ミディアム・ウェルダン？",
         options: [
-          { text: "I think we need a couple more minutes, if that's okay.", trans: "もう少し時間をいただけますか。", correct: true },
-          { text: "We are not ready yet for the ordering.",      trans: "まだ注文する準備ができていません。",       correct: false },
-          { text: "Please wait, we still reading the menu.",     trans: "待ってください、まだメニューを読んでいます。", correct: false },
+          { text: "Medium, please.",               trans: "ミディアムでお願いします。",       correct: true  },
+          { text: "I want medium steak.",          trans: "ミディアムのステーキが欲しいです。", correct: false },
+          { text: "Please cook medium for me.",    trans: "ミディアムで焼いてください。",     correct: false },
         ]},
-      { aiLine: "What would you like to have for your main course?", aiTrans: "メインコースは何になさいますか？",
+      { aiLine: "Do you have any food allergies?", aiTrans: "食物アレルギーはございますか？",
         options: [
-          { text: "I'll go with the grilled salmon, please.",    trans: "グリルサーモンにします。",                 correct: true  },
-          { text: "I want to eat the salmon grilled.",           trans: "焼いたサーモンを食べたいです。",           correct: false },
-          { text: "Give me salmon with grill, please.",          trans: "グリルのサーモンをください。",             correct: false },
+          { text: "No, I don't. I can eat everything.", trans: "いいえ、ありません。何でも食べられます。", correct: true },
+          { text: "No, I have no allergy.",        trans: "いいえ、アレルギーはないです。",   correct: false },
+          { text: "I don't have food problem.",    trans: "食べ物の問題はありません。",       correct: false },
         ]},
-      { aiLine: "How would you like your steak cooked?", aiTrans: "ステーキの焼き加減はいかがいたしますか？",
+      { aiLine: "How is everything? Is the food OK?", aiTrans: "いかがですか？お食事はよろしいですか？",
         options: [
-          { text: "Medium rare, please.",                        trans: "ミディアムレアでお願いします。",           correct: true  },
-          { text: "I want half-cooked steak.",                   trans: "半分焼いたステーキが欲しいです。",         correct: false },
-          { text: "Cook it in the medium and rare way.",         trans: "ミディアムとレアの方法で調理してください。", correct: false },
+          { text: "It's delicious! I love it.",   trans: "最高においしいです！大好きです！", correct: true  },
+          { text: "Very delicious. I like it.",   trans: "とても美味しいです。好きです。",   correct: false },
+          { text: "Food is very good taste.",     trans: "食べ物がとても良い味です。",       correct: false },
         ]},
-      { aiLine: "Is everything tasting all right so far?", aiTrans: "お料理のお味はいかがでしょうか？",
+      { aiLine: "Would you like some dessert?", aiTrans: "デザートはいかがですか？",
         options: [
-          { text: "Yes, it's absolutely delicious. Compliments to the chef!", trans: "はい、とても美味しいです。シェフに伝えてください！", correct: true },
-          { text: "Yes the food is very delicious taste.",       trans: "はい、食べ物はとても美味しい味です。",     correct: false },
-          { text: "The eating is good and delicious for me.",    trans: "食べることは私にとって良くて美味しいです。", correct: false },
+          { text: "Yes, please! What do you recommend?", trans: "はい、お願いします！おすすめは何ですか？", correct: true },
+          { text: "Yes, I want dessert.",         trans: "はい、デザートが欲しいです。",     correct: false },
+          { text: "Yes. What desserts do you have?", trans: "はい。どんなデザートがありますか？", correct: false },
         ]},
-      { aiLine: "Can I get you anything else? Dessert, perhaps?", aiTrans: "他にご注文はございますか？デザートはいかがでしょうか？",
+      { aiLine: "Our chocolate cake is very popular.", aiTrans: "チョコレートケーキがとても人気です。",
         options: [
-          { text: "Actually, yes! What desserts do you have?",   trans: "そうですね！どんなデザートがありますか？", correct: true  },
-          { text: "I want to see the dessert menu please.",      trans: "デザートメニューを見たいです。",           correct: false },
-          { text: "Yes please show me what dessert you have.",   trans: "はい、どんなデザートがあるか見せてください。", correct: false },
+          { text: "That sounds great. I'll have that!", trans: "それは良さそう！それにします！", correct: true },
+          { text: "OK, chocolate cake please.",   trans: "はい、チョコレートケーキをください。", correct: false },
+          { text: "I take chocolate cake.",       trans: "チョコレートケーキにします。",     correct: false },
         ]},
-      { aiLine: "Would you like separate checks, or all together?", aiTrans: "別々でお支払いですか、それともまとめてですか？",
+      { aiLine: "Can I bring you the check?", aiTrans: "お会計をお持ちしましょうか？",
         options: [
-          { text: "All together, please. I'll get it.",          trans: "まとめて、お願いします。私が払います。",   correct: true  },
-          { text: "We pay together in one.",                     trans: "一つにまとめて払います。",                 correct: false },
-          { text: "Together is fine for us.",                    trans: "まとめてが私たちには良いです。",           correct: false },
+          { text: "Yes, please. Can we split it?", trans: "はい、お願いします。割り勘にできますか？", correct: true },
+          { text: "Yes please. We pay separately.", trans: "はい。別々に払います。",         correct: false },
+          { text: "Yes. We each pay own money.",   trans: "はい。それぞれ自分で払います。",  correct: false },
         ]},
-      { aiLine: "I hope you enjoyed your meal! Please come again!", aiTrans: "お食事を楽しんでいただけたでしょうか！またぜひお越しください！",
+      { aiLine: "Thank you for coming. Have a great night!", aiTrans: "ご来店ありがとうございました。良い夜を！",
         options: [
-          { text: "It was fantastic! We'll definitely be back.",  trans: "素晴らしかったです！絶対また来ます。",     correct: true  },
-          { text: "Yes the meal was enjoyed by us.",             trans: "はい、食事は私たちに楽しまれました。",     correct: false },
-          { text: "We enjoyed. We will come again next time.",   trans: "楽しみました。次回またきます。",           correct: false },
+          { text: "Thank you! The food was wonderful.", trans: "ありがとうございます！料理が最高でした！", correct: true },
+          { text: "Thank you. Food was good.",    trans: "ありがとう。食べ物は良かった。",   correct: false },
+          { text: "Yes, very thanks. Good food.", trans: "はい、大変ありがとう。良い食べ物。", correct: false },
         ]},
     ],
   },
@@ -313,550 +313,550 @@ const SCENARIOS: Scenario[] = [
   // 5. 🛒 Shopping
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'shopping', title: 'Shopping at a Store', situation: 'ブランドショップで服を購入する', emoji: '🛒',
+    id: 'shopping', title: 'Clothes Shopping', situation: 'アメリカのショップで服を買う', emoji: '🛒',
     exchanges: [
-      { aiLine: "Hi there! Can I help you find anything today?", aiTrans: "いらっしゃいませ！何かお探しですか？",
+      { aiLine: "Hi! Can I help you find something today?", aiTrans: "いらっしゃいませ！何かお探しですか？",
         options: [
-          { text: "Yes, I'm looking for a casual jacket.",       trans: "はい、カジュアルジャケットを探しています。", correct: true },
-          { text: "I am wanting to find a jacket.",              trans: "ジャケットを見つけたいです。",             correct: false },
-          { text: "Yes, jacket is what I want to find.",         trans: "はい、ジャケットが見つけたいものです。",   correct: false },
+          { text: "Yes! I'm looking for a T-shirt.", trans: "はい！Tシャツを探しています。",  correct: true  },
+          { text: "Yes, I look for T-shirt.",       trans: "はい、Tシャツを探します。",       correct: false },
+          { text: "Yes. I want to buy T-shirt.",    trans: "はい。Tシャツを買いたいです。",   correct: false },
         ]},
-      { aiLine: "Do you have a particular size in mind?", aiTrans: "サイズはご希望がありますか？",
+      { aiLine: "What size are you looking for?", aiTrans: "サイズは何をお探しですか？",
         options: [
-          { text: "I usually wear a medium.",                    trans: "普通はMサイズです。",                     correct: true  },
-          { text: "My size is the medium one.",                  trans: "私のサイズはMです。",                     correct: false },
-          { text: "I am wearing size medium normally.",          trans: "普通はMサイズを着ています。",             correct: false },
+          { text: "I'm a medium, I think.",         trans: "たぶんミディアムだと思います。",   correct: true  },
+          { text: "I am size medium.",              trans: "私はサイズミディアムです。",       correct: false },
+          { text: "My size is medium usually.",     trans: "私のサイズはたいていミディアムです。", correct: false },
         ]},
-      { aiLine: "We have this style in black, navy, and olive green. Which do you prefer?", aiTrans: "このスタイルはブラック・ネイビー・オリーブグリーンがあります。どれがよろしいですか？",
+      { aiLine: "We have this one in blue, black, and white.", aiTrans: "これはブルー・ブラック・ホワイトがあります。",
         options: [
-          { text: "The navy one looks great. Can I try it on?",  trans: "ネイビーが良さそうです。試着できますか？", correct: true  },
-          { text: "I want to try the navy color one.",           trans: "ネイビーカラーのを試したいです。",         correct: false },
-          { text: "Navy is my color choice. Try on possible?",  trans: "ネイビーが私の色の選択。試着可能ですか？", correct: false },
+          { text: "The blue one looks nice. Can I try it on?", trans: "ブルーが良さそうです。試着できますか？", correct: true },
+          { text: "I want blue. Can I try?",        trans: "ブルーが欲しいです。試せますか？", correct: false },
+          { text: "Blue is good. Fitting room OK?", trans: "ブルーがいいです。試着室OK?",    correct: false },
         ]},
-      { aiLine: "The fitting rooms are right over here. Let me know how it fits!", aiTrans: "試着室はすぐそこです。サイズ感を教えてください！",
+      { aiLine: "The fitting rooms are over there on the right.", aiTrans: "試着室はあちら右側にございます。",
         options: [
-          { text: "Thank you! I'll be right out.",               trans: "ありがとうございます！すぐ出てきます。",   correct: true  },
-          { text: "OK I go to fitting room now.",                trans: "はい、今試着室に行きます。",               correct: false },
-          { text: "I will try the clothes in the room.",         trans: "部屋で服を試します。",                     correct: false },
+          { text: "Thank you! I'll go try it on.",  trans: "ありがとうございます！試着してきます。", correct: true },
+          { text: "OK, I go try now.",              trans: "はい、今試しに行きます。",         correct: false },
+          { text: "I understand. I try it.",        trans: "わかりました。試します。",         correct: false },
         ]},
-      { aiLine: "How does it fit? Does it feel comfortable?", aiTrans: "サイズはいかがですか？着心地はよいですか？",
+      { aiLine: "How does it fit?", aiTrans: "サイズはいかがでしたか？",
         options: [
-          { text: "It fits perfectly! I'll take it.",            trans: "ぴったりです！これにします。",             correct: true  },
-          { text: "Yes it is the good fit for me.",              trans: "はい、私には良いフィットです。",           correct: false },
-          { text: "The jacket fits well and I want it.",         trans: "ジャケットはよく合い、欲しいです。",       correct: false },
+          { text: "It fits well, but do you have a large?", trans: "よく合いますが、ラージはありますか？", correct: true },
+          { text: "It is fit, but I want large.",  trans: "合ってますが、ラージが欲しいです。", correct: false },
+          { text: "Good fit. But large size, please.", trans: "フィットします。でもラージをください。", correct: false },
         ]},
-      { aiLine: "Would you like to pay full price, or would you like to use a coupon?", aiTrans: "通常価格でお支払いになりますか？それともクーポンをお使いになりますか？",
+      { aiLine: "Sure! Here's a large. Take your time.", aiTrans: "はい！ラージです。ごゆっくりどうぞ。",
         options: [
-          { text: "Do you accept digital coupons? I have one on my phone.", trans: "デジタルクーポンは使えますか？スマホにあります。", correct: true },
-          { text: "I have coupon on my smartphone phone.",       trans: "スマートフォンにクーポンがあります。",     correct: false },
-          { text: "Yes I want to use coupon if possible.",       trans: "はい、可能ならクーポンを使いたいです。",   correct: false },
+          { text: "Thank you! This one is perfect!",trans: "ありがとうございます！これは完璧です！", correct: true },
+          { text: "Thank you. This size is good.", trans: "ありがとう。このサイズは良いです。", correct: false },
+          { text: "OK good. This is fitting well.", trans: "良いです。これはよく合っています。", correct: false },
         ]},
-      { aiLine: "That'll be $89. And would you like a bag?", aiTrans: "89ドルです。袋はご入り用ですか？",
+      { aiLine: "Great! Would you like anything else?", aiTrans: "良かったです！他に何かお探しですか？",
         options: [
-          { text: "Yes, please. I'll pay by card.",              trans: "はい、お願いします。カードで払います。",   correct: true  },
-          { text: "Yes give me bag. I pay with card.",           trans: "はい、袋をください。カードで払います。",   correct: false },
-          { text: "Bag is needed by me. Card payment please.",   trans: "袋が私に必要です。カード払いでお願いします。", correct: false },
+          { text: "No, I'm good. Just this one.",  trans: "いいえ、大丈夫です。これだけでいいです。", correct: true },
+          { text: "No, only this T-shirt.",        trans: "いいえ、このTシャツだけです。",   correct: false },
+          { text: "I am fine with only this.",     trans: "これだけで大丈夫です。",           correct: false },
         ]},
-      { aiLine: "We also have matching trousers if you're interested.", aiTrans: "ご興味があれば、お揃いのパンツもございます。",
+      { aiLine: "Is this a gift? We can gift-wrap it.", aiTrans: "プレゼント用ですか？ギフトラップできますよ。",
         options: [
-          { text: "Oh really? I might check those out too.",     trans: "本当ですか？そちらも見てみます。",         correct: true  },
-          { text: "Yes I want to see the matching trousers.",    trans: "はい、お揃いのパンツを見たいです。",       correct: false },
-          { text: "Interesting, show me the matching trouser.",  trans: "面白いです、お揃いのパンツを見せてください。", correct: false },
+          { text: "No, it's for me. Thanks, though!", trans: "いいえ、自分用です。でもありがとうございます！", correct: true },
+          { text: "No, it's mine.",                trans: "いいえ、私のものです。",           correct: false },
+          { text: "No, I buy for myself.",         trans: "いいえ、自分に買います。",         correct: false },
         ]},
-      { aiLine: "Here's your receipt. You can return it within 30 days.", aiTrans: "レシートです。30日以内は返品が可能です。",
+      { aiLine: "That comes to $29.99. Cash or card?", aiTrans: "合計29ドル99セントです。現金ですかカードですか？",
         options: [
-          { text: "Good to know. Thanks for all your help today!", trans: "覚えておきます。今日はいろいろありがとうございました！", correct: true },
-          { text: "OK I understand the return policy.",          trans: "はい、返品ポ��シーを理解しました。",       correct: false },
-          { text: "Thank you for the receipt and information.",  trans: "レシートと情報をありがとう。",             correct: false },
+          { text: "Card, please.",                 trans: "カードでお願いします。",           correct: true  },
+          { text: "I pay with card.",              trans: "カードで払います。",               correct: false },
+          { text: "Card payment for me.",          trans: "カードでの支払いです。",           correct: false },
         ]},
-      { aiLine: "Come back anytime! We have new arrivals every week.", aiTrans: "またいつでもお越しください！毎週新商品が入ります。",
+      { aiLine: "Here's your receipt. Thanks for shopping with us!", aiTrans: "こちらがレシートです。ご利用ありがとうございました！",
         options: [
-          { text: "I definitely will! You've been so helpful.",  trans: "絶対また来ます！とても助かりました。",     correct: true  },
-          { text: "OK I will come back when new things arrive.", trans: "新商品が来たらまた戻ります。",             correct: false },
-          { text: "Yes I return here in the future times.",      trans: "はい、将来の時間にここに戻ります。",       correct: false },
+          { text: "Thank you! I love this store.", trans: "ありがとうございます！このお店が大好きです！", correct: true },
+          { text: "Thank you. This store is good.", trans: "ありがとう。このお店は良いです。", correct: false },
+          { text: "Yes, thanks. I like buy here.", trans: "はい、ありがとう。ここで買うのが好きです。", correct: false },
         ]},
     ],
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 6. 🗺️ Asking Directions
-  // ���────────────────────────────────────────────────────────────
+  // 6. 🗺️ Asking for Directions
+  // ─────────────────────────────────────────────────────────────
   {
-    id: 'directions', title: 'Asking for Directions', situation: '道で見知らぬ人に道を尋ねる', emoji: '🗺️',
+    id: 'directions', title: 'Asking for Directions', situation: '旅行先で地元の人に道を聞く', emoji: '🗺️',
     exchanges: [
-      { aiLine: "Hi, can I help you?", aiTrans: "こんにちは、何かお手伝いできますか？",
+      { aiLine: "Hi! You look a bit lost. Can I help?", aiTrans: "こんにちは！少し迷っているみたいですね。お手伝いできますか？",
         options: [
-          { text: "Yes, please! I'm a bit lost. Could you help me?", trans: "はい！少し迷っています。助けてもらえますか？", correct: true },
-          { text: "Yes I am lost and need help.",                trans: "はい、迷っていて助けが必要です。",         correct: false },
-          { text: "I don't know where I am. Help me.",           trans: "どこにいるかわかりません。助けてください。", correct: false },
+          { text: "Yes, please! I'm looking for the station.", trans: "はい、お願いします！駅を探しています。", correct: true },
+          { text: "Yes. Where is station?",         trans: "はい。駅はどこですか？",           correct: false },
+          { text: "Yes, I am lost. Station please.", trans: "はい、迷っています。駅をお願いします。", correct: false },
         ]},
-      { aiLine: "Sure! Where are you trying to get to?", aiTrans: "もちろん！どこに行きたいですか？",
+      { aiLine: "The train station? It's not far. About 10 minutes on foot.", aiTrans: "電車の駅ですか？遠くないです。歩いて約10分です。",
         options: [
-          { text: "I'm looking for Central Park. Is it far from here?", trans: "セントラルパークを探しています。ここから遠いですか？", correct: true },
-          { text: "I want to go to Central Park place.",         trans: "セントラルパークという場所に行きたいです。", correct: false },
-          { text: "Central Park is my destination to go.",       trans: "セントラルパークが私の行く目的地です。",   correct: false },
+          { text: "Great! Which direction should I go?", trans: "良かった！どの方向に行けばいいですか？", correct: true },
+          { text: "Good. Which way I go?",          trans: "良いです。どの方向ですか？",       correct: false },
+          { text: "10 minutes. I can walk.",        trans: "10分。歩けます。",                 correct: false },
         ]},
-      { aiLine: "Not at all! It's about a 10-minute walk from here.", aiTrans: "全然遠くないですよ！ここから歩いて約10分です。",
+      { aiLine: "Go straight down this road, then turn left at the traffic light.", aiTrans: "この道をまっすぐ行って、信号を左に曲がってください。",
         options: [
-          { text: "Oh great! Which direction should I head?",    trans: "それは良かった！どちらの方向に向かえばいいですか？", correct: true },
-          { text: "OK 10 minutes walking. Where I go?",          trans: "はい、10分歩きます。どこへ行きますか？",   correct: false },
-          { text: "Thank you. What is the direction for going?", trans: "ありがとう。どの方向に行けばいいですか？", correct: false },
+          { text: "Straight, then left at the light. Got it!", trans: "まっすぐ、信号を左ですね。わかりました！", correct: true },
+          { text: "OK, straight and left. I understand.", trans: "はい、まっすぐで左。わかりました。", correct: false },
+          { text: "I go straight. And left at light.", trans: "まっすぐ行きます。そして信号で左。", correct: false },
         ]},
-      { aiLine: "Head straight down this road for two blocks, then turn left at the traffic light.", aiTrans: "この道を2ブロック真っ直ぐ進んで、信号を左に曲がってください。",
+      { aiLine: "After the light, you'll see a big park on your right.", aiTrans: "信号の後、右手に大きな公園が見えます。",
         options: [
-          { text: "So straight for two blocks, then left at the light. Got it!", trans: "2ブロック直進して信号で左ですね。わかりました！", correct: true },
-          { text: "I go straight two blocks and turn left.",     trans: "直進2ブロックで左折します。",               correct: false },
-          { text: "Two blocks straight, after that left turn light.", trans: "2ブロック直進、その後左折信号。",     correct: false },
+          { text: "OK, a big park on the right. And then?", trans: "はい、右に大きな公園ですね。それから？", correct: true },
+          { text: "I see park on right. Then what?", trans: "右に公園が見えます。それから何？",   correct: false },
+          { text: "Big park is right side. After?", trans: "大きな公園は右側。その後？",       correct: false },
         ]},
-      { aiLine: "After you turn left, you'll see a big green entrance on your right.", aiTrans: "左折すると、右手に大きな緑の入口が見えてきます。",
+      { aiLine: "The station is just past the park on the left side.", aiTrans: "公園を過ぎると左側に駅があります。",
         options: [
-          { text: "Perfect, a green entrance on the right. I'll keep an eye out for that.", trans: "わかりました、右手の緑の入口ですね。気をつけて探します。", correct: true },
-          { text: "OK the green entrance is on right side.",     trans: "はい、緑の入口は右側です。",               correct: false },
-          { text: "I will look for the green color entrance.",   trans: "緑色の入口を探します。",                   correct: false },
+          { text: "Perfect! I think I can find it now.", trans: "完璧です！もう見つけられると思います。", correct: true },
+          { text: "OK, I understand now.",           trans: "はい、もうわかりました。",         correct: false },
+          { text: "Good. Past park, left side.",    trans: "良いです。公園を過ぎて、左側。",   correct: false },
         ]},
-      { aiLine: "You really can't miss it. It's quite large.", aiTrans: "見逃すことはないですよ。かなり大きいですから。",
+      { aiLine: "Do you need me to draw a map?", aiTrans: "地図を描きましょうか？",
         options: [
-          { text: "Wonderful! Is there a landmark nearby so I know I'm going the right way?", trans: "素晴らしい！正しい方向を確認するためのランドマークはありますか？", correct: true },
-          { text: "OK the entrance is very big and easy to see.", trans: "はい、入口はとても大きくて見やすいです。", correct: false },
-          { text: "I understand it is large so I find it easy.", trans: "大きいので見つけやすいと理解しています。", correct: false },
+          { text: "No, I think I'm fine. Thank you so much!", trans: "いいえ、大丈夫だと思います。ありがとうございます！", correct: true },
+          { text: "No, thank you. I can go.",       trans: "いいえ、ありがとう。行けます。",   correct: false },
+          { text: "No, map is not needed.",         trans: "いいえ、地図は必要ないです。",     correct: false },
         ]},
-      { aiLine: "There's a Starbucks on the corner just before you turn left.", aiTrans: "左折する直前の角にスターバックスがあります。",
+      { aiLine: "No problem. Are you visiting from out of town?", aiTrans: "どういたしまして。この街への旅行ですか？",
         options: [
-          { text: "Oh, perfect. That'll be easy to spot. Thanks a lot!", trans: "それは完璧です。見つけやすいですね。ありがとうございます！", correct: true },
-          { text: "Good, Starbucks is on the corner before turning.", trans: "良い、スターバックスは角に曲がる前にあります。", correct: false },
-          { text: "I know Starbucks so I find the corner easy.", trans: "スターバックスを知っているので角を見つけやすいです。", correct: false },
+          { text: "Yes! I'm from Japan. It's my first time here.", trans: "はい！日本からです。ここは初めてです。", correct: true },
+          { text: "Yes, I come from Japan.",        trans: "はい、日本から来ました。",         correct: false },
+          { text: "Yes, I am Japanese and visiting.", trans: "はい、日本人で訪問しています。", correct: false },
         ]},
-      { aiLine: "No problem at all. Are you visiting the area for the first time?", aiTrans: "どういたしまして。このエリアは初めてですか？",
+      { aiLine: "Welcome! I hope you enjoy the city.", aiTrans: "ようこそ！この街を楽しんでください。",
         options: [
-          { text: "Yes, first time in New York! It's amazing.",  trans: "はい、ニューヨーク初めてです！すごいですね。", correct: true },
-          { text: "Yes it is my first time visiting here.",      trans: "はい、ここを訪問するのは初めてです。",     correct: false },
-          { text: "I come here the first time, yes.",            trans: "はい、ここに初めて来ました。",             correct: false },
+          { text: "Thank you! It's a beautiful city.", trans: "ありがとうございます！美しい街ですね。", correct: true },
+          { text: "Thank you. This city is nice.", trans: "ありがとう。この街はいいですね。",   correct: false },
+          { text: "Yes, I enjoy the city here.",   trans: "はい、ここの街を楽しみます。",     correct: false },
         ]},
-      { aiLine: "Welcome to New York! You're going to love Central Park.", aiTrans: "ニューヨークへようこそ！セントラルパークは絶対好きになりますよ。",
+      { aiLine: "Are you looking for any good restaurants nearby?", aiTrans: "近くで良いレストランをお探しですか？",
         options: [
-          { text: "I can't wait! Thanks so much for your help.",  trans: "楽しみです！本当にありがとうございました。", correct: true },
-          { text: "Thank you for the welcome and your helping.", trans: "歓迎してくれてありがとう、助けてくれて。",   correct: false },
-          { text: "Yes I will love the park very much surely.",  trans: "はい、絶対に公園がとても好きになります。", correct: false },
+          { text: "Oh yes! Do you have any recommendations?", trans: "ああ、はい！おすすめはありますか？", correct: true },
+          { text: "Yes, I want good restaurant.",   trans: "はい、良いレストランが欲しいです。", correct: false },
+          { text: "Yes please. Give me restaurant suggestion.", trans: "はい。レストランのアドバイスをください。", correct: false },
         ]},
-      { aiLine: "Enjoy your day! Don't forget to check out the Boathouse while you're there!", aiTrans: "楽しんでください！ボートハウスも見てみてくださいね！",
+      { aiLine: "There's a great sushi place two blocks away. Very popular!", aiTrans: "2ブロック先に素晴らしい寿司屋があります。とても人気ですよ！",
         options: [
-          { text: "I'll make sure to! You've been incredibly helpful.", trans: "必ず見ます！本当に助かりました。",   correct: true  },
-          { text: "OK I will go to the Boathouse place.",        trans: "はい、ボートハウスという場所に行きます。", correct: false },
-          { text: "Thank you for the day enjoying suggestion.",  trans: "一日の楽しむ提案をありがとう。",           correct: false },
+          { text: "That sounds perfect! Thank you so much!", trans: "それは最高ですね！本当にありがとうございます！", correct: true },
+          { text: "OK, sushi is good! Thank you.", trans: "はい、寿司はいいですね！ありがとう。", correct: false },
+          { text: "Sushi is great. I go there now.", trans: "寿司は最高。今そこに行きます。",   correct: false },
         ]},
     ],
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 7. 👋 Making New Friends
+  // 7. 👋 Making Friends
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'friends', title: 'Making New Friends', situation: '海外留学先のパーティーで新しい友達を作る', emoji: '👋',
+    id: 'friends', title: 'Making New Friends', situation: '語学学校や街で新しい友達を作る', emoji: '👋',
     exchanges: [
-      { aiLine: "Hey! I don't think we've met. I'm Sam.", aiTrans: "やあ！会ったことなかったよね。サムだよ。",
+      { aiLine: "Hey! Are you new here? I haven't seen you before.", aiTrans: "こんにちは！ここは初めてですか？見たことがなかったので。",
         options: [
-          { text: "Hey Sam! I'm Yuki. Nice to meet you!",        trans: "サム！ユキだよ。よろしくね！",             correct: true  },
-          { text: "Hello, my name is Yuki. It is pleasure.",     trans: "こんにちは、私の名前はユキです。光栄です。", correct: false },
-          { text: "I am Yuki. This is my name.",                 trans: "私はユキです。これが私の名前です。",       correct: false },
+          { text: "Yes! I just arrived from Japan.",trans: "はい！日本から来たばかりです。",   correct: true  },
+          { text: "Yes, I come from Japan.",        trans: "はい、日本から来ます。",           correct: false },
+          { text: "Yes, I am new here. Japan.",    trans: "はい、ここは初めてです。日本。",   correct: false },
         ]},
-      { aiLine: "Where are you from, Yuki?", aiTrans: "ユキはどこ出身なの？",
+      { aiLine: "Nice to meet you! I'm Tom. What's your name?", aiTrans: "はじめまして！トムです。お名前は？",
         options: [
-          { text: "I'm from Japan, originally from Osaka.",      trans: "日本出身で、元々は大阪です。",             correct: true  },
-          { text: "I come from the country of Japan.",           trans: "日本という国から来ています。",             correct: false },
-          { text: "My country where I come from is Japan.",      trans: "私が来た国は日本です。",                   correct: false },
+          { text: "Hi Tom! I'm Yuki. Nice to meet you too!", trans: "こんにちはトム！ユキです。こちらこそよろしく！", correct: true },
+          { text: "Hello. My name is Yuki.",       trans: "こんにちは。私の名前はユキです。", correct: false },
+          { text: "I am Yuki. Nice to meet.",      trans: "ユキです。よろしく。",             correct: false },
         ]},
-      { aiLine: "Oh cool, Japan! What brings you here?", aiTrans: "日本か、いいね！ここに来た理由は？",
+      { aiLine: "How long have you been studying here?", aiTrans: "ここで勉強して、どのくらいになりますか？",
         options: [
-          { text: "I'm studying music here for a year.",         trans: "音楽を勉強するために1年間来ています。",     correct: true  },
-          { text: "I come here to study the music for one year.", trans: "1年間音楽を勉強するためにここに来ました。", correct: false },
-          { text: "Music studying is why I am here for year.",   trans: "音楽の勉強が私がここに1年いる理由です。", correct: false },
+          { text: "Just two weeks so far!",        trans: "まだ2週間です！",                  correct: true  },
+          { text: "I study here two weeks.",       trans: "2週間ここで勉強します。",           correct: false },
+          { text: "For two week I am here.",       trans: "2週間ここにいます。",               correct: false },
         ]},
-      { aiLine: "Music? That's awesome! What instrument do you play?", aiTrans: "音楽？それいいね！どの楽器を演奏するの？",
+      { aiLine: "What do you do back in Japan?", aiTrans: "日本では何をしていますか？",
         options: [
-          { text: "I play piano and drums. What about you?",     trans: "ピアノとドラムを弾きます。あなたは？",     correct: true  },
-          { text: "I play piano and drum. And you?",             trans: "ピアノとドラムを弾きます。あなたは？",     correct: false },
-          { text: "My instruments are piano and also the drums.", trans: "私の楽器はピアノとまたドラムです。",     correct: false },
+          { text: "I'm a music student.",          trans: "音楽学生です。",                   correct: true  },
+          { text: "I study music in Japan.",       trans: "日本で音楽を勉強しています。",     correct: false },
+          { text: "My job is music student.",      trans: "仕事は音楽学生です。",             correct: false },
         ]},
-      { aiLine: "No way! I play guitar. We should jam sometime!", aiTrans: "嘘！ギターを弾くよ。いつかセッションしようよ！",
+      { aiLine: "Oh cool! What instrument do you play?", aiTrans: "かっこいい！どんな楽器を演奏しますか？",
         options: [
-          { text: "That would be amazing! I'd love that.",       trans: "それは素晴らしい！ぜひやりたい！",         correct: true  },
-          { text: "Yes I want to do jam session with you.",      trans: "はい、あなたとジャムセッションしたいです。", correct: false },
-          { text: "OK we can do the jamming together sometime.", trans: "はい、いつかー緒にジャムできます。",       correct: false },
+          { text: "I play the piano and drums.",   trans: "ピアノとドラムを演奏します。",     correct: true  },
+          { text: "I play piano and drum.",        trans: "ピアノとドラムを弾きます。",       correct: false },
+          { text: "My instruments are piano, drum.", trans: "楽器はピアノとドラムです。",     correct: false },
         ]},
-      { aiLine: "How long have you been here so far?", aiTrans: "ここに来てどのくらいになる？",
+      { aiLine: "That's awesome! Do you have any plans this weekend?", aiTrans: "すごいね！今週末は何か予定はありますか？",
         options: [
-          { text: "Just about two months. I'm still getting used to everything!", trans: "約2ヶ月です。まだいろいろ慣れているところです！", correct: true },
-          { text: "Two months I have been here already.",        trans: "もう2ヶ月ここにいます。",                 correct: false },
-          { text: "I am here since two months ago.",             trans: "2ヶ月前からここにいます。",               correct: false },
+          { text: "Not yet. Do you want to hang out?", trans: "まだないです。一緒に遊びますか？", correct: true },
+          { text: "No plans. We can meet?",        trans: "予定なし。会えますか？",           correct: false },
+          { text: "Nothing. Let's we meet.",       trans: "何もなし。会いましょう。",         correct: false },
         ]},
-      { aiLine: "Is the food here very different from Japan?", aiTrans: "こっちの食べ物は日本と全然違う？",
+      { aiLine: "Sure! There's a live music event on Saturday. Want to go?", aiTrans: "もちろん！土曜日にライブ音楽イベントがあります。行きますか？",
         options: [
-          { text: "Pretty different! I miss Japanese food, but I'm starting to love the food here.", trans: "かなり違います！和食が恋しいですが、こっちの料理も好きになってきました。", correct: true },
-          { text: "Yes the food here is very different from Japan food.", trans: "はい、こちらの食べ物は日本の食べ物とかなり違います。", correct: false },
-          { text: "I miss Japan food but here food is also OK.", trans: "日本食は恋しいがここの食べ物もOKです。", correct: false },
+          { text: "That sounds fun! I'd love to go!", trans: "楽しそう！ぜひ行きたいです！",  correct: true  },
+          { text: "Yes, I want go to live music.", trans: "はい、ライブ音楽に行きたいです。", correct: false },
+          { text: "Music event sounds good. I go.", trans: "音楽イベントは良さそう。行きます。", correct: false },
         ]},
-      { aiLine: "You should try some local restaurants. I know some great spots!", aiTrans: "地元のレストランに行ってみるべきだよ。いいお店知ってるよ！",
+      { aiLine: "Great! Let's exchange numbers then.", aiTrans: "良かった！じゃあ連絡先を交換しましょう。",
         options: [
-          { text: "Oh, I'd love some recommendations! What do you suggest?", trans: "おすすめを教えてほしい！何がいいですか？", correct: true },
-          { text: "Yes please tell me the good restaurant places.", trans: "はい、良いレストランの場所を教えてください。", correct: false },
-          { text: "I want you to recommend good eating places.", trans: "良い食事場所をおすすめしてほしいです。",   correct: false },
+          { text: "Sure! Here's my number.",       trans: "もちろん！こちらが番号です。",     correct: true  },
+          { text: "Yes, my number is this.",       trans: "はい、私の番号はこれです。",       correct: false },
+          { text: "OK. I give you my number.",     trans: "はい。番号をあげます。",           correct: false },
         ]},
-      { aiLine: "Are you free this weekend? A few of us are going to a concert.", aiTrans: "今週末空いてる？何人かでコンサートに行くんだけど。",
+      { aiLine: "Perfect. I'll send you the event details.", aiTrans: "完璧。イベントの詳細を送ります。",
         options: [
-          { text: "That sounds fun! I'd love to join if it's okay.", trans: "楽しそう！よければ参加させてほしいな。", correct: true },
-          { text: "Yes I am free and I want to join concert.",   trans: "はい、空いていてコンサートに参加したいです。", correct: false },
-          { text: "Concert sounds good. I can come on weekend.", trans: "コンサートは良いですね。週末に来られます。", correct: false },
+          { text: "Thanks, I'll look forward to it!", trans: "ありがとう！楽しみにしています！", correct: true },
+          { text: "OK, I wait for your message.",  trans: "はい、メッセージを待ちます。",     correct: false },
+          { text: "I wait for your send message.", trans: "送信メッセージを待ちます。",       correct: false },
         ]},
-      { aiLine: "Great! Let me get your number so I can send you the details.", aiTrans: "やった！連絡先を教えてもらえれば詳細を送るよ。",
+      { aiLine: "See you Saturday then! It was great meeting you.", aiTrans: "じゃあ土曜日に！会えて良かったです。",
         options: [
-          { text: "Sure! Here it is. Looking forward to it!",    trans: "もちろん！どうぞ。楽しみにしています！",   correct: true  },
-          { text: "OK I give you my phone number now.",          trans: "はい、今電話番号を渡します。",             correct: false },
-          { text: "You can have my number. I look forward.",     trans: "番号を持っていいです。楽しみにしています。", correct: false },
+          { text: "You too! See you on Saturday!", trans: "こちらこそ！土曜日に会いましょう！", correct: true },
+          { text: "Yes, see you on Saturday.",    trans: "はい、土曜日に会いましょう。",     correct: false },
+          { text: "Saturday, I will see you.",    trans: "土曜日、会います。",               correct: false },
         ]},
     ],
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 8. 💪 At the Gym
+  // 8. 💪 Gym
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'gym', title: 'At the Gym', situation: 'ジムでトレーナーに相談し、マシンの使い方を聞く', emoji: '💪',
+    id: 'gym', title: 'At the Gym', situation: 'アメリカのジムで会話する', emoji: '💪',
     exchanges: [
-      { aiLine: "Hey! First time at this gym?", aiTrans: "やあ！このジムは初めてですか？",
+      { aiLine: "Hi! First time at this gym?", aiTrans: "こんにちは！このジムは初めてですか？",
         options: [
-          { text: "Yes, I just signed up today. Is it obvious?", trans: "はい、今日入会しました。わかりますか？",   correct: true  },
-          { text: "Yes it is my first time this gym.",           trans: "はい、このジムは初めてです。",             correct: false },
-          { text: "I signed up today so yes it is first time.",  trans: "今日入会したのではい、初めてです。",       correct: false },
+          { text: "Yes! Can I get a tour?",        trans: "はい！案内してもらえますか？",     correct: true  },
+          { text: "Yes, this is my first time.",   trans: "はい、初めてです。",               correct: false },
+          { text: "Yes, I am new to this gym.",    trans: "はい、このジムは初めてです。",     correct: false },
         ]},
-      { aiLine: "Ha! No worries. I'm Jake, one of the trainers here. Let me show you around.", aiTrans: "はは！大丈夫ですよ。トレーナーのジェイクです。ご案内しますよ。",
+      { aiLine: "Sure! The cardio machines are upstairs.", aiTrans: "もちろん！有酸素運動マシンは上の階です。",
         options: [
-          { text: "That would be really helpful, thank you Jake!", trans: "それはとても助かります、ジェイクさん！",   correct: true  },
-          { text: "Thank you Jake for showing me around.",       trans: "案内してくれてジェイク、ありがとう。",     correct: false },
-          { text: "Yes please show me the gym around.",          trans: "はい、ジムの周りを見せてください。",       correct: false },
+          { text: "Great. And where are the weights?", trans: "良かった。ウェイトはどこですか？", correct: true },
+          { text: "Where are the weight machines?", trans: "ウェイトマシンはどこですか？",    correct: false },
+          { text: "OK. Weights room, where?",      trans: "はい。ウェイトルーム、どこ？",    correct: false },
         ]},
-      { aiLine: "What are your fitness goals? Are you looking to build muscle or lose weight?", aiTrans: "フィットネスの目標は何ですか？筋肉をつけたいですか、それとも体重を減らしたいですか？",
+      { aiLine: "The free weights are in the back room.", aiTrans: "フリーウェイトは奥の部屋にあります。",
         options: [
-          { text: "Mainly muscle building, but some cardio for stamina too.", trans: "主に筋肉をつけたいです。スタミナのためにカーディオも。", correct: true },
-          { text: "I want muscle and also to do cardio.",        trans: "筋肉とカーディオもしたいです。",           correct: false },
-          { text: "My goal is muscle building and cardio doing.", trans: "目標は筋肉づくりとカーディオすることです。", correct: false },
+          { text: "Thank you! Is there a locker room too?", trans: "ありがとうございます！ロッカールームもありますか？", correct: true },
+          { text: "OK. And locker room?",          trans: "はい。ロッカールームは？",         correct: false },
+          { text: "Thank you. I want locker room too.", trans: "ありがとう。ロッカールームも欲しいです。", correct: false },
         ]},
-      { aiLine: "How often are you planning to come in?", aiTrans: "どのくらいの頻度で来る予定ですか？",
+      { aiLine: "Yes, locker rooms are on the left. Do you need a lock?", aiTrans: "はい、ロッカールームは左側です。鍵は必要ですか？",
         options: [
-          { text: "I'm aiming for about 4 times a week.",        trans: "週4回を目標にしています。",               correct: true  },
-          { text: "I will come 4 times in one week.",            trans: "1週間に4回来ます。",                       correct: false },
-          { text: "My coming plan is 4 times per the week.",     trans: "来る計画は週4回です。",                   correct: false },
+          { text: "No, I brought my own. Thanks!", trans: "いいえ、持参しました。ありがとう！", correct: true },
+          { text: "No, I have my own lock.",       trans: "いいえ、自分の鍵があります。",     correct: false },
+          { text: "No. I bring my lock by myself.", trans: "いいえ。自分で鍵を持ってきました。", correct: false },
         ]},
-      { aiLine: "Perfect. Let me show you how to use this cable machine properly.", aiTrans: "良いですね。このケーブルマシンの正しい使い方を教えます。",
+      { aiLine: "Are you using that bench right now?", aiTrans: "今そのベンチを使っていますか？",
         options: [
-          { text: "Sure! I want to make sure I'm using it safely.", trans: "はい！安全に使いたいので助かります。",   correct: true  },
-          { text: "Yes please teach me how to use machine.",     trans: "はい、マシンの使い方を教えてください。",   correct: false },
-          { text: "I want to learn the correct using of machine.", trans: "マシンの正しい使い方を学びたいです。", correct: false },
+          { text: "No, go ahead. I'm done.",       trans: "いいえ、どうぞ。終わりました。",   correct: true  },
+          { text: "No, I finish using it.",        trans: "いいえ、使い終わりました。",       correct: false },
+          { text: "No, you can use it. I don't use now.", trans: "いいえ、使っていいです。今使っていません。", correct: false },
         ]},
-      { aiLine: "Always keep your core tight and your back straight. Never arch it.", aiTrans: "常に体幹を締めて背筋を真っ直ぐに。絶対に反らしてはいけません。",
+      { aiLine: "Thanks! Hey, do you mind if I work in?", aiTrans: "ありがとう！一緒に交互に使ってもいいですか？",
         options: [
-          { text: "Got it. Core tight, back straight. I'll remember that.", trans: "わかりました。体幹を締めて、背中を真っ直ぐ。覚えます。", correct: true },
-          { text: "OK I will tight core and straight back.",     trans: "はい、体幹を締めて背中を真っ直ぐにします。", correct: false },
-          { text: "I understand the core tight and back straight rule.", trans: "体幹締め・背中真っ直ぐルールを理解しました。", correct: false },
+          { text: "Not at all! Go for it.",        trans: "もちろんです！どうぞ。",           correct: true  },
+          { text: "Yes, you can use.",             trans: "はい、使えます。",                 correct: false },
+          { text: "No problem. You do it.",        trans: "問題なし。やってください。",       correct: false },
         ]},
-      { aiLine: "Start with a lighter weight to warm up. How does that feel?", aiTrans: "軽い重量からウォームアップしましょう。どんな感じですか？",
+      { aiLine: "How many sets do you have left?", aiTrans: "あと何セット残っていますか？",
         options: [
-          { text: "It feels manageable. Should I increase the weight?", trans: "いけそうです。重量を上げてみますか？", correct: true },
-          { text: "It is OK weight. I can do more weight.",      trans: "OKの重量です。もっと重くできます。",       correct: false },
-          { text: "The weight is light and I can add more.",     trans: "重量が軽くてもっと追加できます。",         correct: false },
+          { text: "Two more sets. Shouldn't take long.", trans: "あと2セットです。すぐ終わります。", correct: true },
+          { text: "Two sets more.",                trans: "あと2セット。",                   correct: false },
+          { text: "I have 2 sets remaining still.", trans: "まだ2セット残っています。",       correct: false },
         ]},
-      { aiLine: "Try 3 sets of 12 reps. Rest for 60 seconds between sets.", aiTrans: "12回3セットやってみてください。セット間は60秒休憩。",
+      { aiLine: "No rush! Do you come here often?", aiTrans: "急がなくていいですよ！ここにはよく来ますか？",
         options: [
-          { text: "Sounds good. I'll time my rest with my phone.", trans: "わかりました。スマホで休憩時間を計���ます。", correct: true },
-          { text: "OK 3 sets 12 times and 60 second rest.",      trans: "はい、3セット12回と60秒休憩。",             correct: false },
-          { text: "I will do 3 sets with 12 reps and rest 60.",  trans: "12回3セットと60秒休憩をします。",           correct: false },
+          { text: "About three times a week.",     trans: "週に3回ほどです。",               correct: true  },
+          { text: "I come here 3 times per week.", trans: "週に3回ここに来ます。",           correct: false },
+          { text: "Three times in one week.",      trans: "1週間に3回。",                   correct: false },
         ]},
-      { aiLine: "You're doing great! Keep that form consistent throughout.", aiTrans: "上手いですよ！そのフォームを最後まで保ってください。",
+      { aiLine: "Nice! Do you have a trainer?", aiTrans: "いいですね！トレーナーはいますか？",
         options: [
-          { text: "Thanks! I can already feel it working.",      trans: "ありがとうございます！効いているのが感じられます。", correct: true },
-          { text: "Thank you. I feel the effect of exercise.",   trans: "ありがとう。運動の効果を感じます。",       correct: false },
-          { text: "OK I keep the form consistent like you said.", trans: "はい、おっしゃったようにフォームを保ちます。", correct: false },
+          { text: "No, I work out on my own.",     trans: "いいえ、一人でトレーニングしています。", correct: true },
+          { text: "No, I do exercise alone.",      trans: "いいえ、一人でやります。",         correct: false },
+          { text: "No, I train by only myself.",   trans: "いいえ、自分だけでトレーニングします。", correct: false },
         ]},
-      { aiLine: "Nice workout today! See you next time!", aiTrans: "今日はいいトレーニングでした！またね！",
+      { aiLine: "Good work today! See you next time!", aiTrans: "今日は良い運動でしたね！また次回！",
         options: [
-          { text: "Thanks for all the tips, Jake! See you next time!", trans: "アドバイスありがとうジェイク！またね！", correct: true },
-          { text: "OK thank you Jake. I will come next time.",   trans: "はい、ありがとうジェイク。次回来ます。",   correct: false },
-          { text: "Good workout. I see you the next time.",      trans: "良いトレーニング。次回またね。",           correct: false },
+          { text: "Thanks! You too. See you around!", trans: "ありがとう！あなたも。またね！", correct: true  },
+          { text: "Thank you. See you next.",      trans: "ありがとう。また今度。",           correct: false },
+          { text: "Yes, thanks. I see you again.", trans: "はい、ありがとう。また会います。", correct: false },
         ]},
     ],
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 9. 📞 Phone Conversation
+  // 9. 📞 Phone Call (Simple)
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'phone', title: 'Phone Conversation', situation: '英語で病院の予約電話をかける', emoji: '📞',
+    id: 'phone', title: 'Making a Phone Call', situation: 'ピザ屋に電話して注文する', emoji: '📞',
     exchanges: [
-      { aiLine: "Good afternoon, City Medical Center. How can I help you?", aiTrans: "こんにちは、シティ医療センターです。どのようなご用件ですか？",
+      { aiLine: "Thank you for calling Pizza Palace! How can I help you?", aiTrans: "ピザパレスへのお電話ありがとうございます！ご用件は？",
         options: [
-          { text: "Hi, I'd like to make an appointment to see a doctor, please.", trans: "こんにちは、診察の予約をしたいのですが。", correct: true },
-          { text: "Hello, I want appointment with doctor.",      trans: "こんにちは、医師と予約したいです。",       correct: false },
-          { text: "I am calling to make the doctor appointment.", trans: "医師の予約をするために電話しています。", correct: false },
+          { text: "Hi! I'd like to order a pizza for delivery.", trans: "こんにちは！ピザをデリバリーで注文したいです。", correct: true },
+          { text: "Hi, I want to order pizza.",  trans: "こんにちは、ピザを注文したいです。", correct: false },
+          { text: "Hello. Give me pizza delivery.", trans: "こんにちは。ピザのデリバリーをください。", correct: false },
         ]},
-      { aiLine: "Of course. Is this for a new patient or an existing patient?", aiTrans: "もちろんです。新患ですか、それとも既存の患者様ですか？",
+      { aiLine: "Sure! What would you like?", aiTrans: "もちろんです！何になさいますか？",
         options: [
-          { text: "I'm a new patient. This is my first time.",   trans: "新患です。初めての来院です。",             correct: true  },
-          { text: "I am new patient. It is first time for me.",  trans: "新患です。初めてです。",                   correct: false },
-          { text: "This is the first time so I am new.",         trans: "初めてなので新患です。",                   correct: false },
+          { text: "A large pepperoni pizza, please.", trans: "ラージのペパロニピザをひとつお願いします。", correct: true },
+          { text: "I want large pepperoni pizza.", trans: "ラージペパロニピザが欲しいです。", correct: false },
+          { text: "Large size pepperoni, give me.", trans: "ラージサイズペパロニをください。", correct: false },
         ]},
-      { aiLine: "What seems to be the problem?", aiTrans: "どのような症状がありますか？",
+      { aiLine: "Thick crust or thin crust?", aiTrans: "厚生地と薄生地、どちらにしますか？",
         options: [
-          { text: "I've had a sore throat and a mild fever for three days.", trans: "3日間、喉の痛みと軽い熱があります。", correct: true },
-          { text: "I have sore throat and fever since 3 days.", trans: "3日間、喉の痛みと熱があります。",           correct: false },
-          { text: "My throat is hurting and fever for 3 days.", trans: "喉が痛くて3日間熱があります。",             correct: false },
+          { text: "Thin crust, please.",           trans: "薄生地でお願いします。",           correct: true  },
+          { text: "I want thin crust.",            trans: "薄生地が欲しいです。",             correct: false },
+          { text: "Please thin type crust.",       trans: "薄いタイプの生地をください。",     correct: false },
         ]},
-      { aiLine: "I see. Are you available this Thursday at 2 PM?", aiTrans: "わかりました。今週木曜日の午後2時はご都合よろしいですか？",
+      { aiLine: "What's your address?", aiTrans: "お届け先の住所をお願いします。",
         options: [
-          { text: "Yes, Thursday at 2 PM works for me.",         trans: "はい、木曜の午後2時で大丈夫です。",       correct: true  },
-          { text: "Yes Thursday 2 PM is OK for me.",             trans: "はい、木曜14時は私にはOKです。",           correct: false },
-          { text: "I can come on Thursday at the 2 PM time.",    trans: "木曜の午後2時という時間に来られます。",   correct: false },
+          { text: "It's 123 Main Street, Apartment 4B.", trans: "メインストリート123番、アパート4Bです。", correct: true },
+          { text: "My address is 123 Main Street.", trans: "住所はメインストリート123です。",   correct: false },
+          { text: "I live at 123 Main Street.",   trans: "メインストリート123に住んでいます。", correct: false },
         ]},
-      { aiLine: "Great. May I have your full name and date of birth?", aiTrans: "ありがとうございます。フルネームと生年月日をお聞かせください。",
+      { aiLine: "And your phone number?", aiTrans: "電話番号をお願いします。",
         options: [
-          { text: "Sure. It's Yuki Tanaka, born March 15th, 1998.", trans: "はい。田中ユキ、1998年3月15日生まれです。", correct: true },
-          { text: "My name is Yuki Tanaka, birthday is March 15, 1998.", trans: "名前は田中ユキ、誕生日は1998年3月15日です。", correct: false },
-          { text: "I am Yuki Tanaka and born on the 15 March 1998.", trans: "私は田中ユキで1998年3月15日生まれです。", correct: false },
+          { text: "It's 555-1234.",                trans: "555-1234です。",                   correct: true  },
+          { text: "My number is 555-1234.",        trans: "番号は555-1234です。",             correct: false },
+          { text: "Phone number is 555-1234.",     trans: "電話番号は555-1234。",             correct: false },
         ]},
-      { aiLine: "And a phone number where we can reach you?", aiTrans: "ご連絡先の電話番号をお聞かせください。",
+      { aiLine: "That's $18.50. Cash or card on delivery?", aiTrans: "18ドル50セントです。代引き現金ですかカードですか？",
         options: [
-          { text: "It's 080-1234-5678.",                         trans: "080-1234-5678です。",                     correct: true  },
-          { text: "My phone number is 080-1234-5678.",           trans: "私の電話番号は080-1234-5678です。",       correct: false },
-          { text: "You can call me on 080-1234-5678 number.",    trans: "私への電話は080-1234-5678番にできます。", correct: false },
+          { text: "Card on delivery, please.",     trans: "代引きカードでお願いします。",     correct: true  },
+          { text: "I pay by card when delivered.", trans: "デリバリー時にカードで払います。", correct: false },
+          { text: "Card payment at delivery time.", trans: "デリバリー時にカード払い。",      correct: false },
         ]},
-      { aiLine: "Do you have any health insurance?", aiTrans: "健康保険はお持ちですか？",
+      { aiLine: "Your delivery will arrive in about 30 minutes.", aiTrans: "デリバリーは約30分でお届けします。",
         options: [
-          { text: "Yes, I have international health insurance through my school.", trans: "はい、学校の国際健康保険があります。", correct: true },
-          { text: "Yes I have insurance from my school.",        trans: "はい、学校からの保険があります。",         correct: false },
-          { text: "My school gives me international insurance.", trans: "学校が国際保険を与えてくれます。",         correct: false },
+          { text: "Great! Thank you so much.",     trans: "やった！ありがとうございます。",   correct: true  },
+          { text: "OK, 30 minutes is fine.",       trans: "はい、30分で大丈夫です。",         correct: false },
+          { text: "I will wait 30 minutes.",       trans: "30分待ちます。",                   correct: false },
         ]},
-      { aiLine: "Perfect. Please arrive 10 minutes early to fill out paperwork.", aiTrans: "わかりました。書類記入のため10分前にお越しください。",
+      { aiLine: "Is there anything else you'd like to add?", aiTrans: "他にご注文はございますか？",
         options: [
-          { text: "Of course, I'll be there 10 minutes early.",  trans: "もちろんです、10分前に参ります。",         correct: true  },
-          { text: "OK I come 10 minutes earlier than appointment.", trans: "はい、予約より10分早く来ます。",       correct: false },
-          { text: "I will arrive before 10 minutes early.",      trans: "10分前に早く到着します。",                 correct: false },
+          { text: "No, that's everything. Thanks!", trans: "いいえ、以上です。ありがとうございます！", correct: true },
+          { text: "No, only pizza.",               trans: "いいえ、ピザだけです。",           correct: false },
+          { text: "Nothing else. Only this.",      trans: "他には何もない。これだけ。",       correct: false },
         ]},
-      { aiLine: "Is there anything else I can help you with?", aiTrans: "他にご用件はございますか？",
+      { aiLine: "Your order has been placed! See you in 30 minutes.", aiTrans: "ご注文を承りました！30分でお伺いします。",
         options: [
-          { text: "No, that's everything. Thank you so much!",   trans: "いいえ、以上です。ありがとうございます！", correct: true  },
-          { text: "No thank you, that is all I need.",           trans: "いいえありがとう、必要なことは以上です。", correct: false },
-          { text: "Nothing else, I am done with this call.",     trans: "他には何もなく、この電話は終わりです。",   correct: false },
+          { text: "Perfect! I'll be here.",        trans: "完璧！ここで待っています。",       correct: true  },
+          { text: "Good, I wait at home.",         trans: "良いです、家で待ちます。",         correct: false },
+          { text: "OK. I am waiting here now.",    trans: "はい。今ここで待っています。",     correct: false },
         ]},
-      { aiLine: "You're welcome. See you Thursday. Take care and feel better soon!", aiTrans: "どういたしまして。木曜日にお待ちしています。お大事にどうぞ！",
+      { aiLine: "Thank you for calling! Have a great evening!", aiTrans: "お電話ありがとうございました！良い夜を！",
         options: [
-          { text: "Thank you! See you Thursday.",                 trans: "ありがとうございます！木曜日に。",         correct: true  },
-          { text: "OK goodbye for now Thursday see you.",        trans: "はい、では木曜日にさようなら。",           correct: false },
-          { text: "Thank you very much for helping me today.",   trans: "今日助けてくれてありがとうございます。",   correct: false },
+          { text: "Thanks! You too. Goodbye!",     trans: "ありがとうございます！あなたも。さようなら！", correct: true },
+          { text: "Thank you. Bye.",               trans: "ありがとう。さようなら。",         correct: false },
+          { text: "Yes, good evening also.",       trans: "はい、あなたも良い夜を。",         correct: false },
         ]},
     ],
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 10. 💼 Job Interview
+  // 10. 💼 Simple Job Application
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'interview', title: 'Job Interview', situation: 'ミュージックスタジオでのアシスタント職の面接', emoji: '💼',
+    id: 'interview', title: 'Simple Job Interview', situation: 'アルバイトの簡単な面接を受ける', emoji: '💼',
     exchanges: [
-      { aiLine: "Please have a seat. Thanks for coming in today.", aiTrans: "どうぞお座りください。今日はお越しいただきありがとうございます。",
+      { aiLine: "Hi! Please come in and have a seat.", aiTrans: "こんにちは！どうぞ中に入って座ってください。",
         options: [
-          { text: "Thank you for having me. I've been looking forward to this.", trans: "お招きいただきありがとうございます。楽しみにしていました。", correct: true },
-          { text: "Thank you. I am looking forward to this interview.", trans: "ありがとう。この面接を楽しみにしていました。", correct: false },
-          { text: "Thank you very much for giving me this chance.", trans: "このチャンスをくれてありがとうございます。", correct: false },
+          { text: "Thank you! Nice to meet you.", trans: "ありがとうございます！よろしくお願いします。", correct: true },
+          { text: "Thank you. I sit here.",       trans: "ありがとうございます。ここに座ります。", correct: false },
+          { text: "OK, I am sitting now.",        trans: "はい、今座っています。",             correct: false },
         ]},
-      { aiLine: "Tell me a little about yourself.", aiTrans: "自己紹介をお願いします。",
+      { aiLine: "So, why do you want to work here?", aiTrans: "ここで働きたい理由を教えてください。",
         options: [
-          { text: "Sure. I'm Yuki, a music student from Japan. I've been playing piano for 10 years and I'm passionate about music production.", trans: "はい。日本出身の音楽学生ユキです。10年間ピアノを演奏しており、音楽プロダクションに情熱を持っています。", correct: true },
-          { text: "I am Yuki from Japan. I play piano 10 years and love music production.", trans: "日本からのユキです。10年ピアノを弾き音楽プロダクションが好きです。", correct: false },
-          { text: "My name is Yuki. I am Japanese music student who plays piano.", trans: "私の名前はユキです。ピアノを弾く日本人音楽学生です。", correct: false },
+          { text: "I love music, and this is a music store.", trans: "音楽が大好きで、ここは音楽の店だからです。", correct: true },
+          { text: "Because I like music very much.", trans: "なぜなら音楽がとても好きだからです。", correct: false },
+          { text: "This store is good. I love music.", trans: "このお店は良いです。音楽が好きです。", correct: false },
         ]},
-      { aiLine: "What experience do you have with recording software?", aiTrans: "レコーディングソフトウェアの経験はありますか？",
+      { aiLine: "Do you have any work experience?", aiTrans: "お仕事の経験はありますか？",
         options: [
-          { text: "I have two years of experience with Logic Pro, and I've also used Pro Tools on a few projects.", trans: "Logic Proを2年間使用しており、いくつかのプロジェクトでPro Toolsも使いました。", correct: true },
-          { text: "I use Logic Pro for 2 years and some Pro Tools.", trans: "2年間Logic Proと少しのPro Toolsを使います。", correct: false },
-          { text: "My experience is Logic Pro 2 years and also Pro Tools.", trans: "経験はLogic Pro 2年とPro Toolsもです。", correct: false },
+          { text: "Yes, I worked at a café for one year.", trans: "はい、カフェで1年間働きました。",  correct: true  },
+          { text: "Yes, I work at café one year.",  trans: "はい、1年カフェで働きます。",     correct: false },
+          { text: "Yes, café experience one year.", trans: "はい、カフェ経験1年。",           correct: false },
         ]},
-      { aiLine: "Why are you interested in working at this studio?", aiTrans: "なぜこのスタジオで働きたいのですか？",
+      { aiLine: "Can you work on weekends?", aiTrans: "週末は働けますか？",
         options: [
-          { text: "Your studio has an amazing reputation for working with emerging artists, and I'd love to contribute to that environment.", trans: "このスタジオは新進アーティストとの仕事で素晴らしい評判があり、その環境に貢献したいと思っています。", correct: true },
-          { text: "Your studio is very famous and I want to work here.", trans: "このスタジオはとても有名で、ここで働きたいです。", correct: false },
-          { text: "I like music and this studio is good place to work.", trans: "音楽が好きでこのスタジオは働くのに良い場所です。", correct: false },
+          { text: "Yes, weekends are fine for me.", trans: "はい、週末は大丈夫です。",         correct: true  },
+          { text: "Yes, I can work weekend.",      trans: "はい、週末働けます。",             correct: false },
+          { text: "Yes, weekend working is OK.",   trans: "はい、週末働くのは大丈夫です。",   correct: false },
         ]},
-      { aiLine: "Where do you see yourself in five years?", aiTrans: "5年後の自分をどのように描いていますか？",
+      { aiLine: "How many hours a week can you work?", aiTrans: "週に何時間働けますか？",
         options: [
-          { text: "I'd like to be a full-time music producer, working with both Japanese and international artists.", trans: "フルタイムの音楽プロデューサーとして日本と海外のアーティストと仕事したいです。", correct: true },
-          { text: "In 5 years I want to be music producer.",     trans: "5年後に音楽プロデューサーになりたいです。", correct: false },
-          { text: "My future is becoming music producer in 5 years.", trans: "私の未来は5年後に音楽プロデューサーになることです。", correct: false },
+          { text: "About 20 hours a week.",        trans: "週に約20時間です。",               correct: true  },
+          { text: "I can work 20 hours per week.", trans: "週20時間働けます。",               correct: false },
+          { text: "20 hours in one week.",         trans: "1週間に20時間。",                 correct: false },
         ]},
-      { aiLine: "What are your greatest strengths?", aiTrans: "あなたの最大の強みは何ですか？",
+      { aiLine: "What are you good at?", aiTrans: "得意なことは何ですか？",
         options: [
-          { text: "I'm detail-oriented and I work well under pressure. I also pick up new tools quickly.", trans: "細部にこだわり、プレッシャー下でもうまく機能します。新しいツールも素早く習得します。", correct: true },
-          { text: "I am very careful and fast learning person.", trans: "私はとても注意深く素早く学ぶ人です。",       correct: false },
-          { text: "My strong points are detail care and fast to learn.", trans: "強みは細部のケアと素早い学習です。", correct: false },
+          { text: "I'm good at talking to people.", trans: "人と話すことが得意です。",         correct: true  },
+          { text: "I am good in talking people.",  trans: "人に話すことが得意です。",         correct: false },
+          { text: "My strength is people talking.", trans: "強みは人と話すことです。",         correct: false },
         ]},
-      { aiLine: "Do you have any questions for us?", aiTrans: "弊社についてご質問はありますか？",
+      { aiLine: "Do you have any questions for us?", aiTrans: "何かご質問はありますか？",
         options: [
-          { text: "Yes! What does a typical day look like for this role?", trans: "はい！この役職の典型的な一日はどのようなものですか？", correct: true },
-          { text: "Yes, what do I do in typical day of this job?", trans: "はい、この仕事の典型的な一日に何をしますか？", correct: false },
-          { text: "I want to know what work I do every day here.", trans: "毎日何の仕事をするか知りたいです。",       correct: false },
+          { text: "Yes! What time do shifts usually start?", trans: "はい！シフトはたいてい何時から始まりますか？", correct: true },
+          { text: "Yes. When start the shift?",   trans: "はい。シフトはいつ始まりますか？",  correct: false },
+          { text: "Yes. I want know shift time.",  trans: "はい。シフトの時間を知りたいです。", correct: false },
         ]},
-      { aiLine: "The assistant would help with session setup, client communication, and some production work.", aiTrans: "アシスタントはセッションの準備、クライアントとのコミュニケーション、プロダクション作業を手伝ってもらいます。",
+      { aiLine: "Morning shifts start at 9, and evening at 4.", aiTrans: "朝シフトは9時から、夜は4時からです。",
         options: [
-          { text: "That sounds like a great balance. I'd be excited to take on all of those responsibilities.", trans: "バランスが良さそうですね。それらすべての責任を担うのが楽しみです。", correct: true },
-          { text: "OK I understand the duties. I can do all of those.", trans: "はい、職務を理解しました。すべてできます。", correct: false },
-          { text: "The job sounds interesting and I want to do it.", trans: "仕事が面白そうでやりたいです。",           correct: false },
+          { text: "The evening shift works better for me.", trans: "夕方シフトの方が合っています。", correct: true },
+          { text: "Evening shift is good for me.", trans: "夕方シフトは私に良いです。",       correct: false },
+          { text: "I prefer to work at evening shift.", trans: "夕方シフトで働くのを好みます。", correct: false },
         ]},
-      { aiLine: "We'll be in touch within the week. Thank you for your time.", aiTrans: "1週間以内にご連絡します。お時間をいただきありがとうございました。",
+      { aiLine: "Great! We'll call you by Friday.", aiTrans: "了解です！金曜日までにご連絡します。",
         options: [
-          { text: "Thank you so much! I'm really excited about this opportunity.", trans: "ありがとうございます！このチャンスにとても興奮しています。", correct: true },
-          { text: "Thank you. I wait for your contact.",          trans: "ありがとう。ご連絡をお待ちします。",       correct: false },
-          { text: "I am happy to wait for the answer from you.", trans: "あなたからの返答を待つのが嬉しいです。",   correct: false },
+          { text: "Thank you! I look forward to hearing from you.", trans: "ありがとうございます！ご連絡をお待ちしています。", correct: true },
+          { text: "Thank you. I wait for your call.", trans: "ありがとう。電話を待ちます。",  correct: false },
+          { text: "OK. I am waiting your contact.", trans: "はい。ご連絡を待っています。",    correct: false },
         ]},
-      { aiLine: "We'll see ourselves out. It was a pleasure meeting you.", aiTrans: "お見送りします。お会いできて光栄でした。",
+      { aiLine: "It was great meeting you. Have a good day!", aiTrans: "お会いできて良かったです。良い一日を！",
         options: [
-          { text: "The pleasure was all mine. I hope to hear from you soon!", trans: "こちらこそ光栄でした。近いうちにご連絡をお待ちしています！", correct: true },
-          { text: "Nice to meet you too. I hope for your contact.", trans: "こちらもよろしく。ご連絡を期待しています。", correct: false },
-          { text: "It was also my pleasure meeting you today.",   trans: "今日お会いできたことも私の喜びでした。",   correct: false },
+          { text: "You too! Thank you for your time.", trans: "こちらこそ！お時間をいただきありがとうございます。", correct: true },
+          { text: "Thank you for meeting me.",     trans: "会っていただきありがとうございます。", correct: false },
+          { text: "Same. Thanks for your time today.", trans: "こちらも。今日のお時間ありがとうございます。", correct: false },
         ]},
     ],
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 11. 🎉 Party / Social
+  // 11. 🎉 Birthday Party
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'party', title: 'Party & Social', situation: '友人の誕生日パーティーでの会話', emoji: '🎉',
+    id: 'party', title: 'Birthday Party', situation: '友人の誕生日パーティーでの会話', emoji: '🎉',
     exchanges: [
-      { aiLine: "Hey! You made it! I'm so glad you came!", aiTrans: "やあ！来てくれたんだ！来てくれて嬉しいよ！",
+      { aiLine: "Hey! You made it! Happy to see you!", aiTrans: "やあ！来てくれたんだ！会えて嬉しい！",
         options: [
-          { text: "Thanks for the invite! Happy birthday! This looks amazing.", trans: "招待してくれてありがとう！誕生日おめでとう！すごいパーティーだね。", correct: true },
-          { text: "Yes I came. Happy birthday to you.",           trans: "はい、来ました。お誕生日おめでとう。",     correct: false },
-          { text: "I am very happy to come to your birthday.",   trans: "あなたの誕生日に来てとても嬉しいです。",   correct: false },
+          { text: "Thanks for the invite! Happy birthday!", trans: "誘ってくれてありがとう！誕生日おめでとう！", correct: true },
+          { text: "Yes I come. Happy birthday.",   trans: "はい来ました。誕生日おめでとう。",  correct: false },
+          { text: "I am happy to be here. Birthday!", trans: "ここに来て嬉しいです。誕生日！", correct: false },
         ]},
-      { aiLine: "I've been looking forward to seeing you! How have you been?", aiTrans: "会うのを楽しみにしてたよ！元気だった？",
+      { aiLine: "How have you been? I haven't seen you in a while!", aiTrans: "元気でしたか？しばらく会ってなかったですね！",
         options: [
-          { text: "I've been great! Really busy with music, but loving it. How about you?", trans: "元気だよ！音楽でとても忙しいけど楽しんでるよ。あなたは？", correct: true },
-          { text: "I am fine, very busy with music. And you?",   trans: "元気、音楽でとても忙しい。あなたは？",     correct: false },
-          { text: "Good. I was doing music practice. You?",      trans: "元気。音楽練習をしていました。あなたは？", correct: false },
+          { text: "I've been great! Really busy, but good!", trans: "元気でした！すごく忙しかったけど、良かったです！", correct: true },
+          { text: "I am fine. Very busy.",         trans: "元気です。とても忙しい。",         correct: false },
+          { text: "I was good. Busy many things.", trans: "良かったです。多くのことで忙しかった。", correct: false },
         ]},
-      { aiLine: "There are some people I'd love to introduce you to. Do you mind?", aiTrans: "紹介したい人がいるんだけど。いい？",
+      { aiLine: "Come on in! Can I get you a drink?", aiTrans: "さあ入って！飲み物はいかがですか？",
         options: [
-          { text: "Not at all! I'd love to meet more people.",   trans: "もちろん！もっと人と出会いたいな。",       correct: true  },
-          { text: "Yes please introduce me to people.",          trans: "はい、人々に紹介してください。",           correct: false },
-          { text: "I don't mind. New people are OK for me.",     trans: "構いません。新しい人々は私に大丈夫です。", correct: false },
+          { text: "Yes please! Do you have juice?", trans: "はい！ジュースはありますか？",    correct: true  },
+          { text: "Yes, I want juice.",            trans: "はい、ジュースが欲しいです。",     correct: false },
+          { text: "Yes please give me juice.",     trans: "はいジュースをください。",         correct: false },
         ]},
-      { aiLine: "This is Mike! He's also a musician.", aiTrans: "こちらマイク！彼も音楽家だよ。",
+      { aiLine: "Sure! Oh, this is my friend Mike. He's from Canada.", aiTrans: "もちろん！あ、こちら友人のマイク。カナダ出身です。",
         options: [
-          { text: "Hey Mike! Nice to meet you. What kind of music do you play?", trans: "マイク！はじめまして。どんな音楽をやってるの？", correct: true },
-          { text: "Hello Mike. I am Yuki. I play music too.",    trans: "こんにちはマイク。私はユキです。私も音楽をします。", correct: false },
-          { text: "Nice to meet Mike. What music are you playing?", trans: "マイクに会えて嬉しい。どんな音楽を弾い���るの？", correct: false },
+          { text: "Hi Mike! Nice to meet you. I'm Yuki.", trans: "こんにちはマイク！はじめまして。ユキです。", correct: true },
+          { text: "Hello Mike. I am Yuki from Japan.", trans: "こんにちはマイク。日本のユキです。", correct: false },
+          { text: "Nice meet you Mike. My name Yuki.", trans: "はじめましてマイク。名前ユキ。", correct: false },
         ]},
-      { aiLine: "I play jazz trumpet. What about you?", aiTrans: "ジャズトランペットを吹いてるよ。あなたは？",
+      { aiLine: "What kind of music do you like, Yuki?", aiTrans: "ユキさんはどんな音楽が好きですか？",
         options: [
-          { text: "I'm primarily a pianist, but I drum too. I love jazz — do you perform live often?", trans: "主にピアニストですがドラムも。ジャズが大好き——よくライブをするの？", correct: true },
-          { text: "I play piano and drum. I also love jazz music.", trans: "ピアノとドラムを弾きます。ジャズも好きです。", correct: false },
-          { text: "Piano is my instrument. Drum also. Jazz is good.", trans: "ピアノが楽器。ドラムも。ジャズは良いです。", correct: false },
+          { text: "I love jazz and pop music!",    trans: "ジャズとポップ音楽が大好きです！",  correct: true  },
+          { text: "I like jazz music and pop.",    trans: "ジャズとポップが好きです。",       correct: false },
+          { text: "My favorite is jazz and pop.",  trans: "お気に入りはジャズとポップです。", correct: false },
         ]},
-      { aiLine: "Yeah, we have a gig next Friday at a bar downtown. You should come!", aiTrans: "そうだよ、来週金曜日に街のバーでライブがあるよ。来なよ！",
+      { aiLine: "Oh nice! Do you play any instruments?", aiTrans: "いいですね！楽器は演奏しますか？",
         options: [
-          { text: "That sounds great! I'd love to come. What time does it start?", trans: "それは良さそう！ぜひ行きたい。何時開始ですか？", correct: true },
-          { text: "Yes I will come to your live music gig.",     trans: "はい、ライブに来ます。",                   correct: false },
-          { text: "I want to come. When the gig is starting?",   trans: "行きたいです。ライブは何時から始まりますか？", correct: false },
+          { text: "Yes! I play piano and drums.",  trans: "はい！ピアノとドラムを弾きます。", correct: true  },
+          { text: "Yes, I play piano and drum.",   trans: "はい、ピアノとドラムを演奏します。", correct: false },
+          { text: "Yes. Piano, drum is my instrument.", trans: "はい。ピアノとドラムが楽器です。", correct: false },
         ]},
-      { aiLine: "Around 8 PM. I can put you on the guest list!", aiTrans: "夜8時頃だよ。ゲストリストに入れてあげるよ！",
+      { aiLine: "That's so cool! Is the food OK? Please eat!", aiTrans: "かっこいい！食べ物は大丈夫ですか？どうぞ食べてください！",
         options: [
-          { text: "That's so kind of you! I'll definitely be there.", trans: "それはご親切に！絶対行きます。",       correct: true  },
-          { text: "Thank you very kind. I definitely go there.", trans: "とても親切にありがとう。絶対そこに行きます。", correct: false },
-          { text: "Very nice of you. I will come at 8PM Friday.", trans: "あなたはとても良いです。金曜8時に来ます。", correct: false },
+          { text: "Everything looks delicious!",  trans: "全部おいしそうですね！",           correct: true  },
+          { text: "Yes, food is very good.",       trans: "はい、食べ物はとても良いです。",   correct: false },
+          { text: "The food looks very delicious.", trans: "食べ物はとても美味しそうです。",  correct: false },
         ]},
-      { aiLine: "By the way, can I try some of that food you brought?", aiTrans: "ところで、持ってきた料理を試していい？",
+      { aiLine: "I made the cake myself! Do you want some?", aiTrans: "ケーキは自分で作りました！食べますか？",
         options: [
-          { text: "Of course! It's Japanese onigiri. I made it myself.", trans: "もちろん！日本のおにぎりだよ。自分で作ったんだ。", correct: true },
-          { text: "Yes please eat it. I made Japanese onigiri.", trans: "はい、食べてください。日本のおにぎりを作りました。", correct: false },
-          { text: "It is OK to eat. This is onigiri from Japan.", trans: "食べていいです。これは日本のおにぎりです。", correct: false },
+          { text: "Yes please! It looks amazing!",  trans: "はい！すごく美味しそうです！",    correct: true  },
+          { text: "Yes I want cake.",              trans: "はい、ケーキが欲しいです。",       correct: false },
+          { text: "Yes, give me cake please.",     trans: "はい、ケーキをください。",         correct: false },
         ]},
-      { aiLine: "Oh wow, this is delicious! What's inside?", aiTrans: "すごい、美味しい！中に何が入ってるの？",
+      { aiLine: "Here you go! Hope you like it!", aiTrans: "どうぞ！気に入ってもらえると嬉しいです！",
         options: [
-          { text: "This one has salmon and the other has tuna mayo. Glad you like it!", trans: "これはサーモンで、もう一つはツナマヨだよ。気に入ってもらえて嬉しい！", correct: true },
-          { text: "Inside is salmon and tuna mayo. Happy you like.", trans: "中身はサーモンとツナマヨです。気に入って嬉しい。", correct: false },
-          { text: "I put salmon and tuna mayo as the inside ingredient.", trans: "中の材料としてサーモンとツナマヨを入れました。", correct: false },
+          { text: "Mmm, it's delicious! You're a great baker!", trans: "うーん、おいしい！すごく上手なケーキ屋さんですね！", correct: true },
+          { text: "Very delicious. You make good cake.", trans: "とても美味しい。良いケーキを作りました。", correct: false },
+          { text: "It's good cake! You are good at cake.", trans: "良いケーキです！ケーキが上手ですね。", correct: false },
         ]},
-      { aiLine: "I'm going to need your recipe! This was the best thing I've eaten all night.", aiTrans: "レシピを教えてほしいな！今夜食べた中で一番美味しかった。",
+      { aiLine: "So glad you could come! See you soon!", aiTrans: "来てくれて嬉しかったです！また近いうちに！",
         options: [
-          { text: "Ha! I'll send you the recipe. So glad you enjoyed it! Great party by the way!", trans: "わかった！レシピ送るよ。気に入ってもらえて良かった！ところで素晴らしいパーティーだね！", correct: true },
-          { text: "OK I give you recipe. I am happy you liked it.", trans: "はい、レシピを渡します。気に入ってもらえて嬉しいです。", correct: false },
-          { text: "Thank you. I send recipe to you. Good party!", trans: "ありがとう。レシピを送ります。良いパーティー！", correct: false },
+          { text: "It was so much fun! Happy birthday again!", trans: "すごく楽しかった！もう一度誕生日おめでとう！", correct: true },
+          { text: "Yes, very fun. Happy birthday!",  trans: "はい、とても楽しかった。誕生日おめでとう！", correct: false },
+          { text: "I enjoy it. Birthday happy!",   trans: "楽しめました。誕生日おめでとう！", correct: false },
         ]},
     ],
   },
 
   // ─────────────────────────────────────────────────────────────
-  // 12. 🚕 Taking a Taxi / Ride Share
+  // 12. 🚕 Taxi / Ride Share
   // ─────────────────────────────────────────────────────────────
   {
-    id: 'taxi', title: 'Taking a Ride Share', situation: 'ライドシェアに乗って目的地に向かう', emoji: '🚕',
+    id: 'taxi', title: 'Taking a Taxi', situation: 'タクシーやライドシェアで目的地に向かう', emoji: '🚕',
     exchanges: [
-      { aiLine: "Hey, are you Yuki? The ride for downtown?", aiTrans: "ユキさんですか？ダウンタウン行きのご注文の方？",
+      { aiLine: "Hi! Are you Yuki?", aiTrans: "こんにちは！ユキさんですか？",
         options: [
-          { text: "Yes, that's me! Thanks for coming.",          trans: "はい、私です！来てくれてありがとうございます。", correct: true },
-          { text: "Yes I am Yuki and I need ride downtown.",     trans: "はい、私はユキでダウンタウンへのライドが必要です。", correct: false },
-          { text: "I am the person who is called Yuki, yes.",    trans: "はい、ユキと呼ばれている人間です。",       correct: false },
+          { text: "Yes, that's me! Thanks for coming.", trans: "はい、私です！来てくれてありがとう！", correct: true },
+          { text: "Yes, I am Yuki.",                trans: "はい、ユキです。",                 correct: false },
+          { text: "Yes. The person is me.",         trans: "はい。その人は私です。",           correct: false },
         ]},
-      { aiLine: "Great! Go ahead and hop in. You have an address in the app?", aiTrans: "良かった！どうぞ乗ってください。アプリに住所は入れてますか？",
+      { aiLine: "Where would you like to go?", aiTrans: "どちらまでいかれますか？",
         options: [
-          { text: "Yes, it's already set in the app. It's the music hall on 5th Ave.", trans: "はい、アプリに設定済みです。5番街のミュージックホールです。", correct: true },
-          { text: "Yes I put address in app already. Music hall.", trans: "はい、アプリに住所を入れました。ミュージックホール。", correct: false },
-          { text: "The address is in the app. I go to music hall.", trans: "アドレスはアプリにあります。ミュージックホールに行きます。", correct: false },
+          { text: "To City Hall, please.",          trans: "市役所までお願いします。",         correct: true  },
+          { text: "I go to City Hall.",             trans: "市役所に行きます。",               correct: false },
+          { text: "City Hall is my destination.",   trans: "市役所が目的地です。",             correct: false },
         ]},
-      { aiLine: "Nice! Big event tonight?", aiTrans: "いいですね！今夜は大きなイベントがあるんですか？",
+      { aiLine: "No problem. It'll take about 15 minutes.", aiTrans: "了解です。約15分かかります。",
         options: [
-          { text: "Yeah, I'm going to a live jazz concert. I'm really excited!", trans: "はい、ライブジャズコンサートに行きます。とても楽しみです！", correct: true },
-          { text: "Yes I go to jazz concert live tonight.",       trans: "はい、今夜ジャズのライブコンサートに行きます。", correct: false },
-          { text: "Tonight is jazz concert and I am going.",     trans: "今夜はジャズコンサートで私は行きます。",   correct: false },
+          { text: "That's fine. I'm not in a rush.", trans: "大丈夫です。急いでいません。",    correct: true  },
+          { text: "OK, 15 minutes is fine.",        trans: "はい、15分で大丈夫です。",         correct: false },
+          { text: "No problem. I am not rush.",     trans: "大丈夫。急いでいません。",         correct: false },
         ]},
-      { aiLine: "Oh fun! Do you play music yourself?", aiTrans: "楽しそう！ご自身も音楽をやりますか？",
+      { aiLine: "Beautiful day today, isn't it?", aiTrans: "今日は良い天気ですね！",
         options: [
-          { text: "Yes! I play piano and drums. I'm actually studying music here.", trans: "はい！ピアノとドラムを演奏します。実はここで音楽を勉強しています。", correct: true },
-          { text: "Yes I play piano and drum. I study music here.", trans: "はい、ピアノとドラムを弾きます。ここで音楽を勉強しています。", correct: false },
-          { text: "I am musician who plays piano and drum also.", trans: "ピアノとドラムも弾く音楽家です。",         correct: false },
+          { text: "Yes! Perfect weather.",          trans: "はい！完璧な天気ですね。",         correct: true  },
+          { text: "Yes, weather is nice.",          trans: "はい、天気はいいですね。",         correct: false },
+          { text: "Yes, today weather is beautiful.", trans: "はい、今日の天気は美しいです。", correct: false },
         ]},
-      { aiLine: "That's cool! Traffic might be a bit heavy tonight. Is that okay?", aiTrans: "いいですね！今夜は少し渋滞かもしれません。大丈夫ですか？",
+      { aiLine: "Are you visiting, or do you live here?", aiTrans: "旅行中ですか？それともここに住んでいますか？",
         options: [
-          { text: "That's fine. The concert doesn't start until 8, so I have time.", trans: "大丈夫です。コンサートは8時からなので時間はあります。", correct: true },
-          { text: "It is OK because concert is at 8 PM.",        trans: "コンサートが8時なので大丈夫です。",         correct: false },
-          { text: "No problem traffic. I have enough of time.",   trans: "渋滞は問題なし。十分な時間があります。",   correct: false },
+          { text: "I'm studying here for six months.", trans: "6ヶ月間ここで勉強しています。", correct: true  },
+          { text: "I study here for 6 months.",    trans: "6ヶ月間ここで勉強します。",         correct: false },
+          { text: "I am a student here for 6 month.", trans: "ここの学生で6ヶ月です。",       correct: false },
         ]},
-      { aiLine: "Have you been in this city long?", aiTrans: "この街には長くいますか？",
+      { aiLine: "Wow, six months! Do you like it here?", aiTrans: "わあ、6ヶ月も！ここは気に入っていますか？",
         options: [
-          { text: "Just a couple of months. I moved here for school. Still exploring!", trans: "2ヶ月ほどです。学校のために引っ越してきました。まだ探索中です！", correct: true },
-          { text: "I am here 2 months for my school studies.",   trans: "学校の勉強のために2ヶ月います。",           correct: false },
-          { text: "Two months only. I came here for school.",    trans: "2ヶ月だけ。学校のためにここに来ました。", correct: false },
+          { text: "Yes! I love it. The people are so friendly.", trans: "はい！大好きです。人々がとても親切で。", correct: true },
+          { text: "Yes, I like it. People are friendly.", trans: "はい、好きです。人々は親切です。", correct: false },
+          { text: "Yes. Friendly people here.",   trans: "はい。ここは友好的な人々。",       correct: false },
         ]},
-      { aiLine: "What's your favorite thing about the city so far?", aiTrans: "今のところ、この街で一番好きなことは何ですか？",
+      { aiLine: "We're almost there. Any plans today?", aiTrans: "もうすぐ着きます。今日は何か予定がありますか？",
         options: [
-          { text: "Honestly, the music scene. There's live music everywhere!", trans: "正直、音楽シーンです。どこでもライブ音楽がある！", correct: true },
-          { text: "The music scene is what I like most here.",   trans: "音楽シーンがここで一番好きです。",         correct: false },
-          { text: "I like the most the music happening here.",   trans: "ここで起こっている音楽が一番好きです。",   correct: false },
+          { text: "Just a meeting at City Hall.",  trans: "市役所でミーティングがあるだけです。", correct: true },
+          { text: "I have meeting at City Hall.",  trans: "市役所でミーティングがあります。",  correct: false },
+          { text: "Today I go City Hall for meeting.", trans: "今日は市役所にミーティングで行きます。", correct: false },
         ]},
-      { aiLine: "We're about 5 minutes away now.", aiTrans: "あと約5分で着きます。",
+      { aiLine: "Here we are! That's City Hall on the left.", aiTrans: "着きました！左側が市役所です。",
         options: [
-          { text: "Perfect timing! Right on schedule.",          trans: "ちょうどいいタイミングですね！予定通りです。", correct: true },
-          { text: "Good, 5 minutes is fine for me.",             trans: "良い、5分は私には大丈夫です。",             correct: false },
-          { text: "OK 5 minutes and we are arriving there.",     trans: "はい、5分で到着します。",                   correct: false },
+          { text: "Great! How much do I owe you?", trans: "ありがとう！いくらですか？",       correct: true  },
+          { text: "OK. How much is the fare?",    trans: "はい。料金はいくらですか？",       correct: false },
+          { text: "We arrive. Money how much?",   trans: "着きました。料金はいくらですか？", correct: false },
         ]},
-      { aiLine: "I'll drop you off right in front of the main entrance.", aiTrans: "メインエントランスの目の前で降ろしますよ。",
+      { aiLine: "It's $12.50. The payment is in the app.", aiTrans: "12ドル50セントです。お支払いはアプリでお願いします。",
         options: [
-          { text: "That's perfect. Thank you so much!",          trans: "ありがとうございます。最高です！",         correct: true  },
-          { text: "OK that is good place for me to get off.",    trans: "はい、降りるのに良い場所です。",           correct: false },
-          { text: "Good place. I get out from the car there.",   trans: "良い場所。そこで車から出ます。",           correct: false },
+          { text: "Oh right! I'll pay through the app now.", trans: "あ、そうですね！今アプリで払います。", correct: true },
+          { text: "OK, I pay with the app.",      trans: "はい、アプリで払います。",         correct: false },
+          { text: "Yes, app payment OK.",         trans: "はい、アプリ支払いOKです。",       correct: false },
         ]},
-      { aiLine: "Here we are! Have a great time at the concert!", aiTrans: "着きましたよ！コンサートを楽しんでください！",
+      { aiLine: "Have a great day! Good luck with your meeting!", aiTrans: "良い一日を！ミーティング頑張ってください！",
         options: [
-          { text: "Thank you! You've been a great driver. Have a wonderful evening!", trans: "ありがとうございます！素晴らしいドライバーでした。良い夜を！", correct: true },
-          { text: "Thank you driver. I enjoy the concert now.",  trans: "ありがとうドライバー。コンサートを楽しみます。", correct: false },
-          { text: "Thanks for driving. Good night to you.",      trans: "運転してくれてありがとう。おやすみなさい。", correct: false },
+          { text: "Thank you! Drive safe!",        trans: "ありがとうございます！安全運転で！", correct: true  },
+          { text: "Thank you. Bye bye.",           trans: "ありがとうございます。さようなら。", correct: false },
+          { text: "Thanks. Safe drive please.",   trans: "ありがとう。安全に運転してください。", correct: false },
         ]},
     ],
   },
@@ -889,7 +889,7 @@ function saveComplete(date: string): void {
   try { localStorage.setItem(EQ_COMPLETE_KEY + date, '1'); } catch {}
 }
 
-// シャッフル（Fisher-Yates）
+// Fisher-Yates シャッフル
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -905,7 +905,7 @@ function speakEnglish(text: string, onEnd?: () => void): void {
   window.speechSynthesis.cancel();
   const utt      = new SpeechSynthesisUtterance(text);
   utt.lang       = 'en-US';
-  utt.rate       = 0.9;
+  utt.rate       = 0.85;
   utt.pitch      = 1.0;
   if (onEnd) utt.onend = onEnd;
   window.speechSynthesis.speak(utt);
@@ -916,14 +916,14 @@ export function EnglishQuiz() {
   const todayStr  = getTodayDateStr();
   const scenario  = SCENARIOS[dayOfYear() % SCENARIOS.length];
 
-  const [round,     setRound]     = useState<number>(0);
-  const [completed, setCompleted] = useState<boolean>(false);
-  const [options,   setOptions]   = useState<QuizOption[]>([]);
-  const [selected,  setSelected]  = useState<number | null>(null);
-  const [feedback,  setFeedback]  = useState<'correct' | 'wrong' | null>(null);
-  const [taunt,     setTaunt]     = useState('');
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [collapsed,  setCollapsed]  = useState(false);
+  const [round,       setRound]       = useState<number>(0);
+  const [completed,   setCompleted]   = useState<boolean>(false);
+  const [options,     setOptions]     = useState<QuizOption[]>([]);
+  const [selected,    setSelected]    = useState<number | null>(null);
+  const [feedback,    setFeedback]    = useState<'correct' | 'wrong' | null>(null);
+  const [taunt,       setTaunt]       = useState('');
+  const [isSpeaking,  setIsSpeaking]  = useState(false);
+  const [collapsed,   setCollapsed]   = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   // ── 初期化（localStorage から復元） ──────────────────────────
@@ -955,10 +955,9 @@ export function EnglishQuiz() {
 
   // ── 選択肢タップ ─────────────────────────────────────────────
   const handleSelect = (idx: number) => {
-    if (selected !== null) return; // already answered
+    if (selected !== null) return;
     setSelected(idx);
-    const opt = options[idx];
-    if (opt.correct) {
+    if (options[idx].correct) {
       setFeedback('correct');
     } else {
       setFeedback('wrong');
@@ -970,7 +969,6 @@ export function EnglishQuiz() {
   const handleNext = () => {
     const nextRound = round + 1;
     if (nextRound >= scenario.exchanges.length) {
-      // 10往復クリア
       saveProgress(todayStr, nextRound);
       saveComplete(todayStr);
       setRound(nextRound);
@@ -989,7 +987,7 @@ export function EnglishQuiz() {
     setTaunt('');
   };
 
-  // ── 今日リセット（デバッグ用） ──────────────────────────────
+  // ── 今日リセット ─────────────────────────────────────────────
   const handleReset = () => {
     if (!confirm('今日の英会話進捗をリセットしますか？')) return;
     try {
@@ -1012,7 +1010,7 @@ export function EnglishQuiz() {
       >
         <span className="text-xl">{scenario.emoji}</span>
         <div className="flex-1 text-left">
-          <p className="text-xs font-black text-white">スパルタ英会話クイズ</p>
+          <p className="text-xs font-black text-white">スパルタ英会話クイズ（初級〜中級）</p>
           <p className="text-[10px] text-emerald-200">{scenario.title} — {scenario.situation}</p>
         </div>
         {completed ? (
@@ -1036,11 +1034,9 @@ export function EnglishQuiz() {
               <p className="text-sm text-gray-600 leading-relaxed">
                 よくやった！<br/>
                 10往復の英会話を完璧にこなした。<br/>
-                この調子で毎日続けろ！プロのリスニングは積み重ねだ！
+                毎日続ければ、基礎は必ず身に付くぞ！
               </p>
-              <div className="flex items-center justify-center gap-2">
-                <span className="text-xs text-gray-400">明日は新しいシナリオが待っている</span>
-              </div>
+              <p className="text-xs text-gray-400">明日は別のシナリオで練習だ！</p>
               <button
                 onClick={handleReset}
                 className="text-[10px] text-gray-400 hover:text-gray-600 underline"
@@ -1057,19 +1053,17 @@ export function EnglishQuiz() {
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all"
-                    style={{ width: `${((round) / scenario.exchanges.length) * 100}%` }}
+                    style={{ width: `${(round / scenario.exchanges.length) * 100}%` }}
                   />
                 </div>
               </div>
 
-              {/* ── AI のセリフ ── */}
+              {/* ── AIのセリフ ── */}
               <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 space-y-2">
                 <div className="flex items-start gap-2">
                   <span className="text-lg flex-shrink-0 mt-0.5">{scenario.emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-emerald-800 mb-1">
-                      {scenario.title.split(' ').slice(-2).join(' ')}からのセリフ
-                    </p>
+                    <p className="text-xs font-black text-emerald-800 mb-1">相手のセリフ</p>
                     <p className="text-sm font-bold text-gray-900 leading-snug">
                       {currentExchange.aiLine}
                     </p>
@@ -1077,7 +1071,6 @@ export function EnglishQuiz() {
                       {currentExchange.aiTrans}
                     </p>
                   </div>
-                  {/* TTS 発音ボタン */}
                   <button
                     onClick={() => handleSpeak(currentExchange.aiLine)}
                     disabled={isSpeaking}
@@ -1087,16 +1080,14 @@ export function EnglishQuiz() {
                         : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                     }`}
                     title="英語で発音を聞く"
-                  >
-                    🔊
-                  </button>
+                  >🔊</button>
                 </div>
               </div>
 
               {/* ── 3択クイズ ── */}
               <div className="space-y-2">
                 <p className="text-[10px] font-bold text-gray-500">
-                  あなたの返答として最も自然な英文を選べ！
+                  最も自然な英語の返答を選べ！（A1〜B1レベル）
                 </p>
                 {options.map((opt, idx) => {
                   const isSelected = selected === idx;
@@ -1104,7 +1095,7 @@ export function EnglishQuiz() {
                   let btnClass = 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50';
                   if (isSelected && feedback === 'correct')  btnClass = 'border-green-400 bg-green-50 ring-1 ring-green-300';
                   if (isSelected && feedback === 'wrong')    btnClass = 'border-red-400 bg-red-50 ring-1 ring-red-300';
-                  if (selected !== null && !isSelected && isCorrect) btnClass = 'border-green-200 bg-green-50/50 opacity-70';
+                  if (selected !== null && !isSelected && isCorrect)  btnClass = 'border-green-200 bg-green-50/50 opacity-70';
                   if (selected !== null && !isSelected && !isCorrect) btnClass = 'border-gray-100 bg-gray-50 opacity-40';
 
                   return (
@@ -1129,7 +1120,6 @@ export function EnglishQuiz() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-800 leading-snug">{opt.text}</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">{opt.trans}</p>
-                          {/* 選んだ時だけ TTS */}
                           {isSelected && feedback === 'correct' && (
                             <button
                               onClick={e => { e.stopPropagation(); handleSpeak(opt.text); }}
@@ -1152,7 +1142,7 @@ export function EnglishQuiz() {
                     <p className="text-[10px] text-green-600">
                       {round + 1 < scenario.exchanges.length
                         ? `次の往復へ進め！（${round + 2}/${scenario.exchanges.length}）`
-                        : '最後の往復だ！クリアしろ！'}
+                        : '最後の往復！クリアしろ！'}
                     </p>
                   </div>
                   <button
@@ -1161,18 +1151,19 @@ export function EnglishQuiz() {
                   >{round + 1 < scenario.exchanges.length ? '次へ →' : '🏆 完了！'}</button>
                 </div>
               )}
-
               {feedback === 'wrong' && (
-                <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-2xl">
-                  <span className="text-xl flex-shrink-0">🔥</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-black text-red-700">不正解！</p>
-                    <p className="text-[10px] text-red-600 mt-0.5 leading-relaxed">{taunt}</p>
+                <div className="flex flex-col gap-2 p-3 bg-red-50 border border-red-200 rounded-2xl">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xl flex-shrink-0">🔥</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-black text-red-700">不正解！</p>
+                      <p className="text-xs text-red-600 mt-0.5">{taunt}</p>
+                    </div>
                   </div>
                   <button
                     onClick={handleRetry}
-                    className="flex-shrink-0 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl transition-all"
-                  >やり直し</button>
+                    className="self-end px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl transition-all"
+                  >もう一度 ↺</button>
                 </div>
               )}
             </>

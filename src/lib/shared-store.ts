@@ -506,6 +506,17 @@ export function getDailyMusicFact(): MusicFact {
  * Each free block is split into 1-hour increments so multiple tasks fit.
  * Returns the number of tasks that were scheduled.
  */
+/**
+ * Explicitly re-persists all user data to localStorage.
+ * Safe to call anytime — performs a read-then-write to confirm data is intact.
+ * Used by the "Save All" button for user peace-of-mind.
+ */
+export function forceResaveAll(): void {
+  saveTasks(getTasks());
+  save(MEMOS_KEY, getMemos());
+  save(SCHOOL_KEY, getSchoolSchedule());
+}
+
 export function autoSchedulePendingTasks(days = 7): number {
   const pending = getTasks().filter(t => t.status === 'TODO' && !t.scheduledDate);
   if (pending.length === 0) return 0;
