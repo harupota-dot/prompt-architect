@@ -1,18 +1,63 @@
 {
-  "name": "Prompt Architect",
-  "short_name": "Prompt",
-  "description": "話すだけで、Gemini用の最強2ステッププロンプトを自動生成",
-  "start_url": "/",
+  "name": "SPARTA AI — スパルタマネージャー",
+  "short_name": "SPARTA AI",
+  "description": "音楽スキル習得×タスク管理×AIコーチ。サボったら容赦なく叱咤激励するスパルタ型AI秘書システム。",
+  "start_url": "/sparta",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f9fafb",
-  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "background_color": "#111827",
+  "theme_color": "#dc2626",
   "lang": "ja",
+  "categories": ["productivity", "education"],
   "icons": [
     {
       "src": "/icons/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "タスク管理",
+      "short_name": "タスク",
+      "description": "今日のタスクを確認・追加",
+      "url": "/sparta",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "AIに相談",
+      "short_name": "AI相談",
+      "description": "スパルタAIに深掘り相談",
+      "url": "/",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "運動ログ",
+      "short_name": "運動",
+      "description": "今日の運動・歩数を記録",
+      "url": "/sports",
+      "icons": [{ "src": "/icons/icon-192.svg", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

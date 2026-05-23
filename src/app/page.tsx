@@ -5,6 +5,7 @@ import { addTask, getDailyRecord, getDoneExercises, today as todayStr, getSparta
 import { DailyQuoteSection } from '@/components/DailyQuoteSection';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { MusicFactWidget } from '@/components/MusicFactWidget';
+import { DashboardHeader } from '@/components/DashboardHeader';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
@@ -1110,6 +1111,9 @@ export default function SpartaAI() {
                 </details>
               </section>
             )}
+
+            {/* ── ダッシュボードヘッダー（日付・曜日・カウントダウン） ── */}
+            {!cleanText && !confirmedTopic && <DashboardHeader />}
 
             {/* ── 天気予報 ── */}
             {!cleanText && !confirmedTopic && <WeatherWidget />}

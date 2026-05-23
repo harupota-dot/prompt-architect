@@ -10,6 +10,11 @@ import {
   getFreeSlotsForDate, getDailyQuotes, checkTimeConflict,
   getMemos, addMemo, deleteMemo, updateMemo,
 } from '@/lib/shared-store';
+import {
+  SoundType, SOUND_TYPES,
+  playSound, getSoundPref, setSoundPref, getSoundVolume, setSoundVolume,
+} from '@/lib/sound-engine';
+import { DashboardHeader } from '@/components/DashboardHeader';
 
 // ── タスク名プリセット ─────────────────────────────────────────
 interface TaskPreset {
@@ -235,27 +240,8 @@ function gridToSlots(grid: SchoolGrid): SchoolSlot[] {
   return slots;
 }
 
-// ── Web Audio アラーム ────────────────────────────────────────────
-function playAlarmSound() {
-  try {
-    type WindowWithWebkit = typeof window & { webkitAudioContext?: typeof AudioContext };
-    const AC = window.AudioContext ?? (window as WindowWithWebkit).webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    for (let i = 0; i < 4; i++) {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'square';
-      osc.frequency.value = i % 2 === 0 ? 1200 : 900;
-      gain.gain.setValueAtTime(0.7, ctx.currentTime + i * 0.22);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.22 + 0.18);
-      osc.start(ctx.currentTime + i * 0.22);
-      osc.stop(ctx.currentTime + i * 0.22 + 0.18);
-    }
-  } catch { /* ignore */ }
-}
+// playAlarmSound → sound-engine に委譲
+function playAlarmSound() { playSound(); }
 
 // ── メインコンポーネント ──────────────────────────────────────
 export default function SpartaPage() {
@@ -283,6 +269,11 @@ export default function SpartaPage() {
   const [focusWarningCount, setFocusWarningCount] = useState(0);
   const focusModeRef = useRef(false);
 
+  // ── サウンド設定 ─────────────────────────────────────────────
+  const [soundPref, setSoundPrefState]   = useState<SoundType>('alarm');
+  const [soundVolume, setSoundVolumeState] = useState(0.7);
+  const [showSoundSettings, setShowSoundSettings] = useState(false);
+
   // ── メモ state ────────────────────────────────────────────────
   const [memos, setMemos]       = useState<MemoEntry[]>([]);
   const [memoForm, setMemoForm] = useState<MemoForm>(DEFAULT_MEMO_FORM);
@@ -291,7 +282,25 @@ export default function SpartaPage() {
   const reload      = useCallback(() => setTasks(getTasks()), []);
   const reloadMemos = useCallback(() => setMemos(getMemos()), []);
 
-  useEffect(() => { reload(); reloadMemos(); }, [reload, reloadMemos]);
+  useEffect(() => {
+    reload();
+    reloadMemos();
+    // サウンド設定をlocalStorageから復元
+    setSoundPrefState(getSoundPref());
+    setSoundVolumeState(getSoundVolume());
+  }, [reload, reloadMemos]);
+
+  // ── Service Worker → PLAY_SOUND メッセージ受信 ───────────────
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'PLAY_SOUND') {
+        playSound(e.data.soundType as SoundType | undefined);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, []);
 
   // ── 通知権限の初期状態読み込み ──────────────────────────────
   useEffect(() => {
@@ -428,6 +437,7 @@ export default function SpartaPage() {
               body: notifBody,
               delay,
               tag: key,
+              soundType: getSoundPref(), // ユーザー設定の音を渡す
             });
           });
         } else {
@@ -644,6 +654,9 @@ export default function SpartaPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+
+        {/* ── 日付・曜日・カウントダウン ── */}
+        <DashboardHeader />
 
         {/* ── SNS集中モードバナー ── */}
         {focusMode && (
@@ -1086,6 +1099,80 @@ export default function SpartaPage() {
                   disabled={isSpeaking}
                   className="px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-xs font-bold rounded-xl transition-all"
                 >{isSpeaking ? '話し中...' : '今すぐ聞く'}</button>
+              </div>
+
+              {/* ── 通知音設定 ── */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setShowSoundSettings(v => !v)}
+                  className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-all"
+                >
+                  <span className="text-sm">🎵</span>
+                  <div className="flex-1 text-left">
+                    <p className="text-xs font-bold text-gray-700">通知音の選択</p>
+                    <p className="text-[10px] text-gray-400">
+                      現在: {SOUND_TYPES.find(s => s.value === soundPref)?.emoji}{' '}
+                      {SOUND_TYPES.find(s => s.value === soundPref)?.label}
+                    </p>
+                  </div>
+                  <span className={`text-xs text-gray-400 transition-transform ${showSoundSettings ? 'rotate-180' : ''}`}>▼</span>
+                </button>
+
+                {showSoundSettings && (
+                  <div className="px-4 py-3 space-y-3 bg-white">
+                    {/* 5種類の選択 */}
+                    <div className="grid grid-cols-1 gap-2">
+                      {SOUND_TYPES.map(s => (
+                        <button
+                          key={s.value}
+                          onClick={() => {
+                            setSoundPref(s.value);
+                            setSoundPrefState(s.value);
+                            playSound(s.value); // プレビュー再生
+                          }}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
+                            soundPref === s.value
+                              ? 'border-red-400 bg-red-50'
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span className="text-xl w-8 text-center flex-shrink-0">{s.emoji}</span>
+                          <div className="flex-1 text-left min-w-0">
+                            <p className={`text-xs font-bold ${soundPref === s.value ? 'text-red-600' : 'text-gray-700'}`}>
+                              {s.label}
+                            </p>
+                            <p className="text-[10px] text-gray-400 truncate">{s.desc}</p>
+                          </div>
+                          {soundPref === s.value && (
+                            <span className="flex-shrink-0 text-[10px] text-red-600 font-black bg-red-100 px-1.5 py-0.5 rounded-full">使用中</span>
+                          )}
+                          <span className="flex-shrink-0 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full hover:bg-gray-200">▶ 試聴</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* 音量スライダー */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-gray-600">音量</p>
+                        <p className="text-xs text-gray-400">{Math.round(soundVolume * 100)}%</p>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={soundVolume}
+                        onChange={e => {
+                          const v = parseFloat(e.target.value);
+                          setSoundVolume(v);
+                          setSoundVolumeState(v);
+                        }}
+                        className="w-full accent-red-600"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

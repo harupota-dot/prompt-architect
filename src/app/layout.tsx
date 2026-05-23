@@ -7,13 +7,29 @@ import "./globals.css";
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "SPARTA AI",
-  description: "AI秘書システム — スパルタ×タスク×運動 統合版",
+  title: "SPARTA AI — スパルタマネージャー",
+  description: "音楽スキル習得×タスク管理×AIコーチ。サボったら容赦なく叱咤激励するスパルタ型AI秘書システム。",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "SPARTA AI",
+    startupImage: ["/icons/icon-512.svg"],
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icons/icon-192.svg", sizes: "192x192", type: "image/svg+xml" },
+      { url: "/icons/icon-512.svg", sizes: "512x512", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/icons/icon-192.svg", sizes: "192x192", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "black-translucent",
   },
 };
 
