@@ -899,16 +899,17 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// TTS（英語）
+// TTS（英語）— cancel() 直後に speak() すると Chrome で無視されるため 50ms 遅延
 function speakEnglish(text: string, onEnd?: () => void): void {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const utt      = new SpeechSynthesisUtterance(text);
-  utt.lang       = 'en-US';
-  utt.rate       = 0.85;
-  utt.pitch      = 1.0;
-  if (onEnd) utt.onend = onEnd;
-  window.speechSynthesis.speak(utt);
+  const utt  = new SpeechSynthesisUtterance(text);
+  utt.lang   = 'en-US';
+  utt.rate   = 0.85;
+  utt.pitch  = 1.0;
+  utt.onend  = () => { if (onEnd) onEnd(); };
+  utt.onerror = () => { if (onEnd) onEnd(); };
+  setTimeout(() => window.speechSynthesis.speak(utt), 50);
 }
 
 // ── メインコンポーネント ─────────────────────────────────────────
@@ -921,9 +922,10 @@ export function EnglishQuiz() {
   const [options,     setOptions]     = useState<QuizOption[]>([]);
   const [selected,    setSelected]    = useState<number | null>(null);
   const [feedback,    setFeedback]    = useState<'correct' | 'wrong' | null>(null);
-  const [taunt,       setTaunt]       = useState('');
-  const [isSpeaking,  setIsSpeaking]  = useState(false);
-  const [collapsed,   setCollapsed]   = useState(false);
+  const [taunt,          setTaunt]          = useState('');
+  // 'ai' = AIセリフ読み上げ中, number = 選択肢index読み上げ中, null = 停止中
+  const [speakingTarget, setSpeakingTarget] = useState<'ai' | number | null>(null);
+  const [collapsed,      setCollapsed]      = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   // ── 初期化（localStorage から復元） ──────────────────────────
@@ -947,10 +949,10 @@ export function EnglishQuiz() {
 
   const currentExchange = scenario.exchanges[round] ?? null;
 
-  // ── TTS 発音 ─────────────────────────────────────────────────
-  const handleSpeak = useCallback((text: string) => {
-    setIsSpeaking(true);
-    speakEnglish(text, () => setIsSpeaking(false));
+  // ── TTS 発音（target: 'ai' or 選択肢index）────────────────────
+  const handleSpeak = useCallback((text: string, target: 'ai' | number) => {
+    setSpeakingTarget(target);
+    speakEnglish(text, () => setSpeakingTarget(null));
   }, []);
 
   // ── 選択肢タップ ─────────────────────────────────────────────
@@ -1072,14 +1074,14 @@ export function EnglishQuiz() {
                     </p>
                   </div>
                   <button
-                    onClick={() => handleSpeak(currentExchange.aiLine)}
-                    disabled={isSpeaking}
+                    onClick={() => handleSpeak(currentExchange.aiLine, 'ai')}
+                    disabled={speakingTarget !== null}
                     className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                      isSpeaking
+                      speakingTarget === 'ai'
                         ? 'bg-emerald-500 text-white animate-pulse'
                         : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                     }`}
-                    title="英語で発音を聞く"
+                    title="AIセリフを聞く"
                   >🔊</button>
                 </div>
               </div>
@@ -1120,13 +1122,20 @@ export function EnglishQuiz() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-800 leading-snug">{opt.text}</p>
                           <p className="text-[10px] text-gray-400 mt-0.5">{opt.trans}</p>
-                          {isSelected && feedback === 'correct' && (
-                            <button
-                              onClick={e => { e.stopPropagation(); handleSpeak(opt.text); }}
-                              className="mt-1 text-[9px] text-green-600 hover:text-green-800 flex items-center gap-0.5"
-                            >🔊 発音を聞く</button>
-                          )}
                         </div>
+                        {/* 個別🔊ボタン（常時表示）*/}
+                        <button
+                          onClick={e => { e.stopPropagation(); handleSpeak(opt.text, idx); }}
+                          disabled={speakingTarget !== null}
+                          className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-[11px] transition-all ${
+                            speakingTarget === idx
+                              ? 'bg-emerald-500 text-white animate-pulse'
+                              : isSelected && feedback === 'correct'
+                                ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                : 'bg-gray-100 text-gray-400 hover:bg-emerald-100 hover:text-emerald-600'
+                          }`}
+                          title="発音を聞く"
+                        >🔊</button>
                       </div>
                     </button>
                   );
