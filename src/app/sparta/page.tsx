@@ -55,16 +55,16 @@ const SPARTAN_TAUNTS = [
 ];
 function getDailyTaunt() { return SPARTAN_TAUNTS[new Date().getDate() % SPARTAN_TAUNTS.length]; }
 
-const WEEK_DAYS: { idx: 1|2|3|4|5|6; label: string }[] = [
-  { idx: 1, label: '月' }, { idx: 2, label: '火' }, { idx: 3, label: '水' },
-  { idx: 4, label: '木' }, { idx: 5, label: '金' }, { idx: 6, label: '土' },
+/** 学校スケジュール適用曜日: 月〜木のみ（金・土・日は終日フリー） */
+const WEEK_DAYS: { idx: 1|2|3|4; label: string }[] = [
+  { idx: 1, label: '月' }, { idx: 2, label: '火' },
+  { idx: 3, label: '水' }, { idx: 4, label: '木' },
 ];
 
-/** 授業1〜6限 + 夜間7〜9スロット */
-const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+/** 授業1〜6限のみ（7限以降は廃止） */
+const PERIODS = [1, 2, 3, 4, 5, 6] as const;
 const PERIOD_LABELS: Record<number, string> = {
   1: '1限', 2: '2限', 3: '3限', 4: '4限', 5: '5限', 6: '6限',
-  7: '夜1', 8: '夜2', 9: '夜3',
 };
 
 // 時間選択肢
@@ -209,12 +209,13 @@ function buildDayTimeline(tasks: LocalTask[], dateStr: string): TLBlock[] {
 }
 
 // ── 学校グリッド型 ───────────────────────────────────────────────
-type SchoolGrid = string[][]; // [dayIdx 0-5: Mon-Sat][periodIdx 0-8: period 1-9]
+// [dayIdx 0-3: Mon-Thu][periodIdx 0-5: period 1-6]
+type SchoolGrid = string[][];
 
 function slotsToGrid(slots: SchoolSlot[]): SchoolGrid {
-  const grid: SchoolGrid = Array(6).fill(null).map(() => Array(9).fill(''));
+  const grid: SchoolGrid = Array(4).fill(null).map(() => Array(6).fill(''));
   slots.forEach(s => {
-    if (s.day >= 1 && s.day <= 6 && s.period >= 1 && s.period <= 9) {
+    if (s.day >= 1 && s.day <= 4 && s.period >= 1 && s.period <= 6) {
       grid[s.day - 1][s.period - 1] = s.subject;
     }
   });
@@ -227,10 +228,11 @@ function gridToSlots(grid: SchoolGrid): SchoolSlot[] {
     periods.forEach((subject, periodIdx) => {
       if (subject.trim()) {
         const p = periodIdx + 1;
-        if (p >= 1 && p <= 9) {
+        const d = dayIdx + 1; // 1=月, 2=火, 3=水, 4=木
+        if (d >= 1 && d <= 4 && p >= 1 && p <= 6) {
           slots.push({
-            id: `${dayIdx + 1}-${p}`,
-            day: (dayIdx + 1) as SchoolSlot['day'],
+            id: `${d}-${p}`,
+            day: d as SchoolSlot['day'],
             period: p as SchoolSlot['period'],
             subject: subject.trim(),
           });
@@ -1018,7 +1020,7 @@ export default function SpartaPage() {
               <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-black text-indigo-800">📚 学校時間割</p>
-                  <p className="text-[10px] text-indigo-500">科目を入力して保存→空き時間を自動検出</p>
+                  <p className="text-[10px] text-indigo-500">月〜木・1〜6限のみ。金土日は終日フリー自動設定</p>
                 </div>
                 <button
                   onClick={saveSchoolGrid}
@@ -1039,16 +1041,15 @@ export default function SpartaPage() {
                   </thead>
                   <tbody>
                     {PERIODS.map(period => {
-                      const isEvening = period >= 7;
                       const pt = PERIOD_TIMES[period];
                       return (
-                        <tr key={period} className={period === 7 ? 'border-t-2 border-indigo-200' : ''}>
+                        <tr key={period}>
                           <td className="py-0.5 pr-1">
                             <div className="leading-tight text-center">
-                              <div className={`text-[9px] font-bold ${isEvening ? 'text-indigo-500' : 'text-gray-500'}`}>
+                              <div className="text-[9px] font-bold text-gray-500">
                                 {PERIOD_LABELS[period]}
                               </div>
-                              <div className={`text-[8px] ${isEvening ? 'text-indigo-300' : 'text-gray-300'}`}>
+                              <div className="text-[8px] text-gray-300">
                                 {pt.start}〜{pt.end}
                               </div>
                             </div>
@@ -1065,11 +1066,7 @@ export default function SpartaPage() {
                                 }}
                                 placeholder="…"
                                 maxLength={6}
-                                className={`w-full px-1 py-1.5 border rounded-lg text-[10px] text-center focus:outline-none focus:ring-1 focus:border-transparent ${
-                                  isEvening
-                                    ? 'border-indigo-100 bg-indigo-50/40 text-indigo-800 placeholder-indigo-200 focus:ring-indigo-400'
-                                    : 'border-gray-200 bg-white text-gray-800 placeholder-gray-200 focus:ring-indigo-400'
-                                }`}
+                                className="w-full px-1 py-1.5 border border-gray-200 rounded-lg text-[10px] text-center bg-white text-gray-800 placeholder-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:border-transparent"
                               />
                             </td>
                           ))}
@@ -1082,11 +1079,11 @@ export default function SpartaPage() {
               <div className="px-4 pb-3 flex items-center gap-4 text-[9px] text-gray-400">
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-white border border-gray-300" />
-                  1〜6限: 授業時間
+                  月〜木: 1〜6限（最大19:20まで）
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-sm bg-indigo-100 border border-indigo-300" />
-                  夜1〜夜3: 夜間（〜22:00）
+                  <span className="w-2 h-2 rounded-sm bg-green-100 border border-green-300" />
+                  金・土・日: 終日フリー
                 </span>
               </div>
             </div>

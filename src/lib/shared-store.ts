@@ -258,16 +258,16 @@ export function priorityLabel(p: TaskPriority): string {
 export interface SchoolSlot {
   id: string;
   day: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, ..., 6=Sat
-  /** 1–6: 授業時限  7–9: 夜間スロット（19:30〜22:00） */
-  period: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  /** 1–6: 授業時限（月〜木のみ有効）*/
+  period: 1 | 2 | 3 | 4 | 5 | 6;
   subject: string;
 }
 
 /**
- * 学校時間割（ユーザー指定の時間）
+ * 学校時間割（月〜木のみ、最大6限まで）
  * 1限: 9:10~10:40 / 2限: 10:50~12:20 / 3限: 12:50~14:20
  * 4限: 14:30~16:00 / 5限: 16:10~17:40 / 6限: 17:50~19:20
- * 夜1: 19:30~20:30 / 夜2: 20:30~21:30 / 夜3: 21:30~22:00
+ * 金・土・日は終日フリー（学校スケジュールなし）
  */
 export const PERIOD_TIMES: Record<number, { start: string; end: string }> = {
   1: { start: '09:10', end: '10:40' },
@@ -276,21 +276,23 @@ export const PERIOD_TIMES: Record<number, { start: string; end: string }> = {
   4: { start: '14:30', end: '16:00' },
   5: { start: '16:10', end: '17:40' },
   6: { start: '17:50', end: '19:20' },
-  7: { start: '19:30', end: '20:30' },
-  8: { start: '20:30', end: '21:30' },
-  9: { start: '21:30', end: '22:00' },
 };
+
+/** 学校スケジュールが存在しない曜日（金=5・土=6・日=0） */
+const SCHOOL_FREE_DAYS = new Set([0, 5, 6]);
 
 export const DAY_NAMES_SHORT = ['日', '月', '火', '水', '木', '金', '土'];
 
 const SCHOOL_KEY = 'sparta-school-v1';
 
 export function getSchoolSchedule(): SchoolSlot[] {
-  return load<SchoolSlot[]>(SCHOOL_KEY, []);
+  const raw = load<SchoolSlot[]>(SCHOOL_KEY, []);
+  // 移行安全フィルタ: 月〜木・1〜6限のみ有効（旧データの夜間スロットや金土日を除去）
+  return raw.filter(s => !SCHOOL_FREE_DAYS.has(s.day) && s.period >= 1 && s.period <= 6);
 }
 
 export function saveSchoolSchedule(slots: SchoolSlot[]): void {
-  save(SCHOOL_KEY, slots);
+  save(SCHOOL_KEY, slots.filter(s => !SCHOOL_FREE_DAYS.has(s.day) && s.period >= 1 && s.period <= 6));
 }
 
 /** Split a free block into hourly (or N-minute) time slots. */
@@ -311,6 +313,16 @@ function getHourlySlots(startTime: string, endTime: string, intervalMin = 60): s
 /** Free time blocks for a date, outside school hours (within 07:00–22:00). */
 export function getFreeSlotsForDate(dateStr: string): { start: string; end: string; label: string }[] {
   const dow = new Date(dateStr).getDay();
+
+  // 金・土・日は終日フリー（学校スケジュールなし）
+  if (SCHOOL_FREE_DAYS.has(dow)) {
+    return [
+      { start: '07:00', end: '12:00', label: '午前フリー' },
+      { start: '12:00', end: '13:30', label: '昼フリー' },
+      { start: '13:30', end: '22:00', label: '午後フリー' },
+    ];
+  }
+
   const daySlots = getSchoolSchedule().filter(s => s.day === dow);
 
   if (daySlots.length === 0) {
@@ -361,19 +373,21 @@ export function checkTimeConflict(
   const startMin = h * 60 + m;
   const endMin   = startMin + Math.max(estimatedMin, 1);
 
-  // Check school schedule
+  // 金・土・日は学校スケジュールなし → タスク重複のみチェック
   const dow = new Date(dateStr).getDay();
-  for (const slot of getSchoolSchedule().filter(s => s.day === dow)) {
-    const { start, end } = PERIOD_TIMES[slot.period];
-    const [sh, sm2] = start.split(':').map(Number);
-    const [eh, em]  = end.split(':').map(Number);
-    const slotStart = sh * 60 + sm2;
-    const slotEnd   = eh * 60 + em;
-    if (startMin < slotEnd && endMin > slotStart) {
-      const label = slot.subject
-        ? `${slot.subject} (${start}〜${end})`
-        : `${slot.period}限 (${start}〜${end})`;
-      return { type: 'school', name: label };
+  if (!SCHOOL_FREE_DAYS.has(dow)) {
+    for (const slot of getSchoolSchedule().filter(s => s.day === dow)) {
+      const { start, end } = PERIOD_TIMES[slot.period];
+      const [sh, sm2] = start.split(':').map(Number);
+      const [eh, em]  = end.split(':').map(Number);
+      const slotStart = sh * 60 + sm2;
+      const slotEnd   = eh * 60 + em;
+      if (startMin < slotEnd && endMin > slotStart) {
+        const label = slot.subject
+          ? `${slot.subject} (${start}〜${end})`
+          : `${slot.period}限 (${start}〜${end})`;
+        return { type: 'school', name: label };
+      }
     }
   }
 

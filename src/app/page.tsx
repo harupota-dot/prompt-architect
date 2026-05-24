@@ -7,6 +7,7 @@ import { WeatherWidget } from '@/components/WeatherWidget';
 import { MusicFactWidget } from '@/components/MusicFactWidget';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { EnglishQuiz } from '@/components/EnglishQuiz';
+import { NewsWidget } from '@/components/NewsWidget';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
@@ -1118,6 +1119,9 @@ export default function SpartaAI() {
 
             {/* ── 天気予報 ── */}
             {!cleanText && !confirmedTopic && <WeatherWidget />}
+
+            {/* ── 知っておくべきニュース ── */}
+            {!cleanText && !confirmedTopic && <NewsWidget />}
 
             {/* ── 日替わり音楽豆知識 ── */}
             {!cleanText && !confirmedTopic && <MusicFactWidget />}
