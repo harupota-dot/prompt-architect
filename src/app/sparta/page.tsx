@@ -15,7 +15,10 @@ import {
   SoundType, SOUND_TYPES,
   playSound, getSoundPref, setSoundPref, getSoundVolume, setSoundVolume,
 } from '@/lib/sound-engine';
-import { DashboardHeader } from '@/components/DashboardHeader';
+import { DashboardHeader }        from '@/components/DashboardHeader';
+import { GoogleCalendarSync }      from '@/components/GoogleCalendarSync';
+import { CameraScheduleInput }     from '@/components/CameraScheduleInput';
+import { VoiceScheduleInput }      from '@/components/VoiceScheduleInput';
 
 // ── タスク名プリセット ─────────────────────────────────────────
 interface TaskPreset {
@@ -767,6 +770,18 @@ export default function SpartaPage() {
           ))}
         </div>
 
+        {/* ── AI入力案内バナー ── */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-violet-50 to-orange-50 border border-violet-100 rounded-2xl">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-gray-700">📷 カメラ・🎤 音声でも登録できます</p>
+            <p className="text-[9px] text-gray-400">右下のボタンから時間割撮影・声での予定登録が可能</p>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <span className="text-xl">📷</span>
+            <span className="text-xl">🎤</span>
+          </div>
+        </div>
+
         {/* ── 今日の空き時間 ── */}
         {todayFreeSlots.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-2xl">
@@ -1117,6 +1132,9 @@ export default function SpartaPage() {
                 </p>
               )}
             </div>
+
+            {/* Googleカレンダー同期 */}
+            <GoogleCalendarSync speakSpartan={speakSpartan} />
 
             {/* 通知設定 */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
@@ -1495,6 +1513,14 @@ export default function SpartaPage() {
           </div>
         </div>
       )}
+
+      {/* ── フローティング入力ボタン（カメラ・音声）── */}
+      <div className="fixed bottom-20 right-4 z-40 flex flex-col items-center gap-3">
+        {/* 音声でスケジュール追加 */}
+        <VoiceScheduleInput onTasksAdded={reload} speakSpartan={speakSpartan} />
+        {/* カメラで予定を撮影して登録 */}
+        <CameraScheduleInput onTasksAdded={reload} speakSpartan={speakSpartan} />
+      </div>
 
       {/* ── メモ追加モーダル ── */}
       {showMemoAdd && (

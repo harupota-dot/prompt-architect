@@ -1,0 +1,84 @@
+// ── Web Speech API 型定義 ────────────────────────────────────────
+// TypeScript の DOM ライブラリに含まれているが、
+// バージョンによって欠落することがあるため補完宣言として追加
+
+interface SpeechRecognitionErrorEvent extends Event {
+  readonly error: SpeechRecognitionErrorCode;
+  readonly message: string;
+}
+
+type SpeechRecognitionErrorCode =
+  | 'aborted'
+  | 'audio-capture'
+  | 'bad-grammar'
+  | 'language-not-supported'
+  | 'network'
+  | 'no-speech'
+  | 'not-allowed'
+  | 'service-not-allowed';
+
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean;
+  readonly length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+}
+
+interface SpeechRecognitionAlternative {
+  readonly transcript: string;
+  readonly confidence: number;
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  readonly resultIndex: number;
+  readonly results: SpeechRecognitionResultList;
+}
+
+declare class SpeechRecognition extends EventTarget {
+  continuous:       boolean;
+  grammars:         SpeechGrammarList;
+  interimResults:   boolean;
+  lang:             string;
+  maxAlternatives:  number;
+  serviceURI:       string;
+
+  onaudioend:         ((this: SpeechRecognition, ev: Event) => void)                       | null;
+  onaudiostart:       ((this: SpeechRecognition, ev: Event) => void)                       | null;
+  onend:              ((this: SpeechRecognition, ev: Event) => void)                       | null;
+  onerror:            ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
+  onnomatch:          ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void)      | null;
+  onresult:           ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void)      | null;
+  onsoundend:         ((this: SpeechRecognition, ev: Event) => void)                       | null;
+  onsoundstart:       ((this: SpeechRecognition, ev: Event) => void)                       | null;
+  onspeechend:        ((this: SpeechRecognition, ev: Event) => void)                       | null;
+  onspeechstart:      ((this: SpeechRecognition, ev: Event) => void)                       | null;
+  onstart:            ((this: SpeechRecognition, ev: Event) => void)                       | null;
+
+  abort(): void;
+  start(): void;
+  stop():  void;
+}
+
+declare class SpeechGrammarList {
+  readonly length: number;
+  item(index: number): SpeechGrammar;
+  addFromString(string: string, weight?: number): void;
+  addFromURI(src: string, weight?: number): void;
+  [index: number]: SpeechGrammar;
+}
+
+declare class SpeechGrammar {
+  src:    string;
+  weight: number;
+}
+
+interface Window {
+  SpeechRecognition:       typeof SpeechRecognition;
+  webkitSpeechRecognition: typeof SpeechRecognition;
+}
