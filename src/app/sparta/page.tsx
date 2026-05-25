@@ -7,7 +7,7 @@ import {
   getTasks, addTask, updateTask, updateTaskStatus, deleteTask,
   getTasksForDate, priorityColor, priorityLabel, today,
   getSchoolSchedule, saveSchoolSchedule, autoSchedulePendingTasks,
-  getFreeSlotsForDate, getDailyQuotes, checkTimeConflict,
+  getFreeSlotsForDate, getDailyQuotes,
   getMemos, addMemo, deleteMemo, updateMemo,
   forceResaveAll,
 } from '@/lib/shared-store';
@@ -163,6 +163,7 @@ type TLBlock = {
   start: string; end: string; label: string;
   type: 'school' | 'task-done' | 'task-todo' | 'task-over' | 'free';
   task?: LocalTask;
+  overlaps?: boolean;
 };
 function timeToMin(t: string): number {
   const [h, m] = t.split(':').map(Number); return h * 60 + m;
@@ -197,17 +198,23 @@ function buildDayTimeline(tasks: LocalTask[], dateStr: string): TLBlock[] {
     events.push({ startMin: sm, endMin: em, label: t.title, type, task: t });
   });
   events.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  // maxEndSoFar approach: show all events including overlaps
   const blocks: TLBlock[] = [];
-  let cursor = START;
+  let maxEndSoFar = START;
   for (const ev of events) {
-    const es = Math.max(ev.startMin, cursor);
+    const es = Math.max(ev.startMin, START);
     const ee = Math.min(ev.endMin, END);
-    if (es >= ee || es >= END) continue;
-    if (cursor < es) blocks.push({ start: minToTime(cursor), end: minToTime(es), label: '空き時間', type: 'free' });
-    blocks.push({ start: minToTime(es), end: minToTime(ee), label: ev.label, type: ev.type, task: ev.task });
-    cursor = ee;
+    if (es >= END || ee <= es) continue;
+    const overlaps = es < maxEndSoFar;
+    // Only insert a free gap when this event starts after all previous events have ended
+    if (!overlaps && es > maxEndSoFar) {
+      blocks.push({ start: minToTime(maxEndSoFar), end: minToTime(es), label: '空き時間', type: 'free' });
+    }
+    blocks.push({ start: minToTime(es), end: minToTime(ee), label: ev.label, type: ev.type, task: ev.task, overlaps: overlaps || undefined });
+    if (ee > maxEndSoFar) maxEndSoFar = ee;
   }
-  if (cursor < END) blocks.push({ start: minToTime(cursor), end: '22:00', label: '空き時間', type: 'free' });
+  if (maxEndSoFar < END) blocks.push({ start: minToTime(maxEndSoFar), end: '22:00', label: '空き時間', type: 'free' });
   return blocks;
 }
 
@@ -254,7 +261,6 @@ export default function SpartaPage() {
   const [tasks, setTasks]       = useState<LocalTask[]>([]);
   const [showAdd, setShowAdd]   = useState(false);
   const [form, setForm]         = useState<AddTaskForm>(DEFAULT_FORM);
-  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const [tab, setTab]           = useState<'today' | 'all' | 'done' | 'school' | 'memo'>('today');
   const [alertShown, setAlertShown] = useState(true);
 
@@ -539,7 +545,6 @@ export default function SpartaPage() {
   // ── タスクフォームのプリセット選択時 ─────────────────────────
   const onPresetChange = (presetLabel: string) => {
     const preset = TASK_PRESETS.find(p => p.label === presetLabel);
-    setConflictWarning(null);
     if (preset && preset.label !== 'その他') {
       setForm(f => ({
         ...f,
@@ -552,21 +557,6 @@ export default function SpartaPage() {
     }
   };
 
-  // ── 時間変更時にコンフリクトチェック ─────────────────────────
-  const checkConflict = (
-    date: string, hour: string, minute: string, estimatedMin: string
-  ) => {
-    if (!hour) { setConflictWarning(null); return; }
-    const timeStr = `${hour}:${minute}`;
-    const estMin  = estimatedMin ? Number(estimatedMin) : 60;
-    const conflict = checkTimeConflict(date, timeStr, estMin);
-    if (conflict) {
-      setConflictWarning(`その時間はすでに「${conflict.name}」の予定が入っています`);
-    } else {
-      setConflictWarning(null);
-    }
-  };
-
   // ── タスク追加 ────────────────────────────────────────────────
   const submit = () => {
     const title = form.titlePreset === 'その他' ? form.titleCustom.trim() : form.titlePreset;
@@ -575,15 +565,6 @@ export default function SpartaPage() {
     const scheduledTime = form.scheduledHour
       ? `${form.scheduledHour}:${form.scheduledMinute}`
       : undefined;
-
-    // 最終コンフリクトチェック
-    if (scheduledTime) {
-      const conflict = checkTimeConflict(form.scheduledDate, scheduledTime, Number(form.estimatedMin) || 60);
-      if (conflict) {
-        setConflictWarning(`その時間はすでに「${conflict.name}」の予定が入っています`);
-        return;
-      }
-    }
 
     addTask({
       title,
@@ -600,7 +581,6 @@ export default function SpartaPage() {
       notifyCustomMin: form.notifyTiming === 'custom' ? Number(form.notifyCustomMin) : undefined,
     });
     setForm(DEFAULT_FORM);
-    setConflictWarning(null);
     setShowAdd(false);
     reload();
   };
@@ -674,7 +654,7 @@ export default function SpartaPage() {
               >🔔</button>
             )}
             <button
-              onClick={() => { setShowAdd(true); setForm(DEFAULT_FORM); setConflictWarning(null); }}
+              onClick={() => { setShowAdd(true); setForm(DEFAULT_FORM); }}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all"
             >＋ 追加</button>
           </div>
@@ -904,6 +884,7 @@ export default function SpartaPage() {
                       {block.type === 'free' && !isNow && <span className="flex-shrink-0 text-[9px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full">空き</span>}
                       {block.type === 'task-over' && <span className="flex-shrink-0 text-[9px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded-full font-bold">遅延!</span>}
                       {block.type === 'school' && <span className="flex-shrink-0 text-[9px] text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">授業</span>}
+                      {block.overlaps && <span className="flex-shrink-0 text-[9px] text-yellow-800 bg-yellow-100 border border-yellow-300 px-1.5 py-0.5 rounded-full font-bold">⚡重複</span>}
                     </div>
                   </div>
                 );
@@ -913,7 +894,7 @@ export default function SpartaPage() {
               {[
                 { color: 'bg-red-500', label: '授業' }, { color: 'bg-blue-500', label: 'タスク' },
                 { color: 'bg-orange-500', label: '遅延' }, { color: 'bg-green-500', label: '完了' },
-                { color: 'bg-gray-200', label: '空き' },
+                { color: 'bg-gray-200', label: '空き' }, { color: 'bg-yellow-300', label: '重複' },
               ].map(({ color, label }) => (
                 <span key={label} className="flex items-center gap-1">
                   <span className={`w-2 h-2 rounded-full ${color}`} />
@@ -1377,10 +1358,7 @@ export default function SpartaPage() {
                 <label className="text-xs font-semibold text-gray-600 block mb-1">📅 実施日</label>
                 <select
                   value={form.scheduledDate}
-                  onChange={e => {
-                    setForm(f => ({ ...f, scheduledDate: e.target.value }));
-                    checkConflict(e.target.value, form.scheduledHour, form.scheduledMinute, form.estimatedMin);
-                  }}
+                  onChange={e => setForm(f => ({ ...f, scheduledDate: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
                 >
                   {dateOptions.map(opt => (
@@ -1395,10 +1373,7 @@ export default function SpartaPage() {
                 <div className="flex gap-2 items-center">
                   <select
                     value={form.scheduledHour}
-                    onChange={e => {
-                      setForm(f => ({ ...f, scheduledHour: e.target.value }));
-                      checkConflict(form.scheduledDate, e.target.value, form.scheduledMinute, form.estimatedMin);
-                    }}
+                    onChange={e => setForm(f => ({ ...f, scheduledHour: e.target.value }))}
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
                   >
                     <option value="">-- 時 --</option>
@@ -1407,10 +1382,7 @@ export default function SpartaPage() {
                   <span className="text-gray-400 font-bold">:</span>
                   <select
                     value={form.scheduledMinute}
-                    onChange={e => {
-                      setForm(f => ({ ...f, scheduledMinute: e.target.value }));
-                      checkConflict(form.scheduledDate, form.scheduledHour, e.target.value, form.estimatedMin);
-                    }}
+                    onChange={e => setForm(f => ({ ...f, scheduledMinute: e.target.value }))}
                     disabled={!form.scheduledHour}
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white disabled:opacity-50"
                   >
@@ -1419,26 +1391,12 @@ export default function SpartaPage() {
                 </div>
               </div>
 
-              {/* コンフリクト警告 */}
-              {conflictWarning && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
-                  <span className="text-base flex-shrink-0">⛔</span>
-                  <div>
-                    <p className="text-xs font-black text-red-700">時間が重複しています！</p>
-                    <p className="text-[10px] text-red-600">{conflictWarning}</p>
-                  </div>
-                </div>
-              )}
-
               {/* 所要時間・繰り返し */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs font-semibold text-gray-600 block mb-1">所要時間（分）</label>
                   <input type="number" value={form.estimatedMin}
-                    onChange={e => {
-                      setForm(f => ({ ...f, estimatedMin: e.target.value }));
-                      checkConflict(form.scheduledDate, form.scheduledHour, form.scheduledMinute, e.target.value);
-                    }}
+                    onChange={e => setForm(f => ({ ...f, estimatedMin: e.target.value }))}
                     placeholder="60"
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-red-400" />
                 </div>
@@ -1499,10 +1457,7 @@ export default function SpartaPage() {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={submit}
-                disabled={
-                  !!conflictWarning ||
-                  !(form.titlePreset && (form.titlePreset !== 'その他' || form.titleCustom.trim()))
-                }
+                disabled={!(form.titlePreset && (form.titlePreset !== 'その他' || form.titleCustom.trim()))}
                 className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-gray-200 text-white text-sm font-black transition-all"
               >🔥 追加する</button>
               <button onClick={() => setShowAdd(false)}

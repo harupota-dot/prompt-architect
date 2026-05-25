@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { addTask, checkTimeConflict, today } from '@/lib/shared-store';
+import { addTask, today } from '@/lib/shared-store';
 
 // ── 型 ───────────────────────────────────────────────────────────
 interface ParsedItem {
@@ -169,24 +169,12 @@ export function VoiceScheduleInput({ onTasksAdded, speakSpartan }: Props) {
 
   // ── 選択した予定を一括登録 ────────────────────────────────────
   const handleAddSelected = () => {
-    let added    = 0;
-    const conflictMsgs: string[] = [];
+    let added = 0;
 
     for (const item of items) {
       if (!selected.has(item.id)) continue;
 
       const date = item.startDate || today();
-      if (item.time) {
-        const conflict = checkTimeConflict(date, item.time, item.duration ?? 60);
-        if (conflict) {
-          // スパルタ警告
-          const warnMsg = `その時間はすでに「${conflict.name}」の予定があります！スケジュールを確認しろ！`;
-          conflictMsgs.push(`「${item.title}」(${item.time}) は「${conflict.name}」と重複`);
-          speakSpartan(warnMsg);
-          continue;
-        }
-      }
-
       addTask({
         title:          item.title,
         description:    item.description,
@@ -206,13 +194,9 @@ export function VoiceScheduleInput({ onTasksAdded, speakSpartan }: Props) {
 
     onTasksAdded();
 
-    if (added > 0 && conflictMsgs.length === 0) {
+    if (added > 0) {
       setAddResult(`✅ ${added}件を登録しました！`);
       speakSpartan(`よし！${added}件の予定を登録した！サボったら承知しないぞ！`);
-    } else if (added > 0 && conflictMsgs.length > 0) {
-      setAddResult(`✅ ${added}件登録。⚠️ ${conflictMsgs.length}件は重複でスキップ`);
-    } else if (conflictMsgs.length > 0) {
-      setAddResult(`⚠️ 全件重複: ${conflictMsgs.join(' / ')}`);
     }
 
     if (added > 0) {

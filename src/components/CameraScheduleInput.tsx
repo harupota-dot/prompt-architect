@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { addTask, checkTimeConflict, today } from '@/lib/shared-store';
+import { addTask, today } from '@/lib/shared-store';
 
 // ── 型 ───────────────────────────────────────────────────────────
 interface VisionItem {
@@ -101,21 +101,11 @@ export function CameraScheduleInput({ onTasksAdded, speakSpartan }: Props) {
   // ── 選択した予定を一括登録 ────────────────────────────────────
   const handleAddSelected = () => {
     let added = 0;
-    const conflictMsgs: string[] = [];
 
     for (const item of items) {
       if (!selected.has(item.id)) continue;
 
-      // 重複チェック
       const date = item.startDate || today();
-      if (item.time) {
-        const conflict = checkTimeConflict(date, item.time, item.duration ?? 90);
-        if (conflict) {
-          conflictMsgs.push(`「${item.title}」→「${conflict.name}」と重複`);
-          continue;
-        }
-      }
-
       addTask({
         title:          item.title,
         description:    item.description,
@@ -135,14 +125,7 @@ export function CameraScheduleInput({ onTasksAdded, speakSpartan }: Props) {
 
     onTasksAdded();
 
-    if (conflictMsgs.length > 0) {
-      const msg = `${added}件登録。重複でスキップ${conflictMsgs.length}件: ${conflictMsgs[0]}`;
-      setAddResult(msg);
-      speakSpartan(
-        `${added}件を登録した！ただし${conflictMsgs.length}件は重複でスキップした！` +
-        conflictMsgs[0] + 'その時間はすでに予定があるぞ！'
-      );
-    } else if (added > 0) {
+    if (added > 0) {
       setAddResult(`✅ ${added}個の予定を自動登録しました！`);
       speakSpartan(`よし！画像から${added}件の予定を登録した！サボったら承知しないぞ！`);
     } else {
