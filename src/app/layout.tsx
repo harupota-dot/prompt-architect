@@ -44,10 +44,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ja" className={`${geist.variable} h-full`}>
-      <body className="min-h-full bg-gray-50 antialiased pb-16">
+      <body className="min-h-full bg-gray-50 antialiased pb-20">
         <SWRegister />
         {children}
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200">
+        {/* nav-safe-bottom → globals.css で iOS safe-area-inset-bottom を付与 */}
+        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 nav-safe-bottom">
           <div className="max-w-3xl mx-auto flex">
             <Link href="/" className="flex-1 flex flex-col items-center gap-0.5 py-2 px-1 text-gray-500 hover:text-red-600 transition-colors">
               <span className="text-xl">🏠</span>

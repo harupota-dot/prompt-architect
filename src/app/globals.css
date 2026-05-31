@@ -7,3 +7,16 @@
 body {
   font-family: var(--font-sans), Arial, sans-serif;
 }
+
+/* ── iOS ホームインジケーター（safe-area-inset）対応 ──────────────
+   iPhone X 以降のノッチ・ホームバー領域をボトムナビが隠さないよう
+   body と nav に追加パディングを付与する。                          */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    /* Tailwind の pb-20 (5rem=80px) に safe-area 分を上乗せ */
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+  .nav-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

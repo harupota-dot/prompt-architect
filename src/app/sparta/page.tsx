@@ -614,7 +614,7 @@ export default function SpartaPage() {
   const todayFreeSlots = getFreeSlotsForDate(todayStr);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50 pb-44">
 
       {/* ── ヘッダー ── */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
@@ -1469,12 +1469,18 @@ export default function SpartaPage() {
         </div>
       )}
 
-      {/* ── フローティング入力ボタン（カメラ・音声）── */}
-      <div className="fixed bottom-20 right-4 z-40 flex flex-col items-center gap-3">
+      {/* ── フローティング入力ボタン（カメラ・音声）──
+           pointer-events-none: コンテナ自体はタップ通過、ボタン個別に pointer-events-auto
+           bottom-28: iOS safe-area 込みのナビバー高さ (≈89px) を余裕でクリア  */}
+      <div className="fixed bottom-28 right-4 z-40 flex flex-col items-center gap-3 pointer-events-none">
         {/* 音声でスケジュール追加 */}
-        <VoiceScheduleInput onTasksAdded={reload} speakSpartan={speakSpartan} />
+        <div className="pointer-events-auto">
+          <VoiceScheduleInput onTasksAdded={reload} speakSpartan={speakSpartan} />
+        </div>
         {/* カメラで予定を撮影して登録 */}
-        <CameraScheduleInput onTasksAdded={reload} speakSpartan={speakSpartan} />
+        <div className="pointer-events-auto">
+          <CameraScheduleInput onTasksAdded={reload} speakSpartan={speakSpartan} />
+        </div>
       </div>
 
       {/* ── メモ追加モーダル ── */}

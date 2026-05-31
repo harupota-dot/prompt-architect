@@ -801,7 +801,7 @@ export default function SpartaAI() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+      <main className="max-w-3xl mx-auto px-4 pt-6 pb-28 space-y-5">
 
         {/* ════════════════════════════════════════
             INPUT フェーズ
