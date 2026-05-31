@@ -10,15 +10,16 @@ const KEY_REFRESH = 'gcal_refresh_token';
 const KEY_SYNC_ON = 'gcal_auto_sync';
 
 function loadToken(): string {
-  if (typeof window === 'undefined') return '';
-  return localStorage.getItem(KEY_TOKEN) ?? '';
+  try { return (typeof window !== 'undefined' && localStorage.getItem(KEY_TOKEN)) || ''; }
+  catch { return ''; }
 }
 function loadExpiry(): number {
-  if (typeof window === 'undefined') return 0;
-  return Number(localStorage.getItem(KEY_EXPIRY) ?? '0');
+  try { return Number((typeof window !== 'undefined' && localStorage.getItem(KEY_EXPIRY)) || '0'); }
+  catch { return 0; }
 }
 function isTokenValid(): boolean {
-  return !!loadToken() && loadExpiry() > Date.now() + 60_000;
+  try { return !!loadToken() && loadExpiry() > Date.now() + 60_000; }
+  catch { return false; }
 }
 
 // ── 型 ──────────────────────────────────────────────────────────
@@ -45,8 +46,12 @@ export function GoogleCalendarSync({ speakSpartan }: Props) {
 
   // ── 初期化 ─────────────────────────────────────────────────────
   useEffect(() => {
-    setConnected(isTokenValid());
-    setAutoSync(localStorage.getItem(KEY_SYNC_ON) === '1');
+    try {
+      setConnected(isTokenValid());
+      setAutoSync(
+        typeof window !== 'undefined' && localStorage.getItem(KEY_SYNC_ON) === '1'
+      );
+    } catch { /* localStorage unavailable — ignore */ }
   }, []);
 
   // ── ポップアップからのメッセージを受信 ──────────────────────────
@@ -106,10 +111,14 @@ export function GoogleCalendarSync({ speakSpartan }: Props) {
   // ── 切断 ────────────────────────────────────────────────────────
   const handleDisconnect = () => {
     if (!confirm('Googleカレンダーとの連携を解除しますか？')) return;
-    localStorage.removeItem(KEY_TOKEN);
-    localStorage.removeItem(KEY_EXPIRY);
-    localStorage.removeItem(KEY_REFRESH);
-    localStorage.removeItem(KEY_SYNC_ON);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(KEY_TOKEN);
+        localStorage.removeItem(KEY_EXPIRY);
+        localStorage.removeItem(KEY_REFRESH);
+        localStorage.removeItem(KEY_SYNC_ON);
+      }
+    } catch { /* ignore */ }
     setConnected(false);
     setAutoSync(false);
     setSyncResult(null);
@@ -117,7 +126,7 @@ export function GoogleCalendarSync({ speakSpartan }: Props) {
 
   // ── トークンを有効なものに更新 ────────────────────────────────
   const refreshToken = useCallback(async (): Promise<string> => {
-    const refresh = localStorage.getItem(KEY_REFRESH);
+    const refresh = typeof window !== 'undefined' ? localStorage.getItem(KEY_REFRESH) : null;
     if (!refresh) throw new Error('再認証が必要です');
 
     const res  = await fetch('/api/calendar/token', {
@@ -194,7 +203,7 @@ export function GoogleCalendarSync({ speakSpartan }: Props) {
   // ── 自動同期トグル ────────────────────────────────────────────
   const toggleAutoSync = (on: boolean) => {
     setAutoSync(on);
-    localStorage.setItem(KEY_SYNC_ON, on ? '1' : '0');
+    try { if (typeof window !== 'undefined') localStorage.setItem(KEY_SYNC_ON, on ? '1' : '0'); } catch { /* ignore */ }
     if (on) speakSpartan('自動同期ONだ！タスクを追加するたびにGoogleカレンダーに反映されるぞ！');
   };
 
