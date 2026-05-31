@@ -35,10 +35,18 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// ── スケジュール通知受信（メインスレッドから） ──────────────────
-// payload: { type: 'SCHEDULE_NOTIFY', title, body, delay, tag, soundType? }
+// ── メッセージ受信（メインスレッドから） ──────────────────────────
+// ① SKIP_WAITING  : 新バージョンの SW を即時アクティブ化（クライアント制御分）
+// ② SCHEDULE_NOTIFY: スケジュール通知（既存機能）
 self.addEventListener('message', (event) => {
   const { type, title, body, delay, tag, soundType } = event.data ?? {};
+
+  // ── SKIP_WAITING: クライアントが明示的に新 SW のアクティブ化を要求 ──
+  if (type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+
   if (type !== 'SCHEDULE_NOTIFY') return;
 
   const ms = Math.max(0, delay ?? 0);

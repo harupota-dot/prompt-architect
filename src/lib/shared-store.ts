@@ -531,6 +531,76 @@ export function forceResaveAll(): void {
   save(SCHOOL_KEY, getSchoolSchedule());
 }
 
+// ── バージョン管理 & ストレージマイグレーション ───────────────────────
+const VERSION_KEY = 'sparta-app-version';
+
+/**
+ * アプリ起動時に呼び出すストレージ整合性チェック。
+ * - バージョンが変わっていなければ即 return（コスト≒0）
+ * - バージョンが変わっていれば壊れたキーを検出・修復して再保存
+ */
+export function migrateStorage(currentVersion: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const stored = localStorage.getItem(VERSION_KEY);
+    if (stored === currentVersion) return; // 最新 → 何もしない
+
+    // ── 壊れたデータを修復 ──────────────────────────────
+    _repairTasks();
+    _repairSchool();
+    _repairMemos();
+
+    localStorage.setItem(VERSION_KEY, currentVersion);
+    console.info(`[SPARTA AI] Storage migrated: ${stored ?? 'initial'} → ${currentVersion}`);
+  } catch { /* localStorage 使用不可のときは無視 */ }
+}
+
+/** sparta-tasks-v2: Zustand envelope { state: { tasks: [...] } } */
+function _repairTasks(): void {
+  try {
+    const raw = localStorage.getItem(TASKS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as unknown;
+    const tasks = (parsed as Record<string, unknown>)?.state as Record<string, unknown>;
+    if (!Array.isArray(tasks?.tasks)) {
+      // tasks が配列でない → 空の有効な構造にリセット
+      localStorage.setItem(TASKS_KEY, JSON.stringify({
+        state: { tasks: [], _hydrated: true }, version: 1,
+      }));
+    }
+  } catch {
+    try { localStorage.removeItem(TASKS_KEY); } catch { /* ignore */ }
+  }
+}
+
+/** sparta-school-v1: plain SchoolSlot[] */
+function _repairSchool(): void {
+  try {
+    const raw = localStorage.getItem(SCHOOL_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      localStorage.removeItem(SCHOOL_KEY);
+    }
+  } catch {
+    try { localStorage.removeItem(SCHOOL_KEY); } catch { /* ignore */ }
+  }
+}
+
+/** sparta-memos-v1: plain MemoEntry[] */
+function _repairMemos(): void {
+  try {
+    const raw = localStorage.getItem(MEMOS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      localStorage.removeItem(MEMOS_KEY);
+    }
+  } catch {
+    try { localStorage.removeItem(MEMOS_KEY); } catch { /* ignore */ }
+  }
+}
+
 export function autoSchedulePendingTasks(days = 7): number {
   const pending = getTasks().filter(t => t.status === 'TODO' && !t.scheduledDate);
   if (pending.length === 0) return 0;
