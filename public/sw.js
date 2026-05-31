@@ -7,7 +7,7 @@
    変更: v3 でキャッシュを強制クリア（大型アップデート後の互換性修正）
    ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'sparta-ai-v3';
+const CACHE_NAME = 'sparta-ai-v4';
 const PRECACHE_URLS = ['/', '/sparta', '/sports', '/manifest.json', '/favicon.ico'];
 
 // ── インストール & アクティベート ──────────────────────────────

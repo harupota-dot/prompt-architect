@@ -6,7 +6,7 @@ import { migrateStorage } from '@/lib/shared-store';
 // ── アプリバージョン ──────────────────────────────────────────────
 // コードの大幅変更・localStorage スキーマ変更時にインクリメントする。
 // これを変えるとマイグレーションが走り古いキャッシュが一掃される。
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.4.0';
 
 // ── ChunkLoadError 検出パターン ───────────────────────────────────
 // JS/CSS チャンクが古いキャッシュで見つからない場合に発生するエラー文字列
