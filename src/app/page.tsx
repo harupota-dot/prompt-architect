@@ -6,7 +6,6 @@ import { DailyQuoteSection } from '@/components/DailyQuoteSection';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { MusicFactWidget } from '@/components/MusicFactWidget';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import { EnglishQuiz } from '@/components/EnglishQuiz';
 import { NewsWidget } from '@/components/NewsWidget';
 
 // ── 型定義 ──────────────────────────────────────────────────────
@@ -1094,9 +1093,6 @@ export default function SpartaAI() {
 
             {/* ── 日替わり音楽豆知識 ── */}
             {!cleanText && !confirmedTopic && <MusicFactWidget />}
-
-            {/* ── スパルタ英会話クイズ ── */}
-            {!cleanText && !confirmedTopic && <EnglishQuiz />}
 
             {/* ── 日替わり名言 ── */}
             {!cleanText && !confirmedTopic && <DailyQuoteSection />}

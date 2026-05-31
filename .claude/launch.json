@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sparta-ai",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "C:\\Users\\harup\\OneDrive\\デスクトップ\\何でも質問\\app"],
+      "port": 3000
+    }
+  ]
+}

@@ -549,6 +549,8 @@ export function migrateStorage(currentVersion: string): void {
     _repairTasks();
     _repairSchool();
     _repairMemos();
+    // ── 削除済み機能のキャッシュをクリア ───────────────
+    _purgeObsoleteKeys();
 
     localStorage.setItem(VERSION_KEY, currentVersion);
     console.info(`[SPARTA AI] Storage migrated: ${stored ?? 'initial'} → ${currentVersion}`);
@@ -599,6 +601,25 @@ function _repairMemos(): void {
   } catch {
     try { localStorage.removeItem(MEMOS_KEY); } catch { /* ignore */ }
   }
+}
+
+/**
+ * 削除済み機能が残した localStorage キーを一掃する。
+ * 英会話クイズ: "eq-progress-YYYY-MM-DD" / "eq-complete-YYYY-MM-DD"
+ */
+function _purgeObsoleteKeys(): void {
+  try {
+    const toDelete: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      // 英会話クイズの進捗キー
+      if (key.startsWith('eq-progress-') || key.startsWith('eq-complete-')) {
+        toDelete.push(key);
+      }
+    }
+    toDelete.forEach(k => { try { localStorage.removeItem(k); } catch { /* ignore */ } });
+  } catch { /* ignore */ }
 }
 
 export function autoSchedulePendingTasks(days = 7): number {
