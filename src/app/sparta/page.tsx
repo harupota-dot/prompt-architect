@@ -37,8 +37,6 @@ const TASK_PRESETS: TaskPreset[] = [
   { label: 'レコーディング', category: 'work',  estimatedMin: 120 },
   { label: 'VT',           category: 'work',   estimatedMin: 60  },
   { label: 'ADO',          category: 'study',  estimatedMin: 60  },
-  { label: '筋トレ',       category: 'health', estimatedMin: 45  },
-  { label: 'ウォーキング', category: 'health', estimatedMin: 30  },
   { label: '買い物',       category: 'other',  estimatedMin: 30  },
   { label: '風呂',         category: 'other',  estimatedMin: 30  },
   { label: '食事',         category: 'other',  estimatedMin: 30  },
@@ -362,27 +360,12 @@ export default function SpartaPage() {
     const quoteSnippet = creator.quote.slice(0, 25);
     let msg = '';
     if (overdueTasks.length > 0) {
-      const walkingOverdue  = overdueTasks.find(t => t.title.includes('ウォーキング'));
-      const exerciseOverdue = overdueTasks.find(t => t.category === 'health' && !t.title.includes('ウォーキング'));
-      if (walkingOverdue) {
-        msg = 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！';
-      } else if (exerciseOverdue) {
-        msg = 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！';
-      } else {
-        msg = `おい！今日の${creator.name}の言葉を見たか！？「${quoteSnippet}」だ！` +
-              `${overdueTasks.length}件も期限切れにして何やってる！今すぐやれ！言い訳は要らない！`;
-      }
+      msg = `おい！今日の${creator.name}の言葉を見たか！？「${quoteSnippet}」だ！` +
+            `${overdueTasks.length}件も期限切れにして何やってる！` +
+            `${overdueTasks[0].title}を今すぐやれ！言い訳は要らない！`;
     } else if (todoToday.length > 0) {
-      const walkingTask  = todoToday.find(t => t.title.includes('ウォーキング'));
-      const exerciseTask = todoToday.find(t => t.category === 'health' && !t.title.includes('ウォーキング'));
-      if (walkingTask) {
-        msg = 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！';
-      } else if (exerciseTask) {
-        msg = 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！';
-      } else {
-        msg = `今日の${anime.name}も言っている。「${anime.quote.slice(0, 20)}」だ！` +
-              `今日のタスク${todoToday.length}件、${todoToday[0].title}から今すぐ取りかかれ！サボったら承知しないぞ！`;
-      }
+      msg = `今日の${anime.name}も言っている。「${anime.quote.slice(0, 20)}」だ！` +
+            `今日のタスク${todoToday.length}件、${todoToday[0].title}から今すぐ取りかかれ！サボったら承知しないぞ！`;
     } else {
       msg = `タスクなし？それなら今日の${creator.name}の言葉を胸に刻め！「${quoteSnippet}」` +
             '立ち止まった瞬間に負けだ！すぐ新しい目標を立てろ！';
@@ -428,21 +411,10 @@ export default function SpartaPage() {
       if (delay > 0 && delay < 16 * 60 * 60 * 1000) {
         scheduledNotifRef.current.add(key);
 
-        const isWalking  = task.title.includes('ウォーキング');
-        const isExercise = task.category === 'health' && !isWalking;
         const { creator } = getDailyQuotes();
-        const notifTitle = isWalking ? '🚶 ウォーキングの時間だ！' :
-                           isExercise ? '💪 宅トレの時間だ！' : '🔥 スパルタ警告！';
-        const notifBody = isWalking
-          ? 'ウォーキングの時間！脂肪を燃やしてこい！'
-          : isExercise
-          ? 'ベッドから出て即スタートしろ！'
-          : `まもなく「${task.title}」の時間！${creator.name}「${creator.quote.slice(0, 20)}」今すぐ準備！`;
-        const speakBody = isWalking
-          ? 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！'
-          : isExercise
-          ? 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！'
-          : `まもなく${task.title}の時間です！${creator.name}の言葉を胸に！準備しろ！`;
+        const notifTitle = '🔥 スパルタ警告！';
+        const notifBody  = `まもなく「${task.title}」の時間！${creator.name}「${creator.quote.slice(0, 20)}」今すぐ準備！`;
+        const speakBody  = `まもなく${task.title}の時間だ！${creator.name}の言葉を胸に刻んで、今すぐ準備しろ！サボったら承知しないぞ！`;
 
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.ready.then(sw => {
@@ -992,13 +964,7 @@ export default function SpartaPage() {
                     <div className="px-4 py-2 bg-red-50 border-t border-red-100 flex items-center justify-between">
                       <p className="text-[10px] text-red-600 font-medium">🚨 期限切れ！今すぐ取りかかれ！</p>
                       <button
-                        onClick={() => speakSpartan(
-                          task.title.includes('ウォーキング')
-                            ? 'ウォーキングの時間だ！早く歩いたりゆっくり歩いたりして脂肪を燃やしてこい！緩急こそが最大の効果を生む！今すぐ外に出ろ！'
-                            : task.category === 'health'
-                            ? 'おい！ベッドの上にいるなら今すぐ寝転んだまま足を動かせ！YouTubeの動画を早く開いてフォームを確認して即スタートしろ！'
-                            : `${task.title}、期限切れだ！今すぐやれ！言い訳は要らない！`
-                        )}
+                        onClick={() => speakSpartan(`${task.title}、期限切れだ！今すぐ取りかかれ！言い訳は要らない！`)}
                         className="text-[10px] px-2 py-0.5 bg-red-100 text-red-600 rounded-lg font-bold hover:bg-red-200 transition-all"
                       >🔊 喝</button>
                     </div>
@@ -1347,7 +1313,6 @@ export default function SpartaPage() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-red-400">
                     <option value="study">📚 音楽・学習</option>
                     <option value="work">💼 仕事・MT</option>
-                    <option value="health">💪 健康</option>
                     <option value="other">📌 その他</option>
                   </select>
                 </div>

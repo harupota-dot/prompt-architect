@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { addTask, getDailyRecord, getDoneExercises, today as todayStr, getSpartanComment } from '@/lib/shared-store';
+import { addTask, today as todayStr } from '@/lib/shared-store';
 import { DailyQuoteSection } from '@/components/DailyQuoteSection';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { MusicFactWidget } from '@/components/MusicFactWidget';
@@ -32,14 +32,6 @@ interface ScheduleItem {
   source: 'manual' | 'ai-parsed' | 'external-app';
   externalId?: string;
   metadata?: Record<string, unknown>;
-}
-
-interface HealthSnapshot {
-  date: string;
-  steps: number;
-  activeMinutes: number;
-  calories: number;
-  source: 'google-health' | 'mock';
 }
 
 // ── 定数 ────────────────────────────────────────────────────────
@@ -244,11 +236,6 @@ export default function SpartaAI() {
   const [scheduleSummary, setScheduleSummary] = useState('');
   const [isScheduleConfirmed, setIsScheduleConfirmed] = useState(false);
 
-  // ── ヘルスデータ ──────────────────────────────────────────────
-  const [healthData, setHealthData] = useState<{ today: HealthSnapshot; spartanComment: string; note: string } | null>(null);
-  const [showHealth, setShowHealth] = useState(false);
-  const [isLoadingHealth, setIsLoadingHealth] = useState(false);
-
   // ── 履歴 ──────────────────────────────────────────────────────
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -306,24 +293,6 @@ export default function SpartaAI() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isLoadingChat]);
-
-  // ── ヘルスデータ取得 ──────────────────────────────────────────
-  const fetchHealth = useCallback(() => {
-    if (healthData) return;
-    const record = getDailyRecord(todayStr());
-    const done = getDoneExercises(todayStr());
-    setHealthData({
-      today: {
-        date: todayStr(),
-        steps: record.steps ?? 0,
-        activeMinutes: done.length * 15,
-        calories: record.calBurned ?? 0,
-        source: 'mock',
-      },
-      spartanComment: getSpartanComment(record.steps, done.length),
-      note: '運動アプリ（/sports）で記録したデータがリアルタイム反映されます',
-    });
-  }, [healthData]);
 
   // ── 音声認識：初期化 ──────────────────────────────────────────
   const initRecognition = useCallback(() => {
@@ -1131,58 +1100,6 @@ export default function SpartaAI() {
 
             {/* ── 日替わり名言 ── */}
             {!cleanText && !confirmedTopic && <DailyQuoteSection />}
-
-            {/* ── ヘルスデータウィジェット ── */}
-            {!cleanText && !confirmedTopic && (
-              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => { setShowHealth(v => !v); if (!showHealth) fetchHealth(); }}
-                  className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-gray-50 transition-colors"
-                >
-                  <span className="text-lg">🏃</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-gray-700">今日の活動データ</p>
-                    <p className="text-[10px] text-gray-400">Google Health連携枠（現在モックデータ）</p>
-                  </div>
-                  <span className="text-gray-400 text-xs">{showHealth ? '▲' : '▼'}</span>
-                </button>
-                {showHealth && (
-                  <div className="px-5 pb-5 border-t border-gray-100">
-                    {isLoadingHealth && (
-                      <div className="flex items-center gap-2 py-4 text-gray-400 text-xs">
-                        <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" />
-                        <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0.15s' }} />
-                        <div className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0.3s' }} />
-                        <span>読み込み中...</span>
-                      </div>
-                    )}
-                    {healthData && !isLoadingHealth && (
-                      <div className="pt-4 space-y-3">
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="text-center p-3 bg-blue-50 rounded-xl">
-                            <p className="text-xl font-black text-blue-600">{healthData.today.steps.toLocaleString()}</p>
-                            <p className="text-[10px] text-blue-400 mt-0.5">歩数</p>
-                          </div>
-                          <div className="text-center p-3 bg-green-50 rounded-xl">
-                            <p className="text-xl font-black text-green-600">{healthData.today.activeMinutes}</p>
-                            <p className="text-[10px] text-green-400 mt-0.5">活動(分)</p>
-                          </div>
-                          <div className="text-center p-3 bg-orange-50 rounded-xl">
-                            <p className="text-xl font-black text-orange-600">{healthData.today.calories}</p>
-                            <p className="text-[10px] text-orange-400 mt-0.5">消費kcal</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-                          <span className="text-sm flex-shrink-0">🔥</span>
-                          <p className="text-xs text-red-700 font-medium leading-relaxed">{healthData.spartanComment}</p>
-                        </div>
-                        <p className="text-[10px] text-gray-400 text-center">{healthData.note}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
-            )}
 
             {/* 使い方ガイド */}
             {!cleanText && !confirmedTopic && (

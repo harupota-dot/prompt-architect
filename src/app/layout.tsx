@@ -58,10 +58,6 @@ export default function RootLayout({
               <span className="text-xl">🔥</span>
               <span className="text-[10px] font-medium">タスク管理</span>
             </Link>
-            <Link href="/sports" className="flex-1 flex flex-col items-center gap-0.5 py-2 px-1 text-gray-500 hover:text-red-600 transition-colors">
-              <span className="text-xl">💪</span>
-              <span className="text-[10px] font-medium">運動</span>
-            </Link>
           </div>
         </nav>
       </body>
