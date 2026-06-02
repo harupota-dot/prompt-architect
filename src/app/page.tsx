@@ -7,7 +7,8 @@ import { WeatherWidget } from '@/components/WeatherWidget';
 import { MusicFactWidget } from '@/components/MusicFactWidget';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { NewsWidget } from '@/components/NewsWidget';
-import { TimerWidget } from '@/components/TimerWidget';
+import { TimerWidget }   from '@/components/TimerWidget';
+import { CalendarView } from '@/components/CalendarView';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
@@ -206,6 +207,7 @@ export default function SpartaAI() {
 
   // ── アプリフェーズ ────────────────────────────────────────────
   const [appPhase, setAppPhase] = useState<AppPhase>('input');
+  const [showCalendar, setShowCalendar] = useState(false);
   /** スケジュール登録後に「戻る」で返るフェーズ */
   const [prevPhase, setPrevPhase] = useState<AppPhase>('input');
   const [confirmedTopic, setConfirmedTopic] = useState('');
@@ -785,6 +787,43 @@ export default function SpartaAI() {
           <div className="p-3">
             <TimerWidget compact />
           </div>
+        </section>
+
+        {/* ════════════════════════════════════════
+            📅 カレンダー表示ボタン（タイマー直下・常時表示）
+        ════════════════════════════════════════ */}
+        <section>
+          {/* トグルボタン */}
+          <button
+            onClick={() => setShowCalendar(v => !v)}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border shadow-sm transition-all active:scale-[0.99] ${
+              showCalendar
+                ? 'bg-indigo-600 border-indigo-700 text-white'
+                : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-900'
+            }`}
+          >
+            <span className="text-2xl flex-shrink-0">📅</span>
+            <div className="flex-1 text-left">
+              <p className={`text-sm font-black leading-tight ${showCalendar ? 'text-white' : 'text-gray-900'}`}>
+                スケジュールカレンダー
+              </p>
+              <p className={`text-[10px] mt-0.5 ${showCalendar ? 'text-indigo-200' : 'text-gray-400'}`}>
+                {showCalendar
+                  ? '▲ 閉じる'
+                  : '月間カレンダーを開く — 空き時間を見ながら予定を追加'}
+              </p>
+            </div>
+            <span className={`text-lg flex-shrink-0 transition-transform duration-300 ${
+              showCalendar ? 'rotate-180 text-white' : 'text-gray-400'
+            }`}>▼</span>
+          </button>
+
+          {/* カレンダー本体（トグルで展開） */}
+          {showCalendar && (
+            <div className="mt-3">
+              <CalendarView onTaskAdded={() => {}} />
+            </div>
+          )}
         </section>
 
         {/* ════════════════════════════════════════

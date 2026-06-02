@@ -1270,8 +1270,9 @@ export default function SpartaPage() {
 
       {/* ── タスク追加モーダル ── */}
       {showAdd && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center px-4 pt-4"
+          style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px) + 3.5rem)' }}>
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 space-y-4 max-h-[78vh] overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-black text-gray-900">🔥 新しいタスクを追加</h2>
               <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -1464,8 +1465,9 @@ export default function SpartaPage() {
 
       {/* ── メモ追加モーダル ── */}
       {showMemoAdd && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center px-4 pt-4"
+          style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px) + 3.5rem)' }}>
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 space-y-4 max-h-[78vh] overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-black text-gray-900">📝 メモを追加</h2>
               <button onClick={() => setShowMemoAdd(false)} className="text-gray-400 hover:text-gray-600">✕</button>
