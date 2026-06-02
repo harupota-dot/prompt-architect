@@ -303,7 +303,7 @@ export function CalendarView({ onTaskAdded }: { onTaskAdded?: () => void }) {
             style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
           >
             <div className="bg-white rounded-t-3xl shadow-2xl border-t border-gray-100"
-              style={{ maxHeight: '60vh', display: 'flex', flexDirection: 'column' }}>
+              style={{ maxHeight: 'min(60vh, 58dvh)', display: 'flex', flexDirection: 'column' }}>
 
               {/* ── パネルハンドル ── */}
               <div className="flex justify-center pt-3 pb-1 flex-shrink-0">

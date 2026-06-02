@@ -1272,13 +1272,13 @@ export default function SpartaPage() {
       {showAdd && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center px-4 pt-4"
           style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px) + 3.5rem)' }}>
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 space-y-4 max-h-[78vh] overflow-y-auto overscroll-contain">
-            <div className="flex items-center justify-between">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl flex flex-col" style={{ maxHeight: 'min(88vh, 85dvh)' }}>
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
               <h2 className="text-base font-black text-gray-900">🔥 新しいタスクを追加</h2>
               <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
 
-            <div className="space-y-3">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-4 space-y-3">
               {/* タスク名プリセット */}
               <div>
                 <label className="text-xs font-semibold text-gray-600 block mb-1">タスク名 *</label>
@@ -1434,7 +1434,7 @@ export default function SpartaPage() {
               </div>
             </div>
 
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-2 px-6 pb-6 pt-3 flex-shrink-0 border-t border-gray-100">
               <button
                 onClick={submit}
                 disabled={!(form.titlePreset && (form.titlePreset !== 'その他' || form.titleCustom.trim()))}
@@ -1467,12 +1467,12 @@ export default function SpartaPage() {
       {showMemoAdd && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center px-4 pt-4"
           style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px) + 3.5rem)' }}>
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 space-y-4 max-h-[78vh] overflow-y-auto overscroll-contain">
-            <div className="flex items-center justify-between">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl flex flex-col" style={{ maxHeight: 'min(88vh, 85dvh)' }}>
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
               <h2 className="text-base font-black text-gray-900">📝 メモを追加</h2>
               <button onClick={() => setShowMemoAdd(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            <div className="space-y-3">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-4 space-y-3">
               <div>
                 <label className="text-xs font-semibold text-gray-600 block mb-1">タイトル（任意）</label>
                 <input
@@ -1533,7 +1533,7 @@ export default function SpartaPage() {
                 )}
               </div>
             </div>
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-2 px-6 pb-6 pt-3 flex-shrink-0 border-t border-gray-100">
               <button
                 onClick={submitMemo}
                 disabled={!memoForm.text.trim()}

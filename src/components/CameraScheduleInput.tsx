@@ -168,7 +168,7 @@ export function CameraScheduleInput({ onTasksAdded, speakSpartan }: Props) {
       {/* ── モーダル ── */}
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col" style={{ maxHeight: 'min(92vh, 88dvh)' }}>
 
             {/* ヘッダー */}
             <div className="flex items-center gap-3 px-5 py-4 bg-gradient-to-r from-violet-600 to-purple-700 flex-shrink-0">
