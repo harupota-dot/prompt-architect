@@ -9,6 +9,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { NewsWidget } from '@/components/NewsWidget';
 import { TimerWidget }   from '@/components/TimerWidget';
 import { CalendarView } from '@/components/CalendarView';
+import { CameraScheduleInput } from '@/components/CameraScheduleInput';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
@@ -244,6 +245,13 @@ export default function SpartaAI() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedHistoryId, setCopiedHistoryId] = useState<string | null>(null);
 
+  // ── クイックタスク登録 ────────────────────────────────────────
+  const [quickTitle,       setQuickTitle]       = useState('');
+  const [quickHour,        setQuickHour]        = useState('');
+  const [quickMinute,      setQuickMinute]      = useState('00');
+  const [quickAdded,       setQuickAdded]       = useState(false);
+  const [quickVoiceActive, setQuickVoiceActive] = useState(false);
+
   // ── 音声認識 Refs ─────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
@@ -253,7 +261,9 @@ export default function SpartaAI() {
   const confirmedFinalRef  = useRef('');
   const restartTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const chatRecognitionRef = useRef<any>(null);
+  const chatRecognitionRef  = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const quickRecognitionRef = useRef<any>(null);
 
   // ── 履歴ロード ────────────────────────────────────────────────
   useEffect(() => {
@@ -472,6 +482,7 @@ export default function SpartaAI() {
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
       recognitionRef.current?.stop();
       chatRecognitionRef.current?.stop();
+      quickRecognitionRef.current?.stop();
     };
   }, []);
 
@@ -715,6 +726,54 @@ export default function SpartaAI() {
     });
   };
 
+  // ── クイックタスク登録ハンドラ ────────────────────────────────
+  const handleQuickAdd = () => {
+    const title = quickTitle.trim();
+    if (!title) return;
+    addTask({
+      title,
+      scheduledDate:  todayStr(),
+      scheduledTime:  quickHour ? `${quickHour}:${quickMinute}` : undefined,
+      priority:       'HIGH',
+      status:         'TODO',
+      category:       'other',
+      recurrence:     'none',
+      source:         'manual',
+      notifyEnabled:  true,
+      notifyTiming:   'task-time',
+    });
+    setQuickTitle('');
+    setQuickHour('');
+    setQuickMinute('00');
+    setQuickAdded(true);
+    setTimeout(() => setQuickAdded(false), 2500);
+  };
+
+  const toggleQuickVoice = () => {
+    if (typeof window === 'undefined') return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    if (quickVoiceActive) {
+      quickRecognitionRef.current?.stop();
+      setQuickVoiceActive(false);
+      return;
+    }
+    const r = new SR();
+    r.lang = 'ja-JP';
+    r.continuous = false;
+    r.interimResults = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    r.onresult = (event: any) => {
+      const t = event.results[0]?.[0]?.transcript ?? '';
+      if (t) setQuickTitle(t);
+    };
+    r.onend   = () => setQuickVoiceActive(false);
+    r.onerror = () => setQuickVoiceActive(false);
+    quickRecognitionRef.current = r;
+    try { r.start(); setQuickVoiceActive(true); } catch { setQuickVoiceActive(false); }
+  };
+
   // ── 派生値 ────────────────────────────────────────────────────
   const cleanText     = stripInterim(text).trim();
   const isActive      = voiceState === 'recording' || voiceState === 'paused' || voiceState === 'proofreading';
@@ -786,6 +845,94 @@ export default function SpartaAI() {
           </div>
           <div className="p-3">
             <TimerWidget compact />
+          </div>
+        </section>
+
+        {/* ════════════════════════════════════════
+            ⚡ クイックタスク登録（テキスト・音声・カメラ）
+        ════════════════════════════════════════ */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 bg-gradient-to-r from-red-600 to-orange-500 flex items-center gap-2">
+            <span className="text-sm">⚡</span>
+            <p className="text-xs font-black text-white">クイックタスク登録</p>
+            <span className="ml-auto text-[10px] text-red-200">今日のタスクを最速で追加</span>
+          </div>
+          <div className="p-4 space-y-3">
+
+            {/* ① タスク名入力 + 音声ボタン + カメラボタン */}
+            <div className="flex gap-2 items-center">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={quickTitle}
+                  onChange={e => setQuickTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && quickTitle.trim()) handleQuickAdd(); }}
+                  placeholder="タスク名を入力… Enter で登録"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400 pr-8"
+                />
+                {quickTitle && (
+                  <button
+                    onClick={() => setQuickTitle('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-xs"
+                  >✕</button>
+                )}
+              </div>
+
+              {/* マイクボタン：音声→テキストフィールドに自動入力 */}
+              <button
+                onClick={toggleQuickVoice}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all flex-shrink-0 ${
+                  quickVoiceActive
+                    ? 'bg-red-500 text-white animate-pulse shadow-md'
+                    : 'bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-600'
+                }`}
+                title="音声でタスク名を入力"
+              >🎤</button>
+
+              {/* カメラボタン：撮影→Gemini解析→確認→登録 */}
+              <div className="flex-shrink-0">
+                <CameraScheduleInput onTasksAdded={() => {}} speakSpartan={() => {}} />
+              </div>
+            </div>
+
+            {/* ② 時間選択 + 登録ボタン */}
+            <div className="flex gap-2 items-center">
+              <select
+                value={quickHour}
+                onChange={e => setQuickHour(e.target.value)}
+                className="px-2 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-red-400"
+              >
+                <option value="">時間なし</option>
+                {Array.from({ length: 16 }, (_, i) => String(i + 7).padStart(2, '0')).map(h => (
+                  <option key={h} value={h}>{h}時</option>
+                ))}
+              </select>
+              <select
+                value={quickMinute}
+                onChange={e => setQuickMinute(e.target.value)}
+                disabled={!quickHour}
+                className="px-2 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-40"
+              >
+                {['00', '10', '20', '30', '40', '50'].map(m => (
+                  <option key={m} value={m}>{m}分</option>
+                ))}
+              </select>
+              <button
+                onClick={handleQuickAdd}
+                disabled={!quickTitle.trim()}
+                className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-gray-200 text-white text-xs font-black transition-all active:scale-95"
+              >
+                {quickAdded ? '✅ 登録完了！' : '＋ 今日に登録'}
+              </button>
+            </div>
+
+            {/* 音声録音中インジケーター */}
+            {quickVoiceActive && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                <span className="text-xs text-red-700 font-medium">録音中… 話し終わると自動でテキストが入力されます</span>
+              </div>
+            )}
           </div>
         </section>
 
