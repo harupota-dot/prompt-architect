@@ -7,6 +7,7 @@ import { WeatherWidget } from '@/components/WeatherWidget';
 import { MusicFactWidget } from '@/components/MusicFactWidget';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { NewsWidget } from '@/components/NewsWidget';
+import { TimerWidget } from '@/components/TimerWidget';
 
 // ── 型定義 ──────────────────────────────────────────────────────
 type VoiceState = 'idle' | 'recording' | 'paused' | 'proofreading' | 'error';
@@ -770,6 +771,21 @@ export default function SpartaAI() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 pt-6 pb-28 space-y-5">
+
+        {/* ════════════════════════════════════════
+            ⏱ スパルタタイマー（最上部・常時表示）
+            Web Worker + 無音オーディオで画面ロック中も動作
+        ════════════════════════════════════════ */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 bg-gradient-to-r from-slate-700 to-slate-900 flex items-center gap-2">
+            <span className="text-sm">⏱</span>
+            <p className="text-xs font-black text-white">スパルタタイマー</p>
+            <span className="ml-auto text-[10px] text-slate-300">バックグラウンド対応</span>
+          </div>
+          <div className="p-3">
+            <TimerWidget compact />
+          </div>
+        </section>
 
         {/* ════════════════════════════════════════
             INPUT フェーズ

@@ -98,7 +98,7 @@ function ProgressRing({
 }
 
 // ── メインコンポーネント ─────────────────────────────────────────
-export function TimerWidget() {
+export function TimerWidget({ compact = false }: { compact?: boolean }) {
   // ── 交互タイマー state ─────────────────────────────────────────
   const [altRunning, setAltRunning] = useState(false);
   const [altPhase,   setAltPhase]   = useState<AltPhase>('work');
@@ -297,135 +297,128 @@ export function TimerWidget() {
 
   const anyRunning = altRunning || minRunning;
 
+  // compact モード用のサイズ定数
+  const ringSize  = compact ? 'w-[100px] h-[100px]' : 'w-[130px] h-[130px]';
+  const numSize   = compact ? 'text-2xl' : 'text-3xl';
+  const pad       = compact ? 'p-2.5' : 'p-4';
+  const gap       = compact ? 'gap-2' : 'gap-3';
+  const btnPy     = compact ? 'py-2'  : 'py-3';
+
   // ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
+    <div className={compact ? 'space-y-2' : 'space-y-4'}>
 
       {/* バックグラウンド動作バナー */}
       {anyRunning && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-green-600 to-emerald-500 rounded-xl text-white text-[10px] font-bold">
-          <span className="w-2 h-2 bg-white rounded-full animate-pulse flex-shrink-0" />
-          バックグラウンド動作中 — 画面ロック・他アプリ切替でも停止しません
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-500 rounded-xl text-white text-[10px] font-bold">
+          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse flex-shrink-0" />
+          バックグラウンド動作中 — 画面ロック中も停止しません
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
 
-        {/* ════════════════════════════════════════
-            交互タイマー（30s 実行 ↔ 15s インターバル）
-            ════════════════════════════════════════ */}
-        <div className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+        {/* ══════════════════════════════
+            交互タイマー（30s 実行 ↔ 15s）
+            ══════════════════════════════ */}
+        <div className={`flex flex-col items-center ${gap} ${pad} rounded-2xl border-2 transition-all ${
           altRunning
-            ? altPhase === 'work'
-              ? 'bg-red-50   border-red-300'
-              : 'bg-blue-50  border-blue-300'
+            ? altPhase === 'work' ? 'bg-red-50 border-red-300' : 'bg-blue-50 border-blue-300'
             : 'bg-gray-50 border-gray-200'
         }`}>
           {/* タイトル */}
-          <div className="text-center">
-            <p className="text-[11px] font-black text-gray-800">
-              {altRunning
-                ? altPhase === 'work' ? '🔥 実行中！' : '😮‍💨 インターバル'
-                : '30s ↔ 15s 交互'}
+          <div className="text-center leading-tight">
+            <p className="text-[10px] font-black text-gray-800">
+              {altRunning ? (altPhase === 'work' ? '🔥 実行中！' : '😮‍💨 インターバル') : '30s ↔ 15s'}
             </p>
             {altSet > 0 && (
-              <span className="text-[9px] font-bold text-red-600">{altSet}セット完了</span>
+              <span className="text-[9px] font-bold text-red-600">{altSet}セット</span>
             )}
           </div>
 
           {/* プログレスリング */}
-          <div className="relative w-[130px] h-[130px]">
+          <div className={`relative ${ringSize}`}>
             <ProgressRing
               remaining={altRemain}
               total={altPhase === 'work' ? WORK_SEC : REST_SEC}
               color={altPhase === 'work' ? '#ef4444' : '#3b82f6'}
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-black tabular-nums leading-none text-gray-900">
+              <span className={`${numSize} font-black tabular-nums leading-none text-gray-900`}>
                 {fmt(altRemain)}
               </span>
-              <span className={`text-[9px] font-bold mt-0.5 ${
-                altPhase === 'work' ? 'text-red-500' : 'text-blue-500'
-              }`}>
-                {altRunning
-                  ? altPhase === 'work' ? `${WORK_SEC}s 実行` : `${REST_SEC}s 休憩`
-                  : '待機中'}
+              <span className={`text-[9px] font-bold ${altPhase === 'work' ? 'text-red-500' : 'text-blue-500'}`}>
+                {altRunning ? (altPhase === 'work' ? '実行' : 'REST') : '待機'}
               </span>
             </div>
           </div>
 
-          {/* フェーズ表示バー */}
+          {/* フェーズバー */}
           <div className="w-full flex text-center text-[9px] font-black rounded-lg overflow-hidden">
-            <div className={`flex-1 py-1 transition-all ${
-              altRunning && altPhase === 'work' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-400'
-            }`}>実行 30s</div>
-            <div className={`flex-1 py-1 transition-all ${
-              altRunning && altPhase === 'rest' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'
-            }`}>休憩 15s</div>
+            <div className={`flex-1 py-0.5 transition-all ${altRunning && altPhase === 'work' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+              30s
+            </div>
+            <div className={`flex-1 py-0.5 transition-all ${altRunning && altPhase === 'rest' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+              15s
+            </div>
           </div>
 
           {/* ループトグル */}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500">ループ</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] text-gray-500">ループ</span>
             <button
               onClick={() => !altRunning && setAltLoop(v => !v)}
-              className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
-                altLoop ? 'bg-red-500' : 'bg-gray-300'
-              } ${altRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+              className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${altLoop ? 'bg-red-500' : 'bg-gray-300'} ${altRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             >
-              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                altLoop ? 'translate-x-5' : 'translate-x-0.5'
-              }`} />
+              <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${altLoop ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </button>
-            <span className="text-[10px] text-gray-400">{altLoop ? '∞' : '1回'}</span>
+            <span className="text-[9px] text-gray-400">{altLoop ? '∞' : '1'}</span>
           </div>
 
-          {/* スタート / ストップ */}
+          {/* ボタン */}
           <button
             onClick={altRunning ? stopAlt : startAlt}
-            className={`w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 shadow-sm ${
-              altRunning
-                ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                : 'bg-red-600 text-white hover:bg-red-700'
+            className={`w-full ${btnPy} rounded-xl text-xs font-black transition-all active:scale-95 ${
+              altRunning ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-red-600 text-white hover:bg-red-700'
             }`}
           >
-            {altRunning ? '⏹ ストップ' : '▶ スタート'}
+            {altRunning ? '⏹ STOP' : '▶ START'}
           </button>
         </div>
 
-        {/* ════════════════════════════════════════
+        {/* ══════════════════════════════
             1分ループタイマー
-            ════════════════════════════════════════ */}
-        <div className={`flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+            ══════════════════════════════ */}
+        <div className={`flex flex-col items-center ${gap} ${pad} rounded-2xl border-2 transition-all ${
           minRunning ? 'bg-violet-50 border-violet-300' : 'bg-gray-50 border-gray-200'
         }`}>
           {/* タイトル */}
-          <div className="text-center">
-            <p className="text-[11px] font-black text-gray-800">
+          <div className="text-center leading-tight">
+            <p className="text-[10px] font-black text-gray-800">
               {minRunning ? '⏰ カウント中！' : '1分ループ'}
             </p>
             {minLaps > 0 && (
-              <span className="text-[9px] font-bold text-violet-600">{minLaps}回完了</span>
+              <span className="text-[9px] font-bold text-violet-600">{minLaps}回</span>
             )}
           </div>
 
           {/* プログレスリング */}
-          <div className="relative w-[130px] h-[130px]">
+          <div className={`relative ${ringSize}`}>
             <ProgressRing remaining={minRemain} total={MIN_SEC} color="#7c3aed" />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-black tabular-nums leading-none text-gray-900">
+              <span className={`${numSize} font-black tabular-nums leading-none text-gray-900`}>
                 {fmt(minRemain)}
               </span>
-              <span className="text-[9px] font-bold mt-0.5 text-violet-500">
-                {minRunning ? '60s カウント' : '待機中'}
+              <span className="text-[9px] font-bold text-violet-500">
+                {minRunning ? '60s' : '待機'}
               </span>
             </div>
           </div>
 
-          {/* プログレスバー（補助） */}
-          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+          {/* プログレスバー */}
+          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-violet-500 rounded-full transition-all"
+              className="h-full bg-violet-500 rounded-full"
               style={{
                 width: `${Math.max(0, Math.min(100, (minRemain / MIN_SEC) * 100))}%`,
                 transition: 'width 0.95s linear',
@@ -434,42 +427,38 @@ export function TimerWidget() {
           </div>
 
           {/* ループトグル */}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500">ループ</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] text-gray-500">ループ</span>
             <button
               onClick={() => !minRunning && setMinLoop(v => !v)}
-              className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
-                minLoop ? 'bg-violet-500' : 'bg-gray-300'
-              } ${minRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+              className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${minLoop ? 'bg-violet-500' : 'bg-gray-300'} ${minRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
             >
-              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                minLoop ? 'translate-x-5' : 'translate-x-0.5'
-              }`} />
+              <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${minLoop ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </button>
-            <span className="text-[10px] text-gray-400">{minLoop ? '∞' : '1回'}</span>
+            <span className="text-[9px] text-gray-400">{minLoop ? '∞' : '1'}</span>
           </div>
 
-          {/* スタート / ストップ */}
+          {/* ボタン */}
           <button
             onClick={minRunning ? stopMin : startMin}
-            className={`w-full py-3 rounded-xl text-sm font-black transition-all active:scale-95 shadow-sm ${
-              minRunning
-                ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                : 'bg-violet-600 text-white hover:bg-violet-700'
+            className={`w-full ${btnPy} rounded-xl text-xs font-black transition-all active:scale-95 ${
+              minRunning ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-violet-600 text-white hover:bg-violet-700'
             }`}
           >
-            {minRunning ? '⏹ ストップ' : '▶ スタート'}
+            {minRunning ? '⏹ STOP' : '▶ START'}
           </button>
         </div>
 
       </div>
 
-      {/* 説明 */}
-      <div className="text-[9px] text-gray-400 text-center leading-relaxed">
-        ⚡ Web Worker で動作 — タブ非アクティブ時も正確に計測<br />
-        🔇 無音オーディオで iOS/Android のスリープを完全ブロック<br />
-        🔔 時間終了時に通知音＋OS通知＋音声でお知らせ
-      </div>
+      {/* 説明（コンパクト時は省略） */}
+      {!compact && (
+        <div className="text-[9px] text-gray-400 text-center leading-relaxed">
+          ⚡ Web Worker — タブ非アクティブ時も正確に計測 ／
+          🔇 無音オーディオで iOS スリープをブロック ／
+          🔔 終了時に通知音＋音声＋OS通知
+        </div>
+      )}
     </div>
   );
 }
