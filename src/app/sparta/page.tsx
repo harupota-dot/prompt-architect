@@ -19,6 +19,7 @@ import { DashboardHeader }        from '@/components/DashboardHeader';
 import { GoogleCalendarSync }      from '@/components/GoogleCalendarSync';
 import { CameraScheduleInput }     from '@/components/CameraScheduleInput';
 import { VoiceScheduleInput }      from '@/components/VoiceScheduleInput';
+import { TimerWidget }             from '@/components/TimerWidget';
 
 // ── タスク名プリセット ─────────────────────────────────────────
 interface TaskPreset {
@@ -259,7 +260,7 @@ export default function SpartaPage() {
   const [tasks, setTasks]       = useState<LocalTask[]>([]);
   const [showAdd, setShowAdd]   = useState(false);
   const [form, setForm]         = useState<AddTaskForm>(DEFAULT_FORM);
-  const [tab, setTab]           = useState<'today' | 'all' | 'done' | 'school' | 'memo'>('today');
+  const [tab, setTab]           = useState<'today' | 'all' | 'done' | 'school' | 'memo' | 'timer'>('today');
   const [alertShown, setAlertShown] = useState(true);
 
   // ── 通知・TTS state ─────────────────────────────────────────
@@ -788,11 +789,12 @@ export default function SpartaPage() {
         {/* ── タブ ── */}
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
           {([
-            { key: 'today',  label: '今日',   count: todoToday.length },
+            { key: 'today',  label: '今日',    count: todoToday.length },
             { key: 'all',    label: '全タスク', count: allActive.length },
-            { key: 'done',   label: '完了',   count: doneTasks.length },
-            { key: 'school', label: '学校',   count: 0 },
-            { key: 'memo',   label: 'メモ',   count: memos.length },
+            { key: 'done',   label: '完了',    count: doneTasks.length },
+            { key: 'school', label: '学校',    count: 0 },
+            { key: 'memo',   label: 'メモ',    count: memos.length },
+            { key: 'timer',  label: '⏱',      count: 0 },
           ] as const).map(t => (
             <button
               key={t.key}
@@ -802,7 +804,7 @@ export default function SpartaPage() {
               }`}
             >
               {t.label}
-              {t.key !== 'school' && t.key !== 'memo' && <Badge n={t.count} />}
+              {t.key !== 'school' && t.key !== 'memo' && t.key !== 'timer' && <Badge n={t.count} />}
               {t.key === 'memo' && t.count > 0 && <Badge n={t.count} />}
             </button>
           ))}
@@ -1197,6 +1199,23 @@ export default function SpartaPage() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── タイマータブ ── */}
+        {tab === 'timer' && (
+          <div className="space-y-2">
+            {/* ヘッダー */}
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-lg">⏱</span>
+              <div>
+                <p className="text-sm font-black text-gray-900">スパルタタイマー</p>
+                <p className="text-[10px] text-gray-400">
+                  Web Worker + 無音音声で画面ロック・バックグラウンドでも停止しない
+                </p>
+              </div>
+            </div>
+            <TimerWidget />
           </div>
         )}
 
