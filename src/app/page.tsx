@@ -770,7 +770,7 @@ export default function SpartaAI() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 pt-6 pb-28 space-y-5">
+      <main className="max-w-3xl mx-auto px-4 pt-6 pb-40 space-y-5">
 
         {/* ════════════════════════════════════════
             ⏱ スパルタタイマー（最上部・常時表示）

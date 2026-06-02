@@ -16,9 +16,9 @@ import {
   playSound, getSoundPref, setSoundPref, getSoundVolume, setSoundVolume,
 } from '@/lib/sound-engine';
 import { DashboardHeader }        from '@/components/DashboardHeader';
-import { GoogleCalendarSync }      from '@/components/GoogleCalendarSync';
 import { CameraScheduleInput }     from '@/components/CameraScheduleInput';
 import { VoiceScheduleInput }      from '@/components/VoiceScheduleInput';
+import { CalendarView }            from '@/components/CalendarView';
 
 // ── タスク名プリセット ─────────────────────────────────────────
 interface TaskPreset {
@@ -259,7 +259,7 @@ export default function SpartaPage() {
   const [tasks, setTasks]       = useState<LocalTask[]>([]);
   const [showAdd, setShowAdd]   = useState(false);
   const [form, setForm]         = useState<AddTaskForm>(DEFAULT_FORM);
-  const [tab, setTab]           = useState<'today' | 'all' | 'done' | 'school' | 'memo'>('today');
+  const [tab, setTab]           = useState<'today' | 'all' | 'done' | 'school' | 'memo' | 'calendar'>('today');
   const [alertShown, setAlertShown] = useState(true);
 
   // ── 通知・TTS state ─────────────────────────────────────────
@@ -586,7 +586,7 @@ export default function SpartaPage() {
   const todayFreeSlots = getFreeSlotsForDate(todayStr);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-44">
+    <div className="min-h-screen bg-gray-50 pb-56">
 
       {/* ── ヘッダー ── */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
@@ -791,8 +791,9 @@ export default function SpartaPage() {
             { key: 'today',  label: '今日',    count: todoToday.length },
             { key: 'all',    label: '全タスク', count: allActive.length },
             { key: 'done',   label: '完了',    count: doneTasks.length },
-            { key: 'school', label: '学校',    count: 0 },
-            { key: 'memo',   label: 'メモ',    count: memos.length },
+            { key: 'school',   label: '学校',  count: 0 },
+            { key: 'memo',     label: 'メモ',  count: memos.length },
+            { key: 'calendar', label: '📅',    count: 0 },
           ] as const).map(t => (
             <button
               key={t.key}
@@ -802,7 +803,7 @@ export default function SpartaPage() {
               }`}
             >
               {t.label}
-              {t.key !== 'school' && t.key !== 'memo' && <Badge n={t.count} />}
+              {t.key !== 'school' && t.key !== 'memo' && t.key !== 'calendar' && <Badge n={t.count} />}
               {t.key === 'memo' && t.count > 0 && <Badge n={t.count} />}
             </button>
           ))}
@@ -1080,9 +1081,6 @@ export default function SpartaPage() {
               )}
             </div>
 
-            {/* Googleカレンダー同期 */}
-            <GoogleCalendarSync speakSpartan={speakSpartan} />
-
             {/* 通知設定 */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -1249,6 +1247,22 @@ export default function SpartaPage() {
                 ))}
               </ul>
             )}
+          </div>
+        )}
+
+        {/* ── カレンダータブ ── */}
+        {tab === 'calendar' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-lg">📅</span>
+              <div>
+                <p className="text-sm font-black text-gray-900">カレンダー</p>
+                <p className="text-[10px] text-gray-400">
+                  日付をタップして予定を確認・追加。カレンダーを見ながら入力できます。
+                </p>
+              </div>
+            </div>
+            <CalendarView onTaskAdded={reload} />
           </div>
         )}
 

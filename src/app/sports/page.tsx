@@ -314,7 +314,7 @@ export default function SportsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32">
+    <div className="min-h-screen bg-gray-50 pb-40">
 
       {/* ── ヘッダー ── */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
