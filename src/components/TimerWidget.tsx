@@ -3,462 +3,458 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { playSound } from '@/lib/sound-engine';
 
-// ── 定数 ─────────────────────────────────────────────────────────
-const WORK_SEC = 30;  // 交互タイマー：実行フェーズ
-const REST_SEC = 15;  // 交互タイマー：インターバルフェーズ
-const MIN_SEC  = 60;  // 1分タイマー
+// ══════════════════════════════════════════════════════════════════
+// 定数
+// ══════════════════════════════════════════════════════════════════
+const TIME_BLOCKS = [10, 15, 20, 30, 60, 180] as const;
+type  TimeBlock   = typeof TIME_BLOCKS[number];
+type  TimerMode   = 'single' | 'sequence';
 
-type AltPhase = 'work' | 'rest';
+const TIME_LABEL: Record<TimeBlock, string> = {
+  10: '10s', 15: '15s', 20: '20s', 30: '30s', 60: '1分', 180: '3分',
+};
+const STORAGE_KEY = 'sparta-timer-v1';
 
-// ── Web Worker 生成 ────────────────────────────────────────────────
+interface SeqItem { id: string; seconds: TimeBlock }
+interface SavedCfg {
+  mode: TimerMode; singleTime: TimeBlock; singleLoop: boolean;
+  sequence: SeqItem[]; seqLoop: boolean;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// localStorage
+// ══════════════════════════════════════════════════════════════════
+function loadCfg(): Partial<SavedCfg> {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'); }
+  catch { return {}; }
+}
+function saveCfg(c: SavedCfg) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(c)); } catch { /* ignore */ }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Web Worker（/public/timer-worker.js を使用）
+// ══════════════════════════════════════════════════════════════════
 function createWorker(): Worker | null {
   if (typeof window === 'undefined') return null;
   try { return new Worker('/timer-worker.js'); } catch { return null; }
 }
 
-// ── OS プッシュ通知 ───────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// OS通知 / TTS / BGオーディオ（バックグラウンドスリープ防止ハック）
+// ══════════════════════════════════════════════════════════════════
 function notify(title: string, body: string) {
   try {
-    if (
-      typeof window !== 'undefined' &&
-      'Notification' in window &&
-      Notification.permission === 'granted'
-    ) {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted')
       new Notification(title, { body, icon: '/favicon.ico', tag: 'sparta-timer' });
-    }
   } catch { /* ignore */ }
 }
 
-// ── TTS（スパルタ音声） ──────────────────────────────────────────
 function speak(text: string) {
   try {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    const utt   = new SpeechSynthesisUtterance(text);
-    utt.lang    = 'ja-JP';
-    utt.rate    = 1.1;
-    utt.pitch   = 0.85;
-    utt.onerror = () => {/* ignore */};
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'ja-JP'; utt.rate = 1.1; utt.pitch = 0.85;
+    utt.onerror = () => { /* ignore */ };
     setTimeout(() => window.speechSynthesis.speak(utt), 80);
   } catch { /* ignore */ }
 }
 
-// ── バックグラウンド無音オーディオ（スリープ防止ハック） ─────────
-// AudioContext + ほぼ無音のオシレータを維持することで
-// iOS/Android の OS が「メディア再生中」と判断 → ブラウザプロセスの凍結を防ぐ
 interface BGAudio { ctx: AudioContext; osc: OscillatorNode }
 
 function startBGAudio(): BGAudio | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext as typeof AudioContext;
-    if (!AudioCtx) return null;
-    const ctx  = new AudioCtx();
-    const osc  = ctx.createOscillator();
-    const gain = ctx.createGain();
-    // 0.001 = ほぼ無音だが完全0でないことでOSに「再生中」と認識させる
-    gain.gain.value   = 0.001;
-    osc.frequency.value = 1; // 1Hz — 人間には聞こえない超低周波
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext as typeof AudioContext;
+    if (!Ctx) return null;
+    const ctx = new Ctx(), osc = ctx.createOscillator(), gain = ctx.createGain();
+    // 0.001 = ほぼ無音だが OS に「メディア再生中」と判断させる
+    gain.gain.value = 0.001; osc.frequency.value = 1;
+    osc.connect(gain); gain.connect(ctx.destination); osc.start();
     return { ctx, osc };
   } catch { return null; }
 }
 
 function stopBGAudio(bg: BGAudio | null) {
   if (!bg) return;
-  try { bg.osc.stop();   } catch { /* ignore */ }
-  try { bg.ctx.close();  } catch { /* ignore */ }
+  try { bg.osc.stop(); } catch { /* ignore */ }
+  try { bg.ctx.close(); } catch { /* ignore */ }
 }
 
-// ── プログレスリング（SVG） ──────────────────────────────────────
-function ProgressRing({
-  remaining, total, color,
-}: {
-  remaining: number; total: number; color: string;
+// ══════════════════════════════════════════════════════════════════
+// プログレスリング（SVG）
+// ══════════════════════════════════════════════════════════════════
+function ProgressRing({ remaining, total, color, size }: {
+  remaining: number; total: number; color: string; size: number;
 }) {
-  const r    = 50;
+  const r    = size / 2 - 7;
   const circ = 2 * Math.PI * r;
-  const pct  = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
+  const pct  = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 1;
   return (
-    <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 120 120">
-      {/* トラック */}
-      <circle cx="60" cy="60" r={r} fill="none" stroke="#f3f4f6" strokeWidth="10" />
-      {/* プログレス */}
+    <svg className="-rotate-90" width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#f3f4f6" strokeWidth="8" />
       <circle
-        cx="60" cy="60" r={r} fill="none"
-        stroke={color} strokeWidth="10" strokeLinecap="round"
-        strokeDasharray={circ}
-        strokeDashoffset={circ * (1 - pct)}
+        cx={size/2} cy={size/2} r={r} fill="none"
+        stroke={color} strokeWidth="8" strokeLinecap="round"
+        strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
         style={{ transition: 'stroke-dashoffset 0.95s linear' }}
       />
     </svg>
   );
 }
 
-// ── メインコンポーネント ─────────────────────────────────────────
+// ── uid ─────────────────────────────────────────────────────────
+const uid = () => Math.random().toString(36).slice(2, 9);
+const fmt = (s: number) =>
+  `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+
+// ══════════════════════════════════════════════════════════════════
+// メインコンポーネント
+// ══════════════════════════════════════════════════════════════════
 export function TimerWidget({ compact = false }: { compact?: boolean }) {
-  // ── 交互タイマー state ─────────────────────────────────────────
-  const [altRunning, setAltRunning] = useState(false);
-  const [altPhase,   setAltPhase]   = useState<AltPhase>('work');
-  const [altRemain,  setAltRemain]  = useState(WORK_SEC);
-  const [altLoop,    setAltLoop]    = useState(true);
-  const [altSet,     setAltSet]     = useState(0);
+  // ── 設定 ───────────────────────────────────────────────────────
+  const [mode,       setMode]       = useState<TimerMode>('single');
+  const [singleTime, setSingleTime] = useState<TimeBlock>(30);
+  const [singleLoop, setSingleLoop] = useState(false);
+  const [sequence,   setSequence]   = useState<SeqItem[]>([]);
+  const [seqLoop,    setSeqLoop]    = useState(false);
+  const [cfgLoaded,  setCfgLoaded]  = useState(false);
 
-  // ── 1分タイマー state ──────────────────────────────────────────
-  const [minRunning, setMinRunning] = useState(false);
-  const [minRemain,  setMinRemain]  = useState(MIN_SEC);
-  const [minLoop,    setMinLoop]    = useState(true);
-  const [minLaps,    setMinLaps]    = useState(0);
+  // ── 実行 ───────────────────────────────────────────────────────
+  const [running,   setRunning]   = useState(false);
+  const [remaining, setRemaining] = useState(0);
+  const [blockIdx,  setBlockIdx]  = useState(0);
+  const [curSec,    setCurSec]    = useState<TimeBlock>(30);
 
-  // ── Refs（stale closure を避けるため最新値を保持） ─────────────
-  const altWorker  = useRef<Worker | null>(null);
-  const minWorker  = useRef<Worker | null>(null);
-  const bgAudio    = useRef<BGAudio | null>(null);
-  const altLoopRef = useRef(true);
-  const minLoopRef = useRef(true);
-  const altPhaseRef = useRef<AltPhase>('work');
-  const altSetRef   = useRef(0);
-  const minLapsRef  = useRef(0);
-  const altRunRef   = useRef(false);
-  const minRunRef   = useRef(false);
+  // ── Refs（stale closure 防止） ──────────────────────────────────
+  const workerRef     = useRef<Worker | null>(null);
+  const bgRef         = useRef<BGAudio | null>(null);
+  const runRef        = useRef(false);
+  const modeRef       = useRef<TimerMode>('single');
+  const singleLoopRef = useRef(false);
+  const seqLoopRef    = useRef(false);
+  const seqRef        = useRef<SeqItem[]>([]);
+  const blockIdxRef   = useRef(0);
+  const singleTimeRef = useRef<TimeBlock>(30);
 
-  useEffect(() => { altLoopRef.current = altLoop; }, [altLoop]);
-  useEffect(() => { minLoopRef.current = minLoop; }, [minLoop]);
+  useEffect(() => { modeRef.current       = mode;       }, [mode]);
+  useEffect(() => { singleLoopRef.current = singleLoop; }, [singleLoop]);
+  useEffect(() => { seqLoopRef.current    = seqLoop;    }, [seqLoop]);
+  useEffect(() => { seqRef.current        = sequence;   }, [sequence]);
+  useEffect(() => { singleTimeRef.current = singleTime; }, [singleTime]);
 
-  // ── アンマウント時クリーンアップ ──────────────────────────────
+  // ── localStorage 読み込み ────────────────────────────────────────
+  useEffect(() => {
+    const c = loadCfg();
+    if (c.mode)       setMode(c.mode);
+    if (c.singleTime) setSingleTime(c.singleTime);
+    if (typeof c.singleLoop === 'boolean') setSingleLoop(c.singleLoop);
+    if (Array.isArray(c.sequence))         setSequence(c.sequence);
+    if (typeof c.seqLoop === 'boolean')    setSeqLoop(c.seqLoop);
+    setCfgLoaded(true);
+  }, []);
+
+  // ── localStorage 保存 ────────────────────────────────────────────
+  useEffect(() => {
+    if (!cfgLoaded) return;
+    saveCfg({ mode, singleTime, singleLoop, sequence, seqLoop });
+  }, [cfgLoaded, mode, singleTime, singleLoop, sequence, seqLoop]);
+
+  // ── アンマウント ────────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      altWorker.current?.terminate();
-      minWorker.current?.terminate();
-      stopBGAudio(bgAudio.current);
+      workerRef.current?.terminate();
+      stopBGAudio(bgRef.current);
     };
   }, []);
 
-  // ── 両タイマー停止時に BG音を解放 ─────────────────────────────
-  const maybeStopBGAudio = useCallback(() => {
-    if (!altRunRef.current && !minRunRef.current) {
-      stopBGAudio(bgAudio.current);
-      bgAudio.current = null;
+  // ── Worker からのメッセージ処理 ──────────────────────────────────
+  const onWorkerMsg = useCallback((data: { type: string; remaining: number }) => {
+    if (data.type === 'TICK') { setRemaining(data.remaining); return; }
+    if (data.type !== 'DONE') return;
+
+    playSound();
+
+    if (modeRef.current === 'single') {
+      // ── 単独モード ──
+      const label = TIME_LABEL[singleTimeRef.current];
+      speak(`${label}終了！サボるな！`);
+      notify('⏰ タイマー完了！', `${label}経過しました！`);
+
+      if (singleLoopRef.current) {
+        const sec = singleTimeRef.current;
+        setRemaining(sec); setCurSec(sec);
+        workerRef.current?.postMessage({ type: 'START', seconds: sec });
+      } else {
+        workerRef.current?.terminate(); workerRef.current = null;
+        runRef.current = false; setRunning(false); setRemaining(0);
+        stopBGAudio(bgRef.current); bgRef.current = null;
+      }
+    } else {
+      // ── シーケンスモード ──
+      const seq  = seqRef.current;
+      const next = blockIdxRef.current + 1;
+
+      if (next < seq.length) {
+        // 次のブロックへ
+        const ns = seq[next].seconds;
+        blockIdxRef.current = next;
+        setBlockIdx(next); setCurSec(ns); setRemaining(ns);
+        speak(`次！${TIME_LABEL[ns]}スタート！`);
+        notify('🔄 次のブロック', `${TIME_LABEL[ns]}開始！`);
+        workerRef.current?.postMessage({ type: 'START', seconds: ns });
+      } else if (seqLoopRef.current) {
+        // 全体をループ
+        blockIdxRef.current = 0;
+        const fs = seq[0].seconds;
+        setBlockIdx(0); setCurSec(fs); setRemaining(fs);
+        speak('シーケンス完了！最初から再スタート！');
+        notify('🔁 ループ再開', '最初のブロックに戻ります！');
+        workerRef.current?.postMessage({ type: 'START', seconds: fs });
+      } else {
+        // 終了
+        speak('シーケンス全体完了！お疲れ様！');
+        notify('✅ シーケンス完了！', '全ブロック終了しました！');
+        workerRef.current?.terminate(); workerRef.current = null;
+        runRef.current = false; setRunning(false); setRemaining(0);
+        stopBGAudio(bgRef.current); bgRef.current = null;
+      }
     }
   }, []);
 
-  // ───────────────────────────────────────────────────────────────
-  // 交互タイマー
-  // ───────────────────────────────────────────────────────────────
+  // ── スタート ────────────────────────────────────────────────────
+  const handleStart = useCallback(() => {
+    if (runRef.current) return;
+    const m = modeRef.current;
+    if (m === 'sequence' && seqRef.current.length === 0) return;
 
-  const startAlt = useCallback(() => {
-    if (altRunRef.current) return;
-
-    // ★ ユーザーのクリックイベント内で AudioContext を生成（iOS 要件）
-    if (!bgAudio.current) bgAudio.current = startBGAudio();
-
-    const worker = createWorker();
-    if (!worker) { alert('Web Worker が使用できません。ブラウザを更新してください。'); return; }
-
-    altWorker.current     = worker;
-    altPhaseRef.current   = 'work';
-    altSetRef.current     = 0;
-    altRunRef.current     = true;
-
-    setAltPhase('work');
-    setAltSet(0);
-    setAltRemain(WORK_SEC);
-    setAltRunning(true);
-
-    worker.onmessage = ({ data }) => {
-      if (data.type === 'TICK') {
-        setAltRemain(data.remaining);
-        return;
-      }
-
-      if (data.type === 'DONE') {
-        // アラーム音
-        playSound();
-
-        const curPhase  = altPhaseRef.current;
-        const nextPhase : AltPhase = curPhase === 'work' ? 'rest' : 'work';
-        const nextSec   = nextPhase === 'work' ? WORK_SEC : REST_SEC;
-
-        if (curPhase === 'work') {
-          const s = altSetRef.current + 1;
-          altSetRef.current = s;
-          setAltSet(s);
-          speak(`${s}セット完了！15秒インターバル開始！ゆっくり休め！`);
-          notify('🔥 実行完了！', `${s}セット目終了！15秒インターバル開始！`);
-        } else {
-          speak('インターバル終了！次の30秒を全力で行け！今すぐスタート！');
-          notify('💪 インターバル終了！', '次の30秒！ほら動け！');
-        }
-
-        if (altLoopRef.current) {
-          altPhaseRef.current = nextPhase;
-          setAltPhase(nextPhase);
-          setAltRemain(nextSec);
-          worker.postMessage({ type: 'START', seconds: nextSec });
-        } else {
-          worker.terminate();
-          altWorker.current   = null;
-          altRunRef.current   = false;
-          altPhaseRef.current = 'work';
-          altSetRef.current   = 0;
-          setAltRunning(false);
-          setAltPhase('work');
-          setAltRemain(WORK_SEC);
-          setAltSet(0);
-          maybeStopBGAudio();
-        }
-      }
-    };
-
-    worker.postMessage({ type: 'START', seconds: WORK_SEC });
-  }, [maybeStopBGAudio]);
-
-  const stopAlt = useCallback(() => {
-    altWorker.current?.terminate();
-    altWorker.current   = null;
-    altRunRef.current   = false;
-    altPhaseRef.current = 'work';
-    altSetRef.current   = 0;
-    setAltRunning(false);
-    setAltPhase('work');
-    setAltRemain(WORK_SEC);
-    setAltSet(0);
-    maybeStopBGAudio();
-  }, [maybeStopBGAudio]);
-
-  // ───────────────────────────────────────────────────────────────
-  // 1分タイマー
-  // ───────────────────────────────────────────────────────────────
-
-  const startMin = useCallback(() => {
-    if (minRunRef.current) return;
-    if (!bgAudio.current) bgAudio.current = startBGAudio();
+    // ★ BGオーディオはユーザーアクション（ボタンクリック）内で生成（iOS要件）
+    if (!bgRef.current) bgRef.current = startBGAudio();
 
     const worker = createWorker();
     if (!worker) return;
+    workerRef.current = worker;
+    worker.onmessage = ({ data }) => onWorkerMsg(data);
 
-    minWorker.current  = worker;
-    minLapsRef.current = 0;
-    minRunRef.current  = true;
+    blockIdxRef.current = 0;
+    setBlockIdx(0);
 
-    setMinLaps(0);
-    setMinRemain(MIN_SEC);
-    setMinRunning(true);
+    if (m === 'single') {
+      const sec = singleTimeRef.current;
+      setCurSec(sec); setRemaining(sec);
+      worker.postMessage({ type: 'START', seconds: sec });
+    } else {
+      const sec = seqRef.current[0].seconds;
+      setCurSec(sec); setRemaining(sec);
+      worker.postMessage({ type: 'START', seconds: sec });
+    }
 
-    worker.onmessage = ({ data }) => {
-      if (data.type === 'TICK') {
-        setMinRemain(data.remaining);
-        return;
-      }
+    runRef.current = true;
+    setRunning(true);
+  }, [onWorkerMsg]);
 
-      if (data.type === 'DONE') {
-        playSound();
-        const l = minLapsRef.current + 1;
-        minLapsRef.current = l;
-        setMinLaps(l);
-        speak(`${l}分経過！継続は力なりだ！まだまだいけ！`);
-        notify('⏰ 1分完了！', `${l}回目終了！継続は力なり！`);
+  // ── ストップ ────────────────────────────────────────────────────
+  const handleStop = useCallback(() => {
+    workerRef.current?.terminate(); workerRef.current = null;
+    runRef.current = false;
+    setRunning(false); setRemaining(0); setBlockIdx(0);
+    stopBGAudio(bgRef.current); bgRef.current = null;
+  }, []);
 
-        if (minLoopRef.current) {
-          setMinRemain(MIN_SEC);
-          worker.postMessage({ type: 'START', seconds: MIN_SEC });
-        } else {
-          worker.terminate();
-          minWorker.current  = null;
-          minRunRef.current  = false;
-          minLapsRef.current = 0;
-          setMinRunning(false);
-          setMinRemain(MIN_SEC);
-          setMinLaps(0);
-          maybeStopBGAudio();
-        }
-      }
-    };
+  // ── シーケンス操作 ───────────────────────────────────────────────
+  const addBlock    = (s: TimeBlock) => !running && setSequence(p => [...p, { id: uid(), seconds: s }]);
+  const removeBlock = (id: string)   => !running && setSequence(p => p.filter(b => b.id !== id));
+  const moveUp      = (i: number)    => !running && i > 0 && setSequence(p => {
+    const n = [...p]; [n[i-1], n[i]] = [n[i], n[i-1]]; return n;
+  });
+  const moveDown = (i: number) => !running && setSequence(p => {
+    if (i >= p.length - 1) return p;
+    const n = [...p]; [n[i], n[i+1]] = [n[i+1], n[i]]; return n;
+  });
 
-    worker.postMessage({ type: 'START', seconds: MIN_SEC });
-  }, [maybeStopBGAudio]);
+  // ── 表示用計算 ───────────────────────────────────────────────────
+  const idleTime  = mode === 'single' ? singleTime : (sequence[0]?.seconds ?? 30);
+  const dispRem   = running ? remaining : idleTime;
+  const dispTotal = running ? curSec    : idleTime;
+  const ringColor = running ? (mode === 'single' ? '#ef4444' : '#7c3aed') : '#9ca3af';
+  const ringSize  = compact ? 88 : 108;
+  const loopOn    = mode === 'single' ? singleLoop : seqLoop;
+  const canStart  = !(mode === 'sequence' && sequence.length === 0);
 
-  const stopMin = useCallback(() => {
-    minWorker.current?.terminate();
-    minWorker.current  = null;
-    minRunRef.current  = false;
-    minLapsRef.current = 0;
-    setMinRunning(false);
-    setMinRemain(MIN_SEC);
-    setMinLaps(0);
-    maybeStopBGAudio();
-  }, [maybeStopBGAudio]);
-
-  // ── 秒数フォーマット（mm:ss） ─────────────────────────────────
-  const fmt = (s: number) =>
-    `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
-
-  const anyRunning = altRunning || minRunning;
-
-  // compact モード用のサイズ定数
-  const ringSize  = compact ? 'w-[100px] h-[100px]' : 'w-[130px] h-[130px]';
-  const numSize   = compact ? 'text-2xl' : 'text-3xl';
-  const pad       = compact ? 'p-2.5' : 'p-4';
-  const gap       = compact ? 'gap-2' : 'gap-3';
-  const btnPy     = compact ? 'py-2'  : 'py-3';
-
-  // ─────────────────────────────────────────────────────────────────
+  // ── レンダー ─────────────────────────────────────────────────────
   return (
-    <div className={compact ? 'space-y-2' : 'space-y-4'}>
+    <div className="space-y-3">
 
       {/* バックグラウンド動作バナー */}
-      {anyRunning && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-500 rounded-xl text-white text-[10px] font-bold">
+      {running && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl text-white text-[10px] font-bold">
           <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse flex-shrink-0" />
-          バックグラウンド動作中 — 画面ロック中も停止しません
+          バックグラウンド動作中 — 画面ロック・他アプリでも停止しません
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-
-        {/* ══════════════════════════════
-            交互タイマー（30s 実行 ↔ 15s）
-            ══════════════════════════════ */}
-        <div className={`flex flex-col items-center ${gap} ${pad} rounded-2xl border-2 transition-all ${
-          altRunning
-            ? altPhase === 'work' ? 'bg-red-50 border-red-300' : 'bg-blue-50 border-blue-300'
-            : 'bg-gray-50 border-gray-200'
-        }`}>
-          {/* タイトル */}
-          <div className="text-center leading-tight">
-            <p className="text-[10px] font-black text-gray-800">
-              {altRunning ? (altPhase === 'work' ? '🔥 実行中！' : '😮‍💨 インターバル') : '30s ↔ 15s'}
-            </p>
-            {altSet > 0 && (
-              <span className="text-[9px] font-bold text-red-600">{altSet}セット</span>
-            )}
-          </div>
-
-          {/* プログレスリング */}
-          <div className={`relative ${ringSize}`}>
-            <ProgressRing
-              remaining={altRemain}
-              total={altPhase === 'work' ? WORK_SEC : REST_SEC}
-              color={altPhase === 'work' ? '#ef4444' : '#3b82f6'}
-            />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`${numSize} font-black tabular-nums leading-none text-gray-900`}>
-                {fmt(altRemain)}
-              </span>
-              <span className={`text-[9px] font-bold ${altPhase === 'work' ? 'text-red-500' : 'text-blue-500'}`}>
-                {altRunning ? (altPhase === 'work' ? '実行' : 'REST') : '待機'}
-              </span>
-            </div>
-          </div>
-
-          {/* フェーズバー */}
-          <div className="w-full flex text-center text-[9px] font-black rounded-lg overflow-hidden">
-            <div className={`flex-1 py-0.5 transition-all ${altRunning && altPhase === 'work' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
-              30s
-            </div>
-            <div className={`flex-1 py-0.5 transition-all ${altRunning && altPhase === 'rest' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
-              15s
-            </div>
-          </div>
-
-          {/* ループトグル */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] text-gray-500">ループ</span>
-            <button
-              onClick={() => !altRunning && setAltLoop(v => !v)}
-              className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${altLoop ? 'bg-red-500' : 'bg-gray-300'} ${altRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-            >
-              <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${altLoop ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </button>
-            <span className="text-[9px] text-gray-400">{altLoop ? '∞' : '1'}</span>
-          </div>
-
-          {/* ボタン */}
-          <button
-            onClick={altRunning ? stopAlt : startAlt}
-            className={`w-full ${btnPy} rounded-xl text-xs font-black transition-all active:scale-95 ${
-              altRunning ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-red-600 text-white hover:bg-red-700'
-            }`}
+      {/* ── モード切替 ── */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        {(['single', 'sequence'] as const).map(m => (
+          <button key={m}
+            onClick={() => !running && setMode(m)}
+            disabled={running}
+            className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+              mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400'
+            } ${running ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {altRunning ? '⏹ STOP' : '▶ START'}
+            {m === 'single' ? '⏱ 単独' : '📋 シーケンス'}
           </button>
-        </div>
-
-        {/* ══════════════════════════════
-            1分ループタイマー
-            ══════════════════════════════ */}
-        <div className={`flex flex-col items-center ${gap} ${pad} rounded-2xl border-2 transition-all ${
-          minRunning ? 'bg-violet-50 border-violet-300' : 'bg-gray-50 border-gray-200'
-        }`}>
-          {/* タイトル */}
-          <div className="text-center leading-tight">
-            <p className="text-[10px] font-black text-gray-800">
-              {minRunning ? '⏰ カウント中！' : '1分ループ'}
-            </p>
-            {minLaps > 0 && (
-              <span className="text-[9px] font-bold text-violet-600">{minLaps}回</span>
-            )}
-          </div>
-
-          {/* プログレスリング */}
-          <div className={`relative ${ringSize}`}>
-            <ProgressRing remaining={minRemain} total={MIN_SEC} color="#7c3aed" />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`${numSize} font-black tabular-nums leading-none text-gray-900`}>
-                {fmt(minRemain)}
-              </span>
-              <span className="text-[9px] font-bold text-violet-500">
-                {minRunning ? '60s' : '待機'}
-              </span>
-            </div>
-          </div>
-
-          {/* プログレスバー */}
-          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-violet-500 rounded-full"
-              style={{
-                width: `${Math.max(0, Math.min(100, (minRemain / MIN_SEC) * 100))}%`,
-                transition: 'width 0.95s linear',
-              }}
-            />
-          </div>
-
-          {/* ループトグル */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] text-gray-500">ループ</span>
-            <button
-              onClick={() => !minRunning && setMinLoop(v => !v)}
-              className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${minLoop ? 'bg-violet-500' : 'bg-gray-300'} ${minRunning ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-            >
-              <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${minLoop ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </button>
-            <span className="text-[9px] text-gray-400">{minLoop ? '∞' : '1'}</span>
-          </div>
-
-          {/* ボタン */}
-          <button
-            onClick={minRunning ? stopMin : startMin}
-            className={`w-full ${btnPy} rounded-xl text-xs font-black transition-all active:scale-95 ${
-              minRunning ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-violet-600 text-white hover:bg-violet-700'
-            }`}
-          >
-            {minRunning ? '⏹ STOP' : '▶ START'}
-          </button>
-        </div>
-
+        ))}
       </div>
 
-      {/* 説明（コンパクト時は省略） */}
-      {!compact && (
-        <div className="text-[9px] text-gray-400 text-center leading-relaxed">
-          ⚡ Web Worker — タブ非アクティブ時も正確に計測 ／
-          🔇 無音オーディオで iOS スリープをブロック ／
-          🔔 終了時に通知音＋音声＋OS通知
+      {/* ── 時間ブロックボタン群 ── */}
+      <div>
+        <p className="text-[10px] text-gray-400 mb-1.5 font-medium">
+          {mode === 'single' ? '時間を選択：' : 'タップして追加：'}
+        </p>
+        <div className="grid grid-cols-6 gap-1">
+          {TIME_BLOCKS.map(sec => (
+            <button key={sec}
+              onClick={() => mode === 'single' ? (!running && setSingleTime(sec)) : addBlock(sec)}
+              disabled={mode === 'single' && running}
+              className={`py-2 rounded-xl text-[11px] font-black transition-all active:scale-95 ${
+                mode === 'single' && singleTime === sec
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : mode === 'sequence'
+                  ? 'bg-violet-100 text-violet-700 hover:bg-violet-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              } ${mode === 'single' && running ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              {TIME_LABEL[sec]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── シーケンスリスト ── */}
+      {mode === 'sequence' && (
+        <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+          {sequence.length === 0 ? (
+            <p className="text-[10px] text-gray-400 text-center py-4">
+              上のボタンをタップしてブロックを追加してください
+            </p>
+          ) : (
+            <div className="max-h-[136px] overflow-y-auto divide-y divide-gray-100">
+              {sequence.map((block, idx) => (
+                <div key={block.id}
+                  className={`flex items-center gap-2 px-3 py-2 transition-all ${
+                    running && idx === blockIdx ? 'bg-violet-50' : ''
+                  }`}
+                >
+                  {/* 番号バッジ */}
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black flex-shrink-0 ${
+                    running && idx === blockIdx
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}>{idx + 1}</span>
+
+                  {/* 時間 */}
+                  <span className="flex-1 text-xs font-bold text-gray-800">
+                    {TIME_LABEL[block.seconds]}
+                  </span>
+
+                  {/* 操作ボタン */}
+                  <div className="flex gap-0.5 flex-shrink-0">
+                    <button onClick={() => moveUp(idx)} disabled={running || idx === 0}
+                      className="w-6 h-6 rounded-lg bg-white border border-gray-200 text-[10px] hover:bg-gray-50 disabled:opacity-25 flex items-center justify-center">▲</button>
+                    <button onClick={() => moveDown(idx)} disabled={running || idx === sequence.length - 1}
+                      className="w-6 h-6 rounded-lg bg-white border border-gray-200 text-[10px] hover:bg-gray-50 disabled:opacity-25 flex items-center justify-center">▼</button>
+                    <button onClick={() => removeBlock(block.id)} disabled={running}
+                      className="w-6 h-6 rounded-lg bg-red-50 border border-red-100 text-red-400 text-[10px] hover:bg-red-100 disabled:opacity-25 flex items-center justify-center">✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* シーケンスクリア */}
+          {sequence.length > 0 && !running && (
+            <div className="border-t border-gray-100 px-3 py-1.5">
+              <button onClick={() => setSequence([])}
+                className="text-[10px] text-gray-400 hover:text-red-400 transition-colors">
+                リストをクリア
+              </button>
+            </div>
+          )}
         </div>
       )}
+
+      {/* ── メイン表示（リング + コントロール） ── */}
+      <div className="flex items-center gap-4">
+
+        {/* プログレスリング */}
+        <div className="relative flex-shrink-0" style={{ width: ringSize, height: ringSize }}>
+          <ProgressRing remaining={dispRem} total={dispTotal} color={ringColor} size={ringSize} />
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className={`${compact ? 'text-xl' : 'text-2xl'} font-black tabular-nums leading-none text-gray-900`}>
+              {fmt(dispRem)}
+            </span>
+            {mode === 'sequence' && sequence.length > 0 && (
+              <span className="text-[9px] font-bold text-violet-500 mt-0.5">
+                {running ? `${blockIdx + 1}/${sequence.length}` : `0/${sequence.length}`}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* コントロール右側 */}
+        <div className="flex-1 flex flex-col gap-2.5">
+
+          {/* ループトグル */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-500 whitespace-nowrap">
+              {mode === 'single' ? 'ループ' : '全体ループ'}
+            </span>
+            <button
+              onClick={() => {
+                if (running) return;
+                if (mode === 'single') setSingleLoop(v => !v);
+                else setSeqLoop(v => !v);
+              }}
+              className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
+                loopOn ? 'bg-red-500' : 'bg-gray-300'
+              } ${running ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                loopOn ? 'translate-x-5' : 'translate-x-0.5'
+              }`} />
+            </button>
+            <span className="text-[10px] text-gray-400">{loopOn ? '∞' : '1回'}</span>
+          </div>
+
+          {/* START / STOP ボタン */}
+          <button
+            onClick={running ? handleStop : handleStart}
+            disabled={!running && !canStart}
+            className={`w-full py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 ${
+              running
+                ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                : canStart
+                ? mode === 'single'
+                  ? 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
+                  : 'bg-violet-600 text-white hover:bg-violet-700 shadow-sm'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            {running ? '⏹ STOP' : '▶ START'}
+          </button>
+
+          {/* 補足 */}
+          {!running && !compact && (
+            <p className="text-[9px] text-gray-400 leading-relaxed">
+              ⚡ Web Worker ／ 🔇 無音BGオーディオ ／ 🔔 OS通知
+            </p>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }
