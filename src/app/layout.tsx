@@ -59,8 +59,8 @@ export default function RootLayout({
               <span className="text-[10px] font-medium">タスク管理</span>
             </Link>
             <Link href="/music" className="flex-1 flex flex-col items-center gap-0.5 py-2 px-1 text-gray-500 hover:text-indigo-600 transition-colors">
-              <span className="text-xl">🎵</span>
-              <span className="text-[10px] font-medium">音符学習</span>
+              <span className="text-xl">🎓</span>
+              <span className="text-[10px] font-medium">学習</span>
             </Link>
           </div>
         </nav>
