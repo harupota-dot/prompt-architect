@@ -3,135 +3,37 @@
 import { useState, useCallback, useRef } from 'react';
 
 // ─────────────────────────────────────────────────────────────────
-// データセット — 日本人洋楽歌唱でつまずく母音・子音 19音
+// 母音 21 音データセット（ユーザー独自学習資料）
 // ─────────────────────────────────────────────────────────────────
 interface Sound {
-  id:      string;
-  symbol:  string;    // '/æ/'
-  desc:    string;    // 日本語の発音ヒント
-  words:   string[];  // 代表的な英単語（表示は最大4つ）
-  // IPA記号単体を speechSynthesis で鳴らすための phonetic spelling
-  // en-US TTS が自然にその音を発するスペルを使う
-  phonetic: string;
+  ipa:        string;   // 表示する IPA 記号
+  hint:       string;   // 日本語の発音のコツ
+  speechHack: string;   // en-US TTS がその音に近く読むダミースペル
+  examples:   string[]; // 代表的な英単語
 }
 
 const SOUNDS: Sound[] = [
-  // ── 母音 ─────────────────────────────────────────────────────
-  {
-    id:'ae', symbol:'/æ/',
-    phonetic: 'aaah',
-    desc:'「ア」と「エ」の中間。口を横に大きく開く。洋楽で最頻出の母音。',
-    words:['cat','bad','man','black'],
-  },
-  {
-    id:'uh', symbol:'/ʌ/',
-    phonetic: 'uh',
-    desc:'力を抜いて短くつぶす「ア」。love・come・sun の母音。',
-    words:['cup','love','come','sun'],
-  },
-  {
-    id:'aa', symbol:'/ɑː/',
-    phonetic: 'aah',
-    desc:'口を最大限に縦に開ける長い「アー」。father・hot（米）の母音。',
-    words:['hot','father','start','car'],
-  },
-  {
-    id:'schwa', symbol:'/ə/',
-    phonetic: 'uh',
-    desc:'力を完全に抜いた曖昧な「ア」。弱音節で非常に多く使われる。',
-    words:['about','sofa','ago','banana'],
-  },
-  {
-    id:'i', symbol:'/ɪ/',
-    phonetic: 'ih',
-    desc:'短く弱い「イ」。日本語の「イ」より口の力を抜く。',
-    words:['sit','bit','big','with'],
-  },
-  {
-    id:'ii', symbol:'/iː/',
-    phonetic: 'ee',
-    desc:'長く緊張させた「イー」。唇を横に引く。',
-    words:['see','feel','dream','team'],
-  },
-  {
-    id:'e', symbol:'/ɛ/',
-    phonetic: 'eh',
-    desc:'日本語より少し広めの「エ」。',
-    words:['bed','red','said','friend'],
-  },
-  {
-    id:'oo', symbol:'/uː/',
-    phonetic: 'oo',
-    desc:'唇を丸めて前に突き出す長い「ウー」。',
-    words:['food','moon','blue','move'],
-  },
-  {
-    id:'oo_short', symbol:'/ʊ/',
-    phonetic: 'ooh',
-    desc:'短く緩めの「ウ」。/uː/ より唇の力を抜く。book・good の母音。',
-    words:['book','good','look','push'],
-  },
-  {
-    id:'aw', symbol:'/ɔː/',
-    phonetic: 'awe',
-    desc:'唇を丸く開ける長い「オー」。saw・door・thought の母音。',
-    words:['all','saw','more','thought'],
-  },
-  {
-    id:'ei', symbol:'/eɪ/',
-    phonetic: 'ay',
-    desc:'「エ」から「イ」へ滑らかにつなぐ二重母音。',
-    words:['day','make','rain','great'],
-  },
-  // ── 子音 ─────────────────────────────────────────────────────
-  {
-    id:'th_uv', symbol:'/θ/',
-    phonetic: 'thhh',
-    desc:'舌先を上の歯に軽く当て、息だけを出す（無声th）。',
-    words:['think','three','truth','bath'],
-  },
-  {
-    id:'dh', symbol:'/ð/',
-    phonetic: 'thuh',
-    desc:'舌先を軽く噛みながら声を出す（有声th）。',
-    words:['this','they','with','that'],
-  },
-  {
-    id:'sh', symbol:'/ʃ/',
-    phonetic: 'shh',
-    desc:'唇を前に突き出しながら「シュ」。',
-    words:['she','show','rush','fish'],
-  },
-  {
-    id:'zh', symbol:'/ʒ/',
-    phonetic: 'zhh',
-    desc:'有声の「ジュ」。vision・measure に使われる。日本語にない音。',
-    words:['vision','measure','beige','garage'],
-  },
-  {
-    id:'r_eng', symbol:'/r/',
-    phonetic: 'rrr',
-    desc:'舌を巻かず口の中央に浮かせる。日本語の「ら行」とは別物。',
-    words:['red','run','road','right'],
-  },
-  {
-    id:'l_eng', symbol:'/l/',
-    phonetic: 'lll',
-    desc:'舌先を上の歯茎にしっかりつける「ル」。/r/ との区別が最重要。',
-    words:['led','love','light','life'],
-  },
-  {
-    id:'v_eng', symbol:'/v/',
-    phonetic: 'vvv',
-    desc:'上の歯を下唇に当て、声を出しながら振動させる（有声）。',
-    words:['van','love','voice','wave'],
-  },
-  {
-    id:'f_eng', symbol:'/f/',
-    phonetic: 'fff',
-    desc:'上の歯を下唇に当て、息だけを出す（無声）。/v/ とペア。',
-    words:['fan','feel','phone','leaf'],
-  },
+  { ipa: 'æ',     hint: 'アとエの中間',                           speechHack: 'aah',  examples: ['cat'] },
+  { ipa: 'ʌ',     hint: '喉の奥で短くアッ（LOVE 等）',            speechHack: 'uh',   examples: ['cut', 'up'] },
+  { ipa: 'ɑ / ɒ', hint: '口を大きく開けて',                       speechHack: 'ah',   examples: ['mop', 'top', 'lock'] },
+  { ipa: 'ɑ:',    hint: '口を大きく開けて伸ばす',                  speechHack: 'ahh',  examples: ['father'] },
+  { ipa: 'ɑ:r',   hint: '後半、舌先を丸める',                      speechHack: 'ar',   examples: ['arm', 'star', 'park'] },
+  { ipa: 'ə',     hint: '力を抜いて「ア」',                        speechHack: 'uh',   examples: ['about', 'around', 'never'] },
+  { ipa: 'ər',    hint: '後半、舌先を丸める',                      speechHack: 'er',   examples: ['father', 'mother'] },
+  { ipa: 'ə:r',   hint: '長めに発音',                             speechHack: 'err',  examples: ['bird', 'burn', 'hurt'] },
+  { ipa: 'i',     hint: '力を抜いてイとエの中間',                  speechHack: 'ih',   examples: ['sit', 'fit', 'big'] },
+  { ipa: 'i:',    hint: '力を入れて「イー」',                      speechHack: 'ee',   examples: ['cheap', 'see', 'peach'] },
+  { ipa: 'u',     hint: '唇を丸めて短く「ウ」',                    speechHack: 'ooh',  examples: ['good', 'book', 'put'] },
+  { ipa: 'u:',    hint: '唇を突き出して「ウー」',                  speechHack: 'ooo',  examples: ['school', 'two', 'choose'] },
+  { ipa: 'e',     hint: 'はっきり「エ」',                         speechHack: 'eh',   examples: ['set', 'head', 'check', 'pen'] },
+  { ipa: 'ɔ:',    hint: '大きく縦に開けて喉の奥から「オー」',       speechHack: 'aw',   examples: ['saw', 'on'] },
+  { ipa: 'ɔ:r',   hint: '後半、舌先を丸める',                      speechHack: 'or',   examples: ['pork', 'door', 'before'] },
+  { ipa: 'ai',    hint: '二重母音：アィ',                         speechHack: 'eye',  examples: ['I', 'my', 'like'] },
+  { ipa: 'au',    hint: '二重母音：アゥ',                         speechHack: 'ow',   examples: ['out', 'found'] },
+  { ipa: 'ei',    hint: '二重母音：エィ',                         speechHack: 'ay',   examples: ['day', 'great', 'say'] },
+  { ipa: 'ɔi',    hint: '二重母音：オィ',                         speechHack: 'oy',   examples: ['boy', 'toy'] },
+  { ipa: 'ou',    hint: '二重母音：オゥ（最後、唇をすぼめる）',    speechHack: 'oh',   examples: ['go', 'boat'] },
+  { ipa: 'ju:',   hint: '二重母音：ユーゥ（最後、唇をすぼめる）',  speechHack: 'you',  examples: ['you', 'use', 'cute'] },
 ];
 
 // ─────────────────────────────────────────────────────────────────
@@ -140,11 +42,11 @@ const SOUNDS: Sound[] = [
 function speak(text: string, onEnd?: () => void, rate = 0.82): void {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const utt   = new SpeechSynthesisUtterance(text);
-  utt.lang    = 'en-US';
-  utt.rate    = rate;
-  utt.pitch   = 1.0;
-  utt.volume  = 1.0;
+  const utt  = new SpeechSynthesisUtterance(text);
+  utt.lang   = 'en-US';
+  utt.rate   = rate;
+  utt.pitch  = 1.0;
+  utt.volume = 1.0;
   if (onEnd) utt.onend = onEnd;
   setTimeout(() => window.speechSynthesis.speak(utt), 60);
 }
@@ -159,11 +61,17 @@ export function IPALearning() {
 
   const sound = SOUNDS[index];
 
-  // IPA 記号単体の読み上げ（phonetic spelling ハック）
+  const resetSpeaking = () => {
+    window.speechSynthesis?.cancel();
+    setSpeakingIpa(false);
+    setSpeakingWord(null);
+  };
+
+  // IPA 記号単体の読み上げ（speechHack ダミースペルを使用）
   const handleSpeakIpa = useCallback(() => {
     if (speakingIpa) return;
     setSpeakingIpa(true);
-    speak(sound.phonetic, () => setSpeakingIpa(false), 0.75);
+    speak(sound.speechHack, () => setSpeakingIpa(false), 0.72);
   }, [sound, speakingIpa]);
 
   // 単語の読み上げ
@@ -174,13 +82,11 @@ export function IPALearning() {
   }, [speakingWord]);
 
   const goPrev = () => {
-    window.speechSynthesis?.cancel();
-    setSpeakingIpa(false); setSpeakingWord(null);
+    resetSpeaking();
     setIndex(i => (i - 1 + SOUNDS.length) % SOUNDS.length);
   };
   const goNext = () => {
-    window.speechSynthesis?.cancel();
-    setSpeakingIpa(false); setSpeakingWord(null);
+    resetSpeaking();
     setIndex(i => (i + 1) % SOUNDS.length);
   };
 
@@ -204,17 +110,19 @@ export function IPALearning() {
     >
 
       {/* ── 進捗インジケーター ── */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400 font-semibold">{index + 1} / {SOUNDS.length}</span>
-        <div className="flex gap-1 flex-wrap justify-center flex-1 mx-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-gray-400 font-semibold flex-shrink-0">{index + 1} / {SOUNDS.length}</span>
+        <div className="flex gap-1 flex-wrap justify-center flex-1">
           {SOUNDS.map((_, i) => (
-            <button key={i} onClick={() => { setIndex(i); setSpeakingIpa(false); setSpeakingWord(null); }}
+            <button key={i}
+              onClick={() => { resetSpeaking(); setIndex(i); }}
               className={`w-2 h-2 rounded-full transition-all ${
                 i === index ? 'bg-violet-600 scale-125' : 'bg-gray-200 hover:bg-violet-300'
-              }`} />
+              }`}
+            />
           ))}
         </div>
-        <span className="text-[10px] text-gray-400">← スワイプ →</span>
+        <span className="text-[10px] text-gray-400 flex-shrink-0">← スワイプ →</span>
       </div>
 
       {/* ════════════════════════════════════════
@@ -222,25 +130,20 @@ export function IPALearning() {
       ════════════════════════════════════════ */}
       <div className="bg-white rounded-3xl border border-gray-200 shadow-md overflow-hidden">
 
-        {/* 上部グラデーションヘッダー */}
-        <div className="bg-gradient-to-br from-violet-600 to-indigo-700 px-6 pt-8 pb-6 flex flex-col items-center gap-4">
-
-          {/* IPA 記号ボタン（タップで発音再生） */}
+        {/* グラデーションヘッダー：IPA 記号 */}
+        <div className="bg-gradient-to-br from-violet-600 to-indigo-700 px-6 pt-7 pb-5 flex flex-col items-center gap-3">
           <button
             onClick={handleSpeakIpa}
-            className={`transition-all active:scale-90 select-none ${
-              speakingIpa ? 'scale-105' : 'hover:scale-105'
-            }`}
+            className={`transition-all active:scale-90 select-none ${speakingIpa ? 'scale-105' : 'hover:scale-105'}`}
             title="タップしてこの音を聴く"
           >
-            <span className={`text-[88px] font-black leading-none tracking-tight block ${
+            <span className={`text-[76px] font-black leading-none tracking-tight block ${
               speakingIpa ? 'text-yellow-300 animate-pulse' : 'text-white drop-shadow-lg'
             }`}>
-              {sound.symbol}
+              {sound.ipa}
             </span>
           </button>
 
-          {/* スピーカー状態ラベル */}
           <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-all ${
             speakingIpa
               ? 'bg-yellow-400/30 border border-yellow-300/50'
@@ -253,21 +156,27 @@ export function IPALearning() {
           </div>
         </div>
 
-        {/* 発音ヒント */}
-        <div className="px-5 py-4">
-          <p className="text-sm text-gray-700 leading-relaxed text-center">{sound.desc}</p>
+        {/* 発音のコツ（日本語解説） */}
+        <div className="px-5 py-4 border-t border-gray-100">
+          <div className="flex items-start gap-2">
+            <span className="text-violet-500 text-base flex-shrink-0 mt-0.5">💡</span>
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">発音のコツ</p>
+              <p className="text-sm font-semibold text-gray-800 leading-relaxed">{sound.hint}</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ════════════════════════════════════════
-          4つの代表単語カード
+          代表単語カード（タップで読み上げ）
       ════════════════════════════════════════ */}
       <div>
         <p className="text-[11px] text-gray-500 font-semibold mb-2.5 text-center">
           👇 単語をタップして発音を聴いてみよう
         </p>
-        <div className="grid grid-cols-2 gap-2.5">
-          {sound.words.map(word => {
+        <div className={`grid gap-2.5 ${sound.examples.length <= 2 ? 'grid-cols-2' : sound.examples.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          {sound.examples.map(word => {
             const isPlaying = speakingWord === word;
             return (
               <button
@@ -280,9 +189,7 @@ export function IPALearning() {
                 }`}
               >
                 <span>{word}</span>
-                <span className={`text-[10px] font-semibold ${
-                  isPlaying ? 'text-violet-200' : 'text-gray-400'
-                }`}>
+                <span className={`text-[10px] font-semibold ${isPlaying ? 'text-violet-200' : 'text-gray-400'}`}>
                   {isPlaying ? '🔊 再生中…' : '🔊 タップ'}
                 </span>
               </button>
@@ -297,11 +204,11 @@ export function IPALearning() {
       <div className="flex gap-3 mt-1">
         <button onClick={goPrev}
           className="flex-1 py-3.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2">
-          <span>←</span> 前の音
+          ← 前の音
         </button>
         <button onClick={goNext}
           className="flex-1 py-3.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2">
-          次の音 <span>→</span>
+          次の音 →
         </button>
       </div>
 
