@@ -298,12 +298,23 @@ export function IPALearning() {
         style={{ minHeight: 155 }}>
 
         {ipaMode === 'sym-word' ? (
-          /* 記号→単語：IPA記号を大きく表示 */
+          /* 記号→単語：IPA記号をクリックすると模範発音を再生 */
           <div className="flex flex-col items-center justify-center py-5 gap-2 px-4">
             <p className="text-[10px] text-gray-400">この発音記号が含まれる単語はどれ？</p>
-            <span className="text-[80px] font-black text-violet-700 leading-none tracking-tight select-none">
+            <button
+              onClick={() => { setSpeaking(true); speak(quiz.word, () => setSpeaking(false)); }}
+              className={`text-[80px] font-black leading-none tracking-tight transition-all active:scale-95 ${
+                speaking ? 'text-violet-400 animate-pulse' : 'text-violet-700 hover:text-violet-500'
+              }`}
+              title={`タップして「${quiz.word}」の発音を聴く`}
+            >
               {quiz.sound.symbol}
-            </span>
+            </button>
+            <p className={`text-[10px] font-semibold transition-colors ${
+              speaking ? 'text-violet-400' : 'text-violet-300'
+            }`}>
+              {speaking ? '🔊 再生中…' : '👆 タップして模範発音を聴く'}
+            </p>
             <p className="text-xs text-gray-500 text-center leading-relaxed max-w-[260px]">
               {quiz.sound.desc}
             </p>
