@@ -239,6 +239,355 @@ const PRO_ITEMS: QuizItem[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────
+// Q&A Mode dataset
+// ─────────────────────────────────────────────────────────────────
+interface QAItem {
+  question: string;
+  answer:   string;   // correct response
+  wrongs:   [string, string]; // two distractors
+  hint?:    string;
+}
+
+const QA_ITEMS: QAItem[] = [
+  // ── Greetings & Small Talk ───────────────────────────────────
+  {
+    question: 'How are you today?',
+    answer:   'I am fine, thank you.',
+    wrongs:   ['I am a cat.', 'It is raining.'],
+  },
+  {
+    question: 'What is your name?',
+    answer:   'My name is Alex.',
+    wrongs:   ['I like apples.', 'It is Monday.'],
+  },
+  {
+    question: 'Where are you from?',
+    answer:   'I am from Australia.',
+    wrongs:   ['I like apples.', 'It is five o\'clock.'],
+  },
+  {
+    question: 'What do you do for a living?',
+    answer:   'I am a teacher.',
+    wrongs:   ['I am hungry.', 'The sky is blue.'],
+  },
+  {
+    question: 'How was your weekend?',
+    answer:   'It was wonderful, thank you!',
+    wrongs:   ['I have two cats.', 'Please turn left.'],
+  },
+  {
+    question: 'Do you speak Japanese?',
+    answer:   'Just a little, but I am learning.',
+    wrongs:   ['I want some coffee.', 'The train is late.'],
+  },
+  {
+    question: 'Nice to meet you!',
+    answer:   'Nice to meet you too!',
+    wrongs:   ['I am going home.', 'Where is the bus?'],
+  },
+  // ── Hotel / Inn check-in & welcome ──────────────────────────
+  {
+    question: 'Welcome to Brighton Star Inn! How was your trip?',
+    answer:   'It was great, thank you.',
+    wrongs:   ['My name is John.', 'I want to sleep.'],
+    hint:     'Hotel check-in',
+  },
+  {
+    question: 'May I have your name, please?',
+    answer:   'Sure, it\'s Taylor. I have a reservation.',
+    wrongs:   ['I like sushi.', 'The weather is nice.'],
+    hint:     'Hotel check-in',
+  },
+  {
+    question: 'How many nights will you be staying?',
+    answer:   'I will be staying for three nights.',
+    wrongs:   ['I am very tired.', 'Yes, I like it.'],
+    hint:     'Hotel check-in',
+  },
+  {
+    question: 'Would you prefer a smoking or non-smoking room?',
+    answer:   'Non-smoking, please.',
+    wrongs:   ['I want to eat dinner.', 'The sea is beautiful.'],
+    hint:     'Hotel room',
+  },
+  {
+    question: 'What time is check-out?',
+    answer:   'Check-out is at 10 AM.',
+    wrongs:   ['I like coffee.', 'Yes, please.'],
+    hint:     'Hotel check-out',
+  },
+  {
+    question: 'Is breakfast included?',
+    answer:   'Yes, breakfast is served from 7 to 9 AM.',
+    wrongs:   ['The room is on the left.', 'I need a taxi.'],
+    hint:     'Hotel breakfast',
+  },
+  {
+    question: 'Would you like some Japanese green tea?',
+    answer:   'Yes, please. That sounds lovely.',
+    wrongs:   ['I need a map.', 'It is very cloudy today.'],
+    hint:     'Hotel hospitality',
+  },
+  {
+    question: 'Can I see Mt. Fuji from here?',
+    answer:   'Yes, you can see it clearly from the window.',
+    wrongs:   ['No, it is a train.', 'I am eating breakfast.'],
+    hint:     'Sightseeing from hotel',
+  },
+  {
+    question: 'Is the hot spring bath open now?',
+    answer:   'Yes, it is open until midnight.',
+    wrongs:   ['I need more towels.', 'The bus stop is near.'],
+    hint:     'Hotel facilities',
+  },
+  {
+    question: 'Do you need help with your luggage?',
+    answer:   'Yes, please. Thank you so much.',
+    wrongs:   ['I am from Canada.', 'The soup is hot.'],
+    hint:     'Hotel service',
+  },
+  // ── Travel & Sightseeing ─────────────────────────────────────
+  {
+    question: 'Excuse me, where is the nearest train station?',
+    answer:   'It is about a five-minute walk from here.',
+    wrongs:   ['I like pizza.', 'The dog is sleeping.'],
+    hint:     'Directions',
+  },
+  {
+    question: 'How do I get to the city center?',
+    answer:   'Take the number 3 bus and get off at City Hall.',
+    wrongs:   ['I am not hungry.', 'Please wait here.'],
+    hint:     'Directions',
+  },
+  {
+    question: 'What time does the museum open?',
+    answer:   'It opens at 9 AM and closes at 5 PM.',
+    wrongs:   ['It is very delicious.', 'My name is Sara.'],
+    hint:     'Sightseeing',
+  },
+  {
+    question: 'Is there a pharmacy nearby?',
+    answer:   'Yes, there is one just around the corner.',
+    wrongs:   ['I prefer tea.', 'The flower is beautiful.'],
+    hint:     'Travel help',
+  },
+  {
+    question: 'Can I pay by credit card?',
+    answer:   'Yes, we accept all major credit cards.',
+    wrongs:   ['The park is lovely.', 'I am from Tokyo.'],
+    hint:     'Shopping / Payment',
+  },
+  // ── Café ────────────────────────────────────────────────────
+  {
+    question: 'What can I get you?',
+    answer:   'I\'d like a hot latte and a croissant, please.',
+    wrongs:   ['Where is the restroom?', 'I am going by train.'],
+    hint:     'Café order',
+  },
+  {
+    question: 'Would you like that to go or to stay?',
+    answer:   'To stay, please.',
+    wrongs:   ['Yes, I am fine.', 'The bus is coming.'],
+    hint:     'Café order',
+  },
+  {
+    question: 'Can I take your order?',
+    answer:   'Yes, I\'ll have the chicken sandwich and a sparkling water.',
+    wrongs:   ['I live near the park.', 'It is raining today.'],
+    hint:     'Café order',
+  },
+  // ── Daily Situations ────────────────────────────────────────
+  {
+    question: 'Are you ready to order?',
+    answer:   'Yes, I\'ll have the pasta, please.',
+    wrongs:   ['I am from France.', 'The concert was amazing.'],
+    hint:     'Restaurant',
+  },
+  {
+    question: 'Can you recommend a good local restaurant?',
+    answer:   'Sure! The sushi place on Main Street is excellent.',
+    wrongs:   ['I need to charge my phone.', 'The sun is setting.'],
+    hint:     'Recommendation',
+  },
+  {
+    question: 'Do you have any dietary restrictions?',
+    answer:   'I am vegetarian, so no meat please.',
+    wrongs:   ['The mountain is tall.', 'I will call you later.'],
+    hint:     'Restaurant',
+  },
+  {
+    question: 'Could you speak more slowly, please?',
+    answer:   'Of course, I\'m sorry about that.',
+    wrongs:   ['Yes, I have a dog.', 'The flowers are pink.'],
+    hint:     'Communication',
+  },
+  {
+    question: 'What\'s the weather like tomorrow?',
+    answer:   'It should be sunny and warm.',
+    wrongs:   ['I have two tickets.', 'Please open the window.'],
+    hint:     'Weather',
+  },
+  {
+    question: 'Did you enjoy your stay?',
+    answer:   'It was absolutely wonderful. Thank you for everything.',
+    wrongs:   ['I need a new phone.', 'The train is fast.'],
+    hint:     'Hotel check-out',
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────
+// Q&A Mode component
+// ─────────────────────────────────────────────────────────────────
+function buildQAQuiz(prevQ?: string): QAItem & { choices: string[] } {
+  const pool = QA_ITEMS.filter(q => q.question !== prevQ);
+  const item = pool[Math.floor(Math.random() * pool.length)];
+  return { ...item, choices: shuffleArr([item.answer, ...item.wrongs]) };
+}
+
+// temp named export to avoid hoisting conflict with shuffle below
+function shuffleArr<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function QAMode() {
+  type QAQuiz = QAItem & { choices: string[] };
+  const [quiz,     setQuiz]     = useState<QAQuiz>(() => buildQAQuiz());
+  const [result,   setResult]   = useState<'correct' | 'wrong' | null>(null);
+  const [locked,   setLocked]   = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [showText, setShowText] = useState(false);
+  const [correct,  setCorrect]  = useState(0);
+  const [total,    setTotal]    = useState(0);
+  const prevRef = useRef<string | undefined>(undefined);
+
+  const playQuestion = useCallback(() => {
+    setSpeaking(true);
+    speakText(quiz.question, () => setSpeaking(false), 0.84);
+  }, [quiz]);
+
+  useEffect(() => {
+    setResult(null); setLocked(false); setShowText(false);
+    playQuestion();
+  }, [quiz.question]); // eslint-disable-line
+
+  const next = () => {
+    prevRef.current = quiz.question;
+    setQuiz(buildQAQuiz(prevRef.current));
+  };
+
+  const handleTap = (choice: string) => {
+    if (locked) return;
+    const ok = choice === quiz.answer;
+    setTotal(t => t + 1);
+    if (ok) {
+      setCorrect(c => c + 1);
+      setResult('correct');
+      setLocked(true);
+      // Read the correct answer aloud, then advance
+      speakText(quiz.answer, () => setTimeout(next, 600), 0.86);
+    } else {
+      setResult('wrong');
+      setTimeout(() => setResult(null), 900);
+    }
+  };
+
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+  return (
+    <div className="flex flex-col gap-4">
+
+      {/* Question card */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex flex-col items-center gap-3">
+        <p className="text-[11px] text-gray-400 font-semibold tracking-wide uppercase">
+          Choose the best response
+        </p>
+        {quiz.hint && (
+          <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">
+            {quiz.hint}
+          </span>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2 flex-wrap justify-center">
+          <button onClick={playQuestion}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-black text-sm transition-all active:scale-95 ${
+              speaking
+                ? 'bg-teal-400 text-white animate-pulse'
+                : 'bg-teal-600 hover:bg-teal-700 text-white'
+            }`}>
+            <span className="text-lg">🔊</span>
+            <span>{speaking ? 'Playing…' : 'Listen Again'}</span>
+          </button>
+          <button onClick={() => setShowText(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-2xl font-black text-sm transition-all active:scale-95 border ${
+              showText
+                ? 'bg-amber-100 border-amber-300 text-amber-700'
+                : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'
+            }`}>
+            <span>{showText ? '🙈' : '👁️'}</span>
+            <span className="text-xs">{showText ? 'Hide Text' : 'Show Text'}</span>
+          </button>
+        </div>
+
+        {/* Revealed question */}
+        {showText && (
+          <div className="w-full px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-sm font-bold text-amber-800 text-center leading-relaxed">
+              {quiz.question}
+            </p>
+          </div>
+        )}
+
+        {result === 'correct' && <p className="text-emerald-600 font-black animate-bounce">✓ Correct!</p>}
+        {result === 'wrong'   && <p className="text-red-500 font-black">Try again!</p>}
+      </div>
+
+      {/* 3 answer choices */}
+      <div className="flex flex-col gap-2.5">
+        {quiz.choices.map((choice, idx) => {
+          const isCorrectAndShowing = result === 'correct' && choice === quiz.answer;
+          return (
+            <button key={idx} onClick={() => handleTap(choice)}
+              disabled={result === 'correct'}
+              className={`w-full px-4 py-3.5 rounded-2xl text-left font-semibold text-sm leading-snug border transition-all active:scale-[0.98] shadow-sm ${
+                isCorrectAndShowing
+                  ? 'bg-emerald-100 border-emerald-400 text-emerald-800 scale-[1.02]'
+                  : 'bg-white border-gray-200 text-gray-800 hover:bg-teal-50 hover:border-teal-300'
+              }`}>
+              <span className="text-gray-400 font-black mr-2">{['A', 'B', 'C'][idx]}.</span>
+              {choice}
+            </button>
+          );
+        })}
+      </div>
+
+      <button onClick={next}
+        className="w-full py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-black text-sm transition-all">
+        Skip →
+      </button>
+
+      {/* Score */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-white rounded-xl border border-gray-200">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Accuracy</span>
+          <span className="text-base font-black text-teal-600">{accuracy}%</span>
+        </div>
+        <span className="text-xs text-gray-400">{correct} / {total} correct</span>
+        <button onClick={() => { setCorrect(0); setTotal(0); }}
+          className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 rounded-lg px-2 py-1 transition-colors">
+          Reset
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────
 function shuffle<T>(arr: T[]): T[] {
@@ -250,7 +599,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function speak(text: string, onEnd?: () => void, rate = 0.88): void {
+function speakText(text: string, onEnd?: () => void, rate = 0.88): void {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
@@ -290,7 +639,7 @@ function WordQuizView({ onCorrect }: { onCorrect: () => void }) {
 
   const playWord = useCallback(() => {
     setSpeaking(true);
-    speak(quiz.correct.word, () => setSpeaking(false));
+    speakText(quiz.correct.word, () => setSpeaking(false));
   }, [quiz]);
 
   useEffect(() => { setShowText(false); playWord(); }, [quiz.correct.word]); // eslint-disable-line
@@ -385,7 +734,7 @@ function SentenceQuizView({
 
   const playSentence = useCallback(() => {
     setSpeaking(true);
-    speak(quiz.sentence, () => setSpeaking(false), 0.82);
+    speakText(quiz.sentence, () => setSpeaking(false), 0.82);
   }, [quiz]);
 
   useEffect(() => {
@@ -476,11 +825,19 @@ function SentenceQuizView({
 // ─────────────────────────────────────────────────────────────────
 // BabyImmersion — root component
 // ─────────────────────────────────────────────────────────────────
+type ImmersionMode = 'picture' | 'qa';
+
 export function BabyImmersion() {
+  const [mode,         setMode]         = useState<ImmersionMode>('picture');
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [total,        setTotal]        = useState(0);
   const [justLevelUp,  setJustLevelUp]  = useState(false);
   const prevLevelRef = useRef(1);
+
+  const switchMode = (m: ImmersionMode) => {
+    window.speechSynthesis?.cancel();
+    setMode(m);
+  };
 
   const growthLevel = getGrowthLevel(totalCorrect);
   const nextLevel   = GROWTH_LEVELS.find(l => l.scoreReq > totalCorrect);
@@ -540,6 +897,26 @@ export function BabyImmersion() {
         </div>
       </div>
 
+      {/* ── Mode toggle ── */}
+      <div className="flex gap-1.5 bg-gray-100 p-1 rounded-2xl">
+        {([
+          ['picture', '🖼️', 'Picture Mode',  'Emoji quiz'],
+          ['qa',      '💬', 'Q&A Mode',      'Conversation'],
+        ] as [ImmersionMode, string, string, string][]).map(([m, icon, label, sub]) => (
+          <button key={m} onClick={() => switchMode(m)}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${
+              mode === m
+                ? m === 'picture'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-teal-600 text-white shadow-md'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            <span className="block">{icon} {label}</span>
+            <span className={`block text-[9px] mt-0.5 ${mode === m ? 'text-white/70' : 'text-gray-400'}`}>{sub}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Level-up banner */}
       {justLevelUp && (
         <div className="flex items-center gap-3 px-4 py-3 bg-yellow-50 border border-yellow-300 rounded-2xl animate-bounce shadow">
@@ -551,25 +928,31 @@ export function BabyImmersion() {
         </div>
       )}
 
-      {/* Quiz */}
-      {items === null
-        ? <WordQuizView    onCorrect={onCorrect} />
-        : <SentenceQuizView items={items} accentColor={accent} onCorrect={onCorrect} />
-      }
+      {/* Quiz — Picture Mode */}
+      {mode === 'picture' && (
+        <>
+          {items === null
+            ? <WordQuizView    onCorrect={onCorrect} />
+            : <SentenceQuizView items={items} accentColor={accent} onCorrect={onCorrect} />
+          }
+          {/* Picture Mode score */}
+          <div className="flex items-center justify-between px-4 py-2.5 bg-white rounded-xl border border-gray-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Accuracy</span>
+              <span className="text-base font-black text-blue-600">{accuracy}%</span>
+            </div>
+            <span className="text-xs text-gray-400">{totalCorrect} / {total} correct</span>
+            <button
+              onClick={() => { setTotalCorrect(0); setTotal(0); prevLevelRef.current = 1; }}
+              className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 rounded-lg px-2 py-1 transition-colors">
+              Reset
+            </button>
+          </div>
+        </>
+      )}
 
-      {/* Score */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-white rounded-xl border border-gray-200">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">Accuracy</span>
-          <span className="text-base font-black text-blue-600">{accuracy}%</span>
-        </div>
-        <span className="text-xs text-gray-400">{totalCorrect} / {total} correct</span>
-        <button
-          onClick={() => { setTotalCorrect(0); setTotal(0); prevLevelRef.current = 1; }}
-          className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 rounded-lg px-2 py-1 transition-colors">
-          Reset
-        </button>
-      </div>
+      {/* Quiz — Q&A Mode (has its own score inside) */}
+      {mode === 'qa' && <QAMode />}
 
     </div>
   );
