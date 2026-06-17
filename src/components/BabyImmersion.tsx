@@ -3,149 +3,239 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 // ─────────────────────────────────────────────────────────────────
-// Growth Level definitions
+// Growth Level definitions  (level-up every 20 correct answers)
 // ─────────────────────────────────────────────────────────────────
 interface GrowthLevel {
-  level:    number;
-  title:    string;
-  emoji:    string;
-  color:    string;   // Tailwind gradient
-  badge:    string;   // Tailwind badge bg
-  scoreReq: number;   // cumulative correct answers required
+  level: number; title: string; emoji: string;
+  color: string; badge: string; scoreReq: number;
 }
-
 const GROWTH_LEVELS: GrowthLevel[] = [
-  { level: 1, title: 'Baby',        emoji: '👶', color: 'from-blue-400 to-cyan-400',      badge: 'bg-blue-100 text-blue-700',    scoreReq: 0  },
-  { level: 2, title: 'Toddler',     emoji: '🧒', color: 'from-green-400 to-emerald-500',  badge: 'bg-green-100 text-green-700',  scoreReq: 10 },
-  { level: 3, title: 'Child',       emoji: '🧑', color: 'from-yellow-400 to-amber-500',   badge: 'bg-yellow-100 text-yellow-700',scoreReq: 20 },
-  { level: 4, title: 'Teen',        emoji: '🧑‍🎓', color: 'from-orange-400 to-rose-500',   badge: 'bg-orange-100 text-orange-700',scoreReq: 30 },
-  { level: 5, title: 'Adult',       emoji: '👔', color: 'from-violet-500 to-indigo-600',  badge: 'bg-violet-100 text-violet-700',scoreReq: 40 },
-  { level: 6, title: 'Pro',         emoji: '🌍', color: 'from-rose-500 to-pink-600',      badge: 'bg-rose-100 text-rose-700',    scoreReq: 55 },
+  { level:1, title:'Baby',    emoji:'👶',   color:'from-blue-400 to-cyan-400',     badge:'bg-blue-100 text-blue-700',    scoreReq:0   },
+  { level:2, title:'Toddler', emoji:'🧒',   color:'from-green-400 to-emerald-500', badge:'bg-green-100 text-green-700',  scoreReq:20  },
+  { level:3, title:'Child',   emoji:'🧑',   color:'from-yellow-400 to-amber-500',  badge:'bg-yellow-100 text-yellow-700',scoreReq:40  },
+  { level:4, title:'Teen',    emoji:'🧑‍🎓', color:'from-orange-400 to-rose-500',   badge:'bg-orange-100 text-orange-700',scoreReq:60  },
+  { level:5, title:'Adult',   emoji:'👔',   color:'from-violet-500 to-indigo-600', badge:'bg-violet-100 text-violet-700',scoreReq:80  },
+  { level:6, title:'Pro',     emoji:'🌍',   color:'from-rose-500 to-pink-600',     badge:'bg-rose-100 text-rose-700',    scoreReq:110 },
 ];
-
-function getGrowthLevel(totalCorrect: number): GrowthLevel {
-  for (let i = GROWTH_LEVELS.length - 1; i >= 0; i--) {
-    if (totalCorrect >= GROWTH_LEVELS[i].scoreReq) return GROWTH_LEVELS[i];
-  }
+function getGrowthLevel(n: number): GrowthLevel {
+  for (let i = GROWTH_LEVELS.length - 1; i >= 0; i--)
+    if (n >= GROWTH_LEVELS[i].scoreReq) return GROWTH_LEVELS[i];
   return GROWTH_LEVELS[0];
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Shared quiz item format
+// QuizItem (sentence levels)
 // ─────────────────────────────────────────────────────────────────
 interface QuizItem {
-  sentence: string;  // spoken text
-  answer:   string;  // correct emoji
-  choices:  string[]; // 4 emoji options (includes answer)
-  hint?:    string;  // optional sub-label shown under emoji
+  sentence: string;
+  answer:   string;
+  choices:  string[];
+  hint?:    string;
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Level 1 — Baby: single nouns (emoji tap)
+// Level 1 — Baby: single words / simple phrases
 // ─────────────────────────────────────────────────────────────────
 const BABY_ITEMS: { word: string; emoji: string }[] = [
-  { word: 'Apple',      emoji: '🍎' }, { word: 'Banana',     emoji: '🍌' },
-  { word: 'Orange',     emoji: '🍊' }, { word: 'Strawberry', emoji: '🍓' },
-  { word: 'Grape',      emoji: '🍇' }, { word: 'Bread',      emoji: '🍞' },
-  { word: 'Pizza',      emoji: '🍕' }, { word: 'Egg',        emoji: '🥚' },
-  { word: 'Milk',       emoji: '🥛' }, { word: 'Cake',       emoji: '🎂' },
-  { word: 'Dog',        emoji: '🐶' }, { word: 'Cat',        emoji: '🐱' },
-  { word: 'Bird',       emoji: '🐦' }, { word: 'Fish',       emoji: '🐟' },
-  { word: 'Rabbit',     emoji: '🐰' }, { word: 'Bear',       emoji: '🐻' },
-  { word: 'Lion',       emoji: '🦁' }, { word: 'Elephant',   emoji: '🐘' },
-  { word: 'Car',        emoji: '🚗' }, { word: 'Bus',        emoji: '🚌' },
-  { word: 'Train',      emoji: '🚂' }, { word: 'Airplane',   emoji: '✈️' },
-  { word: 'House',      emoji: '🏠' }, { word: 'Book',       emoji: '📚' },
-  { word: 'Ball',       emoji: '⚽' }, { word: 'Sun',        emoji: '☀️' },
-  { word: 'Moon',       emoji: '🌙' }, { word: 'Star',       emoji: '⭐' },
-  { word: 'Tree',       emoji: '🌳' }, { word: 'Flower',     emoji: '🌸' },
+  // Food & drinks
+  { word:'Apple',       emoji:'🍎' }, { word:'Banana',      emoji:'🍌' },
+  { word:'Orange',      emoji:'🍊' }, { word:'Strawberry',  emoji:'🍓' },
+  { word:'Grape',       emoji:'🍇' }, { word:'Bread',       emoji:'🍞' },
+  { word:'Pizza',       emoji:'🍕' }, { word:'Egg',         emoji:'🥚' },
+  { word:'Milk',        emoji:'🥛' }, { word:'Cake',        emoji:'🎂' },
+  { word:'Cookie',      emoji:'🍪' }, { word:'Rice',        emoji:'🍚' },
+  { word:'Soup',        emoji:'🍜' }, { word:'Cheese',      emoji:'🧀' },
+  { word:'Butter',      emoji:'🧈' }, { word:'Juice',       emoji:'🧃' },
+  { word:'Coffee',      emoji:'☕' }, { word:'Tea',         emoji:'🍵' },
+  { word:'Ice cream',   emoji:'🍦' }, { word:'Chocolate',   emoji:'🍫' },
+  { word:'Carrot',      emoji:'🥕' }, { word:'Potato',      emoji:'🥔' },
+  { word:'Tomato',      emoji:'🍅' }, { word:'Corn',        emoji:'🌽' },
+  // Animals
+  { word:'Dog',         emoji:'🐶' }, { word:'Cat',         emoji:'🐱' },
+  { word:'Bird',        emoji:'🐦' }, { word:'Fish',        emoji:'🐟' },
+  { word:'Rabbit',      emoji:'🐰' }, { word:'Bear',        emoji:'🐻' },
+  { word:'Lion',        emoji:'🦁' }, { word:'Monkey',      emoji:'🐵' },
+  { word:'Elephant',    emoji:'🐘' }, { word:'Frog',        emoji:'🐸' },
+  { word:'Penguin',     emoji:'🐧' }, { word:'Duck',        emoji:'🦆' },
+  { word:'Horse',       emoji:'🐴' }, { word:'Pig',         emoji:'🐷' },
+  { word:'Cow',         emoji:'🐮' }, { word:'Sheep',       emoji:'🐑' },
+  { word:'Tiger',       emoji:'🐯' }, { word:'Wolf',        emoji:'🐺' },
+  // Vehicles
+  { word:'Car',         emoji:'🚗' }, { word:'Bus',         emoji:'🚌' },
+  { word:'Train',       emoji:'🚂' }, { word:'Airplane',    emoji:'✈️' },
+  { word:'Bicycle',     emoji:'🚲' }, { word:'Boat',        emoji:'⛵' },
+  { word:'Truck',       emoji:'🚚' }, { word:'Ambulance',   emoji:'🚑' },
+  { word:'Motorcycle',  emoji:'🏍️' }, { word:'Helicopter',  emoji:'🚁' },
+  // Weather
+  { word:'Sunny',       emoji:'☀️' }, { word:'Rainy',       emoji:'🌧️' },
+  { word:'Cloudy',      emoji:'☁️' }, { word:'Snowy',       emoji:'❄️' },
+  { word:'Windy',       emoji:'🌬️' }, { word:'Rainbow',     emoji:'🌈' },
+  { word:'Thunder',     emoji:'⛈️' }, { word:'Foggy',       emoji:'🌫️' },
+  // Colors
+  { word:'Red',         emoji:'🔴' }, { word:'Blue',        emoji:'🔵' },
+  { word:'Green',       emoji:'🟢' }, { word:'Yellow',      emoji:'🟡' },
+  { word:'Orange',      emoji:'🟠' }, { word:'Purple',      emoji:'🟣' },
+  { word:'Black',       emoji:'⚫' }, { word:'White',       emoji:'⚪' },
+  // Places & things
+  { word:'House',       emoji:'🏠' }, { word:'School',      emoji:'🏫' },
+  { word:'Hospital',    emoji:'🏥' }, { word:'Park',        emoji:'🌳' },
+  { word:'Beach',       emoji:'🏖️' }, { word:'Mountain',    emoji:'⛰️' },
+  { word:'Book',        emoji:'📚' }, { word:'Ball',        emoji:'⚽' },
+  { word:'Bed',         emoji:'🛏️' }, { word:'Chair',       emoji:'🪑' },
+  { word:'Door',        emoji:'🚪' }, { word:'Window',      emoji:'🪟' },
+  { word:'Clock',       emoji:'🕐' }, { word:'Phone',       emoji:'📱' },
+  { word:'Star',        emoji:'⭐' }, { word:'Moon',        emoji:'🌙' },
+  { word:'Sun',         emoji:'☀️' }, { word:'Tree',        emoji:'🌲' },
+  { word:'Flower',      emoji:'🌸' }, { word:'Heart',       emoji:'❤️' },
 ];
 
 // ─────────────────────────────────────────────────────────────────
-// Level 2 — Toddler: simple action sentences
+// Level 2 — Toddler: simple daily actions
 // ─────────────────────────────────────────────────────────────────
 const TODDLER_ITEMS: QuizItem[] = [
-  { sentence: 'The dog is sleeping.',    answer: '🐶💤', choices: ['🐶💤','🐶🏃','🐱💤','🐶🍎'] },
-  { sentence: 'I am eating an apple.',   answer: '😋🍎', choices: ['😋🍎','😋🍌','😴🍎','🍎🚗'] },
-  { sentence: 'The cat is running.',     answer: '🐱🏃', choices: ['🐱🏃','🐱💤','🐶🏃','🐱🍎'] },
-  { sentence: 'She is drinking milk.',   answer: '😊🥛', choices: ['😊🥛','😊🍎','😴🥛','🥛🐶'] },
-  { sentence: 'The bird is flying.',     answer: '🐦✈️', choices: ['🐦✈️','🐦💤','🐶✈️','🐦🍎'] },
-  { sentence: 'I am reading a book.',    answer: '😊📚', choices: ['😊📚','😊🎵','😴📚','📚🐶'] },
-  { sentence: 'The baby is sleeping.',   answer: '👶💤', choices: ['👶💤','👶🏃','👶🍎','🐶💤'] },
-  { sentence: 'The lion is eating.',     answer: '🦁😋', choices: ['🦁😋','🦁💤','🐶😋','🦁🚗'] },
-  { sentence: 'The sun is shining.',     answer: '☀️😊', choices: ['☀️😊','🌙😊','☀️💤','⭐😊'] },
-  { sentence: 'It is raining.',          answer: '🌧️💧', choices: ['🌧️💧','☀️💧','🌧️😊','💧🐶'] },
-  { sentence: 'I love you.',             answer: '😊❤️', choices: ['😊❤️','😴❤️','😊⭐','❤️🐶'] },
-  { sentence: 'The rabbit is jumping.',  answer: '🐰⬆️', choices: ['🐰⬆️','🐰💤','🐶⬆️','🐰🍎'] },
+  { sentence:'The dog is sleeping.',           answer:'🐶💤', choices:['🐶💤','🐶🏃','🐱💤','🐶🍎'] },
+  { sentence:'I am eating an apple.',          answer:'😋🍎', choices:['😋🍎','😋🍌','😴🍎','🍎🚗'] },
+  { sentence:'The cat is running.',            answer:'🐱🏃', choices:['🐱🏃','🐱💤','🐶🏃','🐱🍎'] },
+  { sentence:'She is drinking milk.',          answer:'😊🥛', choices:['😊🥛','😊🍎','😴🥛','🥛🐶'] },
+  { sentence:'The bird is flying.',            answer:'🐦✈️', choices:['🐦✈️','🐦💤','🐶✈️','🐦🍎'] },
+  { sentence:'I am reading a book.',           answer:'😊📚', choices:['😊📚','😊🎵','😴📚','📚🐶'] },
+  { sentence:'The baby is crying.',            answer:'👶😭', choices:['👶😭','👶😊','👶💤','🐶😭'] },
+  { sentence:'The lion is eating.',            answer:'🦁😋', choices:['🦁😋','🦁💤','🐶😋','🦁🚗'] },
+  { sentence:'The sun is shining.',            answer:'☀️😊', choices:['☀️😊','🌙😊','☀️💤','⭐😊'] },
+  { sentence:'It is raining.',                 answer:'🌧️💧', choices:['🌧️💧','☀️💧','🌧️😊','💧🐶'] },
+  { sentence:'I love you.',                    answer:'😊❤️', choices:['😊❤️','😴❤️','😊⭐','❤️🐶'] },
+  { sentence:'The rabbit is jumping.',         answer:'🐰⬆️', choices:['🐰⬆️','🐰💤','🐶⬆️','🐰🍎'] },
+  { sentence:'I am drinking water.',           answer:'💧👄', choices:['💧👄','🥛👄','💧😴','💧🐶'] },
+  { sentence:'The duck is swimming.',          answer:'🦆💧', choices:['🦆💧','🐟💧','🦆💤','🦆🍎'] },
+  { sentence:'She is washing her hands.',      answer:'👐🧼', choices:['👐🧼','👐😊','🧼🐶','👐💧'] },
+  { sentence:'The boy is playing with a ball.',answer:'🧒⚽', choices:['🧒⚽','🧒📚','⚽😊','🧒💤'] },
+  { sentence:'I need to sleep now.',           answer:'😴🛏️', choices:['😴🛏️','😊🛏️','😴📚','🐶🛏️'] },
+  { sentence:'The dog is barking.',            answer:'🐶💬', choices:['🐶💬','🐱💬','🐶💤','🐶🍎'] },
+  { sentence:'She is brushing her teeth.',     answer:'😁🪥', choices:['😁🪥','😁😊','🪥💧','😁🧼'] },
+  { sentence:'I am putting on my shoes.',      answer:'👟🙌', choices:['👟🙌','👟💤','🧢🙌','👟😊'] },
+  { sentence:'The horse is running fast.',     answer:'🐴🏃', choices:['🐴🏃','🐴💤','🐶🏃','🐴🍎'] },
+  { sentence:'It is snowing outside.',         answer:'❄️🌳', choices:['❄️🌳','☀️🌳','❄️🌊','❄️🐶'] },
+  { sentence:'The cat is drinking milk.',      answer:'🐱🥛', choices:['🐱🥛','🐶🥛','🐱💧','🐱💤'] },
+  { sentence:'I am drawing a picture.',        answer:'✏️🎨', choices:['✏️🎨','📚🎨','✏️😊','✏️📱'] },
+  { sentence:'The baby is smiling.',           answer:'👶😊', choices:['👶😊','👶😭','🧒😊','👶💤'] },
+  { sentence:'I want some cookies.',           answer:'🍪😊', choices:['🍪😊','🍎😊','🍪😴','🍪🐶'] },
+  { sentence:'The pig is eating.',             answer:'🐷😋', choices:['🐷😋','🐷💤','🐶😋','🐷🏃'] },
+  { sentence:'I am taking a bath.',            answer:'🛁😊', choices:['🛁😊','🛁💤','🧼😊','🛁🐶'] },
+  { sentence:'The flowers are blooming.',      answer:'🌸☀️', choices:['🌸☀️','🌸💧','🌲☀️','🌸😊'] },
+  { sentence:'I am going to bed.',             answer:'😴🌙', choices:['😴🌙','😊🌙','😴☀️','🛏️🌙'] },
 ];
 
 // ─────────────────────────────────────────────────────────────────
-// Level 3 — Child: slightly longer sentences
+// Level 3 — Child
 // ─────────────────────────────────────────────────────────────────
 const CHILD_ITEMS: QuizItem[] = [
-  { sentence: 'I want to go to the park.',          answer: '🌳🏃', choices: ['🌳🏃','🏠🏃','🌳😴','🌳🚗'] },
-  { sentence: 'Can I have some water, please?',     answer: '💧🙏', choices: ['💧🙏','🥛🙏','💧😊','🍎🙏'] },
-  { sentence: 'Let\'s play outside together.',      answer: '⚽🌳', choices: ['⚽🌳','⚽🏠','📚🌳','⚽💤'] },
-  { sentence: 'I am very hungry right now.',        answer: '😩🍽️', choices: ['😩🍽️','😩💤','😊🍽️','😩📚'] },
-  { sentence: 'The stars are beautiful tonight.',   answer: '⭐🌙', choices: ['⭐🌙','⭐☀️','🌸🌙','⭐💧'] },
-  { sentence: 'My dog loves to run in the garden.', answer: '🐶🌳', choices: ['🐶🌳','🐱🌳','🐶🏠','🐶💤'] },
-  { sentence: 'She is drawing a beautiful picture.', answer: '🎨😊', choices: ['🎨😊','📚😊','🎨😴','🎨🐶'] },
-  { sentence: 'I am going to school by bus.',       answer: '🚌🎒', choices: ['🚌🎒','🚗🎒','🚌🏠','🚌📚'] },
-  { sentence: 'We are having a birthday party.',    answer: '🎂🎉', choices: ['🎂🎉','🍎🎉','🎂😴','🎂🐶'] },
-  { sentence: 'It is cold outside today.',          answer: '🥶❄️', choices: ['🥶❄️','😊❄️','🥶☀️','🌧️❄️'] },
+  { sentence:'I want to go to the park.',            answer:'🌳🏃', choices:['🌳🏃','🏠🏃','🌳😴','🌳🚗'] },
+  { sentence:'Can I have some water, please?',       answer:'💧🙏', choices:['💧🙏','🥛🙏','💧😊','🍎🙏'] },
+  { sentence:'Let\'s play outside together.',        answer:'⚽🌳', choices:['⚽🌳','⚽🏠','📚🌳','⚽💤'] },
+  { sentence:'I am very hungry right now.',          answer:'😩🍽️', choices:['😩🍽️','😩💤','😊🍽️','😩📚'] },
+  { sentence:'The stars are beautiful tonight.',     answer:'⭐🌙', choices:['⭐🌙','⭐☀️','🌸🌙','⭐💧'] },
+  { sentence:'My dog loves to run in the garden.',   answer:'🐶🌳', choices:['🐶🌳','🐱🌳','🐶🏠','🐶💤'] },
+  { sentence:'She is drawing a beautiful picture.',  answer:'🎨😊', choices:['🎨😊','📚😊','🎨😴','🎨🐶'] },
+  { sentence:'I am going to school by bus.',         answer:'🚌🎒', choices:['🚌🎒','🚗🎒','🚌🏠','🚌📚'] },
+  { sentence:'We are having a birthday party.',      answer:'🎂🎉', choices:['🎂🎉','🍎🎉','🎂😴','🎂🐶'] },
+  { sentence:'It is cold outside today.',            answer:'🥶❄️', choices:['🥶❄️','😊❄️','🥶☀️','🌧️❄️'] },
+  { sentence:'My mom is cooking dinner.',            answer:'👩‍🍳🍳', choices:['👩‍🍳🍳','👩‍🍳📚','🍳😊','👩‍🍳💤'] },
+  { sentence:'I found a beautiful shell on the beach.',answer:'🐚🏖️',choices:['🐚🏖️','🐚🌳','🐟🏖️','🐚😊'] },
+  { sentence:'The rainbow appeared after the rain.',  answer:'🌈🌧️', choices:['🌈🌧️','🌈☀️','🌈😊','🌈🌳'] },
+  { sentence:'I brush my teeth every morning.',       answer:'🪥🌅', choices:['🪥🌅','🪥🌙','🧼🌅','🪥😊'] },
+  { sentence:'She has a pet goldfish.',               answer:'🐟❤️', choices:['🐟❤️','🐱❤️','🐟😊','🐟🏠'] },
+  { sentence:'We planted a tree in the garden.',      answer:'🌱🌳', choices:['🌱🌳','🌱💧','🌸🌳','🌱😊'] },
+  { sentence:'I love playing in the snow.',           answer:'❄️😆', choices:['❄️😆','☀️😆','❄️😴','❄️🐶'] },
+  { sentence:'The moon looks so big tonight.',        answer:'🌕🌙', choices:['🌕🌙','⭐🌙','🌕☀️','🌕😊'] },
+  { sentence:'I made a sandwich for lunch.',          answer:'🥪😊', choices:['🥪😊','🥪😴','🍎😊','🥪🐶'] },
+  { sentence:'The kite is flying very high.',         answer:'🪁☁️', choices:['🪁☁️','🐦☁️','🪁😊','🪁🌳'] },
 ];
 
 // ─────────────────────────────────────────────────────────────────
 // Level 4 — Teen: everyday situations
 // ─────────────────────────────────────────────────────────────────
 const TEEN_ITEMS: QuizItem[] = [
-  { sentence: 'I missed the last train home.',              answer: '🚂😱', choices: ['🚂😱','🚌😱','🚂😊','🚂💤'] },
-  { sentence: 'Can you turn up the music a bit?',          answer: '🎵🔊', choices: ['🎵🔊','🎵📉','📚🔊','🎵💤'] },
-  { sentence: 'I have a big test tomorrow morning.',        answer: '📚😰', choices: ['📚😰','📚😊','🎵😰','📚🎉'] },
-  { sentence: 'Let\'s grab some food after this.',         answer: '🍔🙌', choices: ['🍔🙌','🍎🙌','🍔😴','🍔📚'] },
-  { sentence: 'My phone battery is almost dead.',          answer: '📱🔋', choices: ['📱🔋','💻🔋','📱😊','📱🎵'] },
-  { sentence: 'She posted a new photo on social media.',   answer: '📸📱', choices: ['📸📱','📸📚','📱💤','📸🎵'] },
-  { sentence: 'I stayed up all night studying.',           answer: '🌙📚', choices: ['🌙📚','☀️📚','🌙🎵','🌙💤'] },
-  { sentence: 'We won the game in the final minute.',      answer: '⚽🏆', choices: ['⚽🏆','⚽😱','🏀🏆','⚽💤'] },
-  { sentence: 'I\'m saving money to buy a new guitar.',   answer: '💰🎸', choices: ['💰🎸','💰📚','💰🎵','💸🎸'] },
-  { sentence: 'The concert last night was amazing.',       answer: '🎤🔥', choices: ['🎤🔥','🎤😴','🎵🔥','🎤📚'] },
+  { sentence:'I missed the last train home.',              answer:'🚂😱', choices:['🚂😱','🚌😱','🚂😊','🚂💤'] },
+  { sentence:'Can you turn up the music a bit?',          answer:'🎵🔊', choices:['🎵🔊','🎵📉','📚🔊','🎵💤'] },
+  { sentence:'I have a big test tomorrow morning.',        answer:'📚😰', choices:['📚😰','📚😊','🎵😰','📚🎉'] },
+  { sentence:'Let\'s grab some food after this.',         answer:'🍔🙌', choices:['🍔🙌','🍎🙌','🍔😴','🍔📚'] },
+  { sentence:'My phone battery is almost dead.',          answer:'📱🔋', choices:['📱🔋','💻🔋','📱😊','📱🎵'] },
+  { sentence:'She posted a new photo on social media.',   answer:'📸📱', choices:['📸📱','📸📚','📱💤','📸🎵'] },
+  { sentence:'I stayed up all night studying.',           answer:'🌙📚', choices:['🌙📚','☀️📚','🌙🎵','🌙💤'] },
+  { sentence:'We won the game in the final minute.',      answer:'⚽🏆', choices:['⚽🏆','⚽😱','🏀🏆','⚽💤'] },
+  { sentence:'I\'m saving money to buy a new guitar.',   answer:'💰🎸', choices:['💰🎸','💰📚','💰🎵','💸🎸'] },
+  { sentence:'The concert last night was amazing.',       answer:'🎤🔥', choices:['🎤🔥','🎤😴','🎵🔥','🎤📚'] },
+  { sentence:'I need to call my parents.',                answer:'📞👨‍👩‍👦', choices:['📞👨‍👩‍👦','📞😊','📱👨‍👩‍👦','📞💤'] },
+  { sentence:'We are going on a road trip this weekend.', answer:'🚗🗺️', choices:['🚗🗺️','🚗😴','✈️🗺️','🚗🏠'] },
+  { sentence:'My favorite subject is science.',           answer:'🔬😊', choices:['🔬😊','📚😊','🔬💤','🎵😊'] },
+  { sentence:'I overslept and was late for class.',       answer:'⏰😱', choices:['⏰😱','⏰😊','🌙😱','⏰🏃'] },
+  { sentence:'Can you help me with my homework?',         answer:'📝🙏', choices:['📝🙏','📝😊','📚🙏','📝💤'] },
 ];
 
 // ─────────────────────────────────────────────────────────────────
-// Level 5 — Adult: café / travel / emotions
+// Level 5 — Adult: café / travel / hotel / emotions
 // ─────────────────────────────────────────────────────────────────
 const ADULT_ITEMS: QuizItem[] = [
   // Café
-  { sentence: "I'd like a hot coffee, please.",                   answer: '☕🤲', choices: ['☕🤲','🧃🤲','☕😴','🍵🤲'],   hint: 'Café order' },
-  { sentence: "Could I get this to go?",                          answer: '☕🛍️', choices: ['☕🛍️','☕😊','🍵🛍️','☕📚'],   hint: 'Café order' },
-  { sentence: "Do you have any dairy-free options?",              answer: '🥛❌', choices: ['🥛❌','🥛😊','☕❌','🍰❌'],   hint: 'Café order' },
-  { sentence: "I'll have the avocado toast, please.",             answer: '🥑🍞', choices: ['🥑🍞','🍳🍞','🥑😊','🥑☕'],  hint: 'Café order' },
-  // Travel
-  { sentence: "Where is the restroom?",                           answer: '🚹❓', choices: ['🚹❓','🚪❓','🚹😊','✈️❓'],    hint: 'Travel' },
-  { sentence: "My flight has been delayed.",                      answer: '✈️⏰', choices: ['✈️⏰','✈️😊','🚂⏰','✈️❌'],  hint: 'Travel' },
-  { sentence: "Can I have a window seat, please?",                answer: '💺🪟', choices: ['💺🪟','💺😊','🪟❓','💺✈️'],   hint: 'Travel' },
-  { sentence: "I need to exchange some currency.",                answer: '💱💵', choices: ['💱💵','💰💵','💱😊','💵📚'],   hint: 'Travel' },
-  { sentence: "Is there a pharmacy nearby?",                      answer: '💊📍', choices: ['💊📍','🏥📍','💊😊','💊❓'],   hint: 'Travel' },
-  // Emotions / Greetings
-  { sentence: "I'm so excited for today!",                        answer: '🔥😆', choices: ['🔥😆','😴😆','🔥😊','🎉😆'],   hint: 'Emotions' },
-  { sentence: "I'm feeling a bit under the weather.",             answer: '🤒😔', choices: ['🤒😔','😊😔','🤒💪','🤒💤'],   hint: 'Emotions' },
-  { sentence: "Long time no see! How have you been?",             answer: '👋😊', choices: ['👋😊','👋😴','👋📚','🤝😊'],   hint: 'Greetings' },
+  { sentence:"I'd like a hot coffee, please.",                     answer:'☕🤲', choices:['☕🤲','🧃🤲','☕😴','🍵🤲'],    hint:'Café' },
+  { sentence:"Could I get this to go?",                            answer:'☕🛍️', choices:['☕🛍️','☕😊','🍵🛍️','☕📚'],   hint:'Café' },
+  { sentence:"Do you have any dairy-free options?",                answer:'🥛❌', choices:['🥛❌','🥛😊','☕❌','🍰❌'],    hint:'Café' },
+  { sentence:"I'll have the avocado toast, please.",               answer:'🥑🍞', choices:['🥑🍞','🍳🍞','🥑😊','🥑☕'],   hint:'Café' },
+  { sentence:"Can I get a large iced latte?",                      answer:'🧊☕', choices:['🧊☕','☕😊','🧊🍵','🧊🥛'],    hint:'Café' },
+  { sentence:"Is there free Wi-Fi here?",                          answer:'📶❓', choices:['📶❓','📶😊','📱❓','📶☕'],     hint:'Café' },
+  { sentence:"Could I have the menu, please?",                     answer:'📋🙏', choices:['📋🙏','📋😊','🍽️🙏','📋☕'],   hint:'Café' },
+  { sentence:"I'd like a table for two.",                          answer:'🪑2️⃣', choices:['🪑2️⃣','🪑😊','🍽️2️⃣','🪑☕'], hint:'Café' },
+  { sentence:"Can we split the bill?",                             answer:'💳✂️', choices:['💳✂️','💳😊','💰✂️','💳☕'],   hint:'Café' },
+  { sentence:"Everything was delicious, thank you!",               answer:'😋🙏', choices:['😋🙏','😋😊','🍽️🙏','😋☕'],   hint:'Café' },
+  // Travel & Airport
+  { sentence:"Where is the restroom?",                             answer:'🚹❓', choices:['🚹❓','🚪❓','🚹😊','✈️❓'],    hint:'Travel' },
+  { sentence:"My flight has been delayed.",                        answer:'✈️⏰', choices:['✈️⏰','✈️😊','🚂⏰','✈️❌'],   hint:'Travel' },
+  { sentence:"Can I have a window seat, please?",                  answer:'💺🪟', choices:['💺🪟','💺😊','🪟❓','💺✈️'],   hint:'Travel' },
+  { sentence:"I need to exchange some currency.",                   answer:'💱💵', choices:['💱💵','💰💵','💱😊','💵📚'],   hint:'Travel' },
+  { sentence:"Is there a pharmacy nearby?",                        answer:'💊📍', choices:['💊📍','🏥📍','💊😊','💊❓'],   hint:'Travel' },
+  { sentence:"Where is the nearest train station?",                answer:'🚉❓', choices:['🚉❓','🚌❓','🚉😊','🚉🚶'],    hint:'Travel' },
+  { sentence:"How long does it take to get there?",                answer:'⏱️❓', choices:['⏱️❓','⏱️😊','🗺️❓','⏱️🚗'],  hint:'Travel' },
+  { sentence:"Can you call me a taxi, please?",                    answer:'🚕🙏', choices:['🚕🙏','🚌🙏','🚕😊','🚕❓'],   hint:'Travel' },
+  { sentence:"I lost my passport.",                                 answer:'🛂😱', choices:['🛂😱','🛂😊','📄😱','🛂❓'],   hint:'Travel' },
+  { sentence:"How much does the bus ticket cost?",                 answer:'🚌💵', choices:['🚌💵','🚌😊','✈️💵','🚌❓'],   hint:'Travel' },
+  // Hotel & Inn
+  { sentence:"Welcome to our inn! Did you have a good trip?",      answer:'🏨🤝😊', choices:['🏨🤝😊','🏨💤😊','🏡🤝😊','🏨😊❓'],  hint:'Hotel' },
+  { sentence:"Here is the key to your room. Enjoy your stay.",     answer:'🔑🚪✨', choices:['🔑🚪✨','🔑😊✨','🔑🚪💤','🏨🔑✨'],  hint:'Hotel' },
+  { sentence:"You can see a beautiful mountain from this window.",  answer:'🏔️🪟👀', choices:['🏔️🪟👀','🌊🪟👀','🏔️🪟😊','🏔️😊👀'], hint:'Hotel' },
+  { sentence:"Would you like some Japanese green tea?",             answer:'🍵🤲🇯🇵', choices:['🍵🤲🇯🇵','☕🤲🇯🇵','🍵😊🇯🇵','🍵🤲😊'],hint:'Hotel' },
+  { sentence:"Check-out time is at 10 AM tomorrow.",               answer:'🕙🚪👋', choices:['🕙🚪👋','🕙😊👋','🕙🏨👋','🕙🚪😊'], hint:'Hotel' },
+  { sentence:"Breakfast is served from 7 to 9 AM.",                answer:'🍳🕖😊', choices:['🍳🕖😊','🍳🕙😊','🥐🕖😊','🍳🕖💤'], hint:'Hotel' },
+  { sentence:"The hot spring bath is open until midnight.",         answer:'♨️🌙✅', choices:['♨️🌙✅','♨️☀️✅','♨️🌙❌','🛁🌙✅'],  hint:'Hotel' },
+  { sentence:"Can I have an extra pillow, please?",                 answer:'🛏️🙏✨', choices:['🛏️🙏✨','🛏️😊✨','💤🙏✨','🛏️🙏❓'],hint:'Hotel' },
+  { sentence:"Do you need help with your luggage?",                 answer:'🧳🤝😊', choices:['🧳🤝😊','🧳😊❓','👜🤝😊','🧳🤝❓'],  hint:'Hotel' },
+  { sentence:"Please enjoy your dinner at our restaurant.",         answer:'🍽️😊🏨', choices:['🍽️😊🏨','🍽️😊☕','🥢😊🏨','🍽️💤🏨'],hint:'Hotel' },
+  // Emotions & Greetings
+  { sentence:"I'm so excited for today!",                          answer:'🔥😆', choices:['🔥😆','😴😆','🔥😊','🎉😆'],   hint:'Feelings' },
+  { sentence:"I'm feeling a bit under the weather.",               answer:'🤒😔', choices:['🤒😔','😊😔','🤒💪','🤒💤'],   hint:'Feelings' },
+  { sentence:"Long time no see! How have you been?",               answer:'👋😊', choices:['👋😊','👋😴','👋📚','🤝😊'],   hint:'Greetings' },
+  { sentence:"I'm really proud of you!",                           answer:'💪🏆', choices:['💪🏆','💪😊','🏆😊','💪📚'],   hint:'Feelings' },
+  { sentence:"Don't worry, everything will be fine.",              answer:'🤗😊', choices:['🤗😊','🤗😢','🤝😊','🤗💤'],   hint:'Feelings' },
 ];
 
 // ─────────────────────────────────────────────────────────────────
 // Level 6 — Pro: business / advanced
 // ─────────────────────────────────────────────────────────────────
 const PRO_ITEMS: QuizItem[] = [
-  { sentence: "Let's circle back on this after the meeting.",      answer: '🔄💼', choices: ['🔄💼','🔄😊','💼📅','🔄📚'],   hint: 'Business' },
-  { sentence: "Could you send me the report by end of day?",       answer: '📊📨', choices: ['📊📨','📊💤','📧📊','📊🎉'],    hint: 'Business' },
-  { sentence: "We need to align on the project timeline.",         answer: '📅✅', choices: ['📅✅','📅😊','✅💼','📅❌'],    hint: 'Business' },
-  { sentence: "I appreciate your feedback on this proposal.",      answer: '🙏📄', choices: ['🙏📄','🙏😊','📄💼','🙏🎉'],    hint: 'Business' },
-  { sentence: "The quarterly results exceeded our expectations.",  answer: '📈🎉', choices: ['📈🎉','📉🎉','📈😊','📈💼'],    hint: 'Business' },
-  { sentence: "Could we schedule a call for next week?",           answer: '📞📅', choices: ['📞📅','📞😊','📅💼','📞❓'],    hint: 'Business' },
-  { sentence: "I'd like to negotiate the terms of this contract.", answer: '🤝📄', choices: ['🤝📄','🤝😊','📄💼','🤝❌'],    hint: 'Business' },
-  { sentence: "We're launching the new product next quarter.",     answer: '🚀📦', choices: ['🚀📦','🚀😊','📦💼','🚀📅'],    hint: 'Business' },
-  { sentence: "Please keep this information confidential.",        answer: '🔒🤫', choices: ['🔒🤫','🔒😊','🤫💼','🔒📄'],    hint: 'Business' },
-  { sentence: "The team delivered an outstanding performance.",    answer: '🏆👏', choices: ['🏆👏','🏆😊','👏💼','🏆📊'],    hint: 'Business' },
+  { sentence:"Let's circle back on this after the meeting.",       answer:'🔄💼', choices:['🔄💼','🔄😊','💼📅','🔄📚'],  hint:'Business' },
+  { sentence:"Could you send me the report by end of day?",        answer:'📊📨', choices:['📊📨','📊💤','📧📊','📊🎉'],   hint:'Business' },
+  { sentence:"We need to align on the project timeline.",          answer:'📅✅', choices:['📅✅','📅😊','✅💼','📅❌'],   hint:'Business' },
+  { sentence:"I appreciate your feedback on this proposal.",       answer:'🙏📄', choices:['🙏📄','🙏😊','📄💼','🙏🎉'],   hint:'Business' },
+  { sentence:"The quarterly results exceeded our expectations.",   answer:'📈🎉', choices:['📈🎉','📉🎉','📈😊','📈💼'],   hint:'Business' },
+  { sentence:"Could we schedule a call for next week?",            answer:'📞📅', choices:['📞📅','📞😊','📅💼','📞❓'],   hint:'Business' },
+  { sentence:"I'd like to negotiate the terms of this contract.",  answer:'🤝📄', choices:['🤝📄','🤝😊','📄💼','🤝❌'],   hint:'Business' },
+  { sentence:"We're launching the new product next quarter.",      answer:'🚀📦', choices:['🚀📦','🚀😊','📦💼','🚀📅'],   hint:'Business' },
+  { sentence:"Please keep this information confidential.",         answer:'🔒🤫', choices:['🔒🤫','🔒😊','🤫💼','🔒📄'],   hint:'Business' },
+  { sentence:"The team delivered an outstanding performance.",     answer:'🏆👏', choices:['🏆👏','🏆😊','👏💼','🏆📊'],   hint:'Business' },
+  { sentence:"I'd like to present our Q3 strategy.",              answer:'📊🎤', choices:['📊🎤','📊😊','🎤💼','📊📅'],   hint:'Business' },
+  { sentence:"Please review the attached documents.",              answer:'📎📋', choices:['📎📋','📎😊','📋💼','📎📧'],   hint:'Business' },
+  { sentence:"We are on track to meet our deadline.",              answer:'📅✅', choices:['📅✅','📅😊','📅❌','⏰✅'],   hint:'Business' },
+  { sentence:"Let's set up a brainstorming session.",              answer:'💡🤝', choices:['💡🤝','💡😊','🤝💼','💡📅'],   hint:'Business' },
+  { sentence:"Our client approved the final design.",              answer:'✅🎨', choices:['✅🎨','✅😊','🎨💼','✅📄'],   hint:'Business' },
 ];
 
 // ─────────────────────────────────────────────────────────────────
@@ -163,27 +253,23 @@ function shuffle<T>(arr: T[]): T[] {
 function speak(text: string, onEnd?: () => void, rate = 0.88): void {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const utt  = new SpeechSynthesisUtterance(text);
-  utt.lang   = 'en-US';
-  utt.rate   = rate;
-  utt.pitch  = 1.05;
-  utt.volume = 1.0;
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'en-US'; utt.rate = rate; utt.pitch = 1.05; utt.volume = 1.0;
   if (onEnd) utt.onend = onEnd;
   setTimeout(() => window.speechSynthesis.speak(utt), 80);
 }
 
-function getItemsForLevel(growthLevel: number): QuizItem[] | null {
-  // null = baby mode (word tap)
-  if (growthLevel === 1) return null;
-  if (growthLevel === 2) return TODDLER_ITEMS;
-  if (growthLevel === 3) return CHILD_ITEMS;
-  if (growthLevel === 4) return TEEN_ITEMS;
-  if (growthLevel === 5) return ADULT_ITEMS;
+function getItemsForLevel(lv: number): QuizItem[] | null {
+  if (lv === 1) return null;
+  if (lv === 2) return TODDLER_ITEMS;
+  if (lv === 3) return CHILD_ITEMS;
+  if (lv === 4) return TEEN_ITEMS;
+  if (lv === 5) return ADULT_ITEMS;
   return PRO_ITEMS;
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Baby Word Quiz (Level 1)
+// Level 1 — Word Quiz
 // ─────────────────────────────────────────────────────────────────
 interface WordQuiz { correct: { word: string; emoji: string }; choices: { word: string; emoji: string }[] }
 
@@ -199,6 +285,7 @@ function WordQuizView({ onCorrect }: { onCorrect: () => void }) {
   const [result,   setResult]   = useState<'correct' | 'wrong' | null>(null);
   const [locked,   setLocked]   = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [showText, setShowText] = useState(false);
   const prevRef = useRef<string | undefined>(undefined);
 
   const playWord = useCallback(() => {
@@ -206,7 +293,7 @@ function WordQuizView({ onCorrect }: { onCorrect: () => void }) {
     speak(quiz.correct.word, () => setSpeaking(false));
   }, [quiz]);
 
-  useEffect(() => { playWord(); }, [quiz.correct.word]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setShowText(false); playWord(); }, [quiz.correct.word]); // eslint-disable-line
 
   const next = useCallback(() => {
     prevRef.current = quiz.correct.word;
@@ -217,12 +304,10 @@ function WordQuizView({ onCorrect }: { onCorrect: () => void }) {
   const handleTap = (item: { word: string; emoji: string }) => {
     if (locked) return;
     if (item.word === quiz.correct.word) {
-      setResult('correct'); setLocked(true);
-      onCorrect();
+      setResult('correct'); setLocked(true); onCorrect();
       setTimeout(next, 1100);
     } else {
-      setResult('wrong');
-      setTimeout(() => setResult(null), 700);
+      setResult('wrong'); setTimeout(() => setResult(null), 700);
     }
   };
 
@@ -230,13 +315,27 @@ function WordQuizView({ onCorrect }: { onCorrect: () => void }) {
     <div className="flex flex-col gap-4">
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex flex-col items-center gap-3">
         <p className="text-[11px] text-gray-400 font-semibold tracking-wide uppercase">Which one is it?</p>
-        <button onClick={playWord}
-          className={`flex items-center gap-3 px-5 py-2.5 rounded-2xl font-black text-base transition-all active:scale-95 ${
-            speaking ? 'bg-blue-400 text-white animate-pulse' : 'bg-blue-600 hover:bg-blue-700 text-white'
-          }`}>
-          <span className="text-xl">🔊</span>
-          <span>{speaking ? 'Playing…' : 'Listen Again'}</span>
-        </button>
+        <div className="flex gap-2">
+          <button onClick={playWord}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-black text-base transition-all active:scale-95 ${
+              speaking ? 'bg-blue-400 text-white animate-pulse' : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}>
+            <span className="text-xl">🔊</span>
+            <span className="text-sm">{speaking ? 'Playing…' : 'Listen Again'}</span>
+          </button>
+          <button onClick={() => setShowText(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-2xl font-black text-sm transition-all active:scale-95 border ${
+              showText ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'
+            }`}>
+            <span>{showText ? '🙈' : '👁️'}</span>
+            <span className="text-xs">{showText ? 'Hide' : 'Show Text'}</span>
+          </button>
+        </div>
+        {showText && (
+          <div className="px-4 py-2 bg-amber-50 border border-amber-200 rounded-xl text-center">
+            <p className="text-lg font-black text-amber-800">{quiz.correct.word}</p>
+          </div>
+        )}
         {result === 'correct' && <p className="text-emerald-600 font-black animate-bounce">✓ Correct!</p>}
         {result === 'wrong'   && <p className="text-red-500 font-black">Try again!</p>}
       </div>
@@ -281,6 +380,7 @@ function SentenceQuizView({
   const [result,   setResult]   = useState<'correct' | 'wrong' | null>(null);
   const [locked,   setLocked]   = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [showText, setShowText] = useState(false);
   const prevRef = useRef<string | undefined>(undefined);
 
   const playSentence = useCallback(() => {
@@ -289,11 +389,10 @@ function SentenceQuizView({
   }, [quiz]);
 
   useEffect(() => {
-    setResult(null); setLocked(false);
+    setResult(null); setLocked(false); setShowText(false);
     playSentence();
-  }, [quiz.sentence]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [quiz.sentence]); // eslint-disable-line
 
-  // Reset when items set changes (level up)
   useEffect(() => {
     prevRef.current = undefined;
     setQuiz(buildSentenceQuiz(items));
@@ -307,12 +406,10 @@ function SentenceQuizView({
   const handleTap = (choice: string) => {
     if (locked) return;
     if (choice === quiz.answer) {
-      setResult('correct'); setLocked(true);
-      onCorrect();
+      setResult('correct'); setLocked(true); onCorrect();
       setTimeout(next, 1200);
     } else {
-      setResult('wrong');
-      setTimeout(() => setResult(null), 700);
+      setResult('wrong'); setTimeout(() => setResult(null), 700);
     }
   };
 
@@ -325,13 +422,32 @@ function SentenceQuizView({
             <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{quiz.hint}</span>
           )}
         </div>
-        <button onClick={playSentence}
-          className={`flex items-center gap-3 px-5 py-2.5 rounded-2xl font-black text-base transition-all active:scale-95 ${
-            speaking ? `${accentColor} opacity-80 text-white animate-pulse` : `${accentColor} text-white hover:opacity-90`
-          }`}>
-          <span className="text-xl">🔊</span>
-          <span>{speaking ? 'Playing…' : 'Listen Again'}</span>
-        </button>
+
+        {/* Action buttons */}
+        <div className="flex gap-2 flex-wrap justify-center">
+          <button onClick={playSentence}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-black text-sm transition-all active:scale-95 ${
+              speaking ? `${accentColor} opacity-80 text-white animate-pulse` : `${accentColor} text-white hover:opacity-90`
+            }`}>
+            <span className="text-lg">🔊</span>
+            <span>{speaking ? 'Playing…' : 'Listen Again'}</span>
+          </button>
+          <button onClick={() => setShowText(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-2xl font-black text-sm transition-all active:scale-95 border ${
+              showText ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200'
+            }`}>
+            <span>{showText ? '🙈' : '👁️'}</span>
+            <span className="text-xs">{showText ? 'Hide Text' : 'Show Text'}</span>
+          </button>
+        </div>
+
+        {/* Revealed sentence */}
+        {showText && (
+          <div className="w-full px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-sm font-bold text-amber-800 text-center leading-relaxed">{quiz.sentence}</p>
+          </div>
+        )}
+
         {result === 'correct' && <p className="text-emerald-600 font-black animate-bounce">✓ Correct!</p>}
         {result === 'wrong'   && <p className="text-red-500 font-black">Try again!</p>}
       </div>
@@ -348,6 +464,7 @@ function SentenceQuizView({
           </button>
         ))}
       </div>
+
       <button onClick={next}
         className="w-full py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-black text-sm transition-all">
         Skip →
@@ -363,21 +480,21 @@ export function BabyImmersion() {
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [total,        setTotal]        = useState(0);
   const [justLevelUp,  setJustLevelUp]  = useState(false);
+  const prevLevelRef = useRef(1);
 
-  const growthLevel    = getGrowthLevel(totalCorrect);
-  const nextLevel      = GROWTH_LEVELS.find(l => l.scoreReq > totalCorrect);
-  const toNext         = nextLevel ? nextLevel.scoreReq - totalCorrect : null;
-  const progressPct    = nextLevel
+  const growthLevel = getGrowthLevel(totalCorrect);
+  const nextLevel   = GROWTH_LEVELS.find(l => l.scoreReq > totalCorrect);
+  const toNext      = nextLevel ? nextLevel.scoreReq - totalCorrect : null;
+  const progressPct = nextLevel
     ? Math.round(((totalCorrect - growthLevel.scoreReq) / (nextLevel.scoreReq - growthLevel.scoreReq)) * 100)
     : 100;
 
-  const prevLevelRef = useRef(growthLevel.level);
   const onCorrect = () => {
     setTotalCorrect(c => {
       const next = c + 1;
-      const newLevel = getGrowthLevel(next);
-      if (newLevel.level > prevLevelRef.current) {
-        prevLevelRef.current = newLevel.level;
+      const newLv = getGrowthLevel(next);
+      if (newLv.level > prevLevelRef.current) {
+        prevLevelRef.current = newLv.level;
         setJustLevelUp(true);
         setTimeout(() => setJustLevelUp(false), 2500);
       }
@@ -385,12 +502,10 @@ export function BabyImmersion() {
     });
     setTotal(t => t + 1);
   };
-  const onWrong = () => setTotal(t => t + 1);
 
-  const items         = getItemsForLevel(growthLevel.level);
-  const accuracy      = total > 0 ? Math.round((totalCorrect / total) * 100) : 0;
+  const items    = getItemsForLevel(growthLevel.level);
+  const accuracy = total > 0 ? Math.round((totalCorrect / total) * 100) : 0;
 
-  // accent color for listen button
   const accentColors: Record<number, string> = {
     2: 'bg-green-600', 3: 'bg-yellow-500', 4: 'bg-orange-500',
     5: 'bg-violet-600', 6: 'bg-rose-600',
@@ -400,7 +515,7 @@ export function BabyImmersion() {
   return (
     <div className="flex flex-col gap-4 pb-32 max-w-md mx-auto px-4">
 
-      {/* ── Level Banner ── */}
+      {/* Level Banner */}
       <div className={`rounded-2xl bg-gradient-to-r ${growthLevel.color} px-5 py-4 text-white shadow-md`}>
         <div className="flex items-center justify-between">
           <div>
@@ -414,26 +529,18 @@ export function BabyImmersion() {
             <p className="text-[10px] opacity-70">correct</p>
           </div>
         </div>
-
-        {/* Progress bar */}
         <div className="mt-3">
           <div className="flex justify-between text-[10px] opacity-70 mb-1">
             <span>Progress</span>
-            {toNext !== null
-              ? <span>{toNext} more to level up!</span>
-              : <span>🏆 Max Level!</span>
-            }
+            {toNext !== null ? <span>{toNext} more to level up!</span> : <span>🏆 Max Level!</span>}
           </div>
           <div className="h-2 bg-white/30 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white rounded-full transition-all duration-500"
-              style={{ width: `${progressPct}%` }}
-            />
+            <div className="h-full bg-white rounded-full transition-all duration-500" style={{ width:`${progressPct}%` }} />
           </div>
         </div>
       </div>
 
-      {/* Level-up celebration */}
+      {/* Level-up banner */}
       {justLevelUp && (
         <div className="flex items-center gap-3 px-4 py-3 bg-yellow-50 border border-yellow-300 rounded-2xl animate-bounce shadow">
           <span className="text-3xl">🎉</span>
@@ -444,13 +551,13 @@ export function BabyImmersion() {
         </div>
       )}
 
-      {/* ── Quiz ── */}
+      {/* Quiz */}
       {items === null
         ? <WordQuizView    onCorrect={onCorrect} />
         : <SentenceQuizView items={items} accentColor={accent} onCorrect={onCorrect} />
       }
 
-      {/* ── Score ── */}
+      {/* Score */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-white rounded-xl border border-gray-200">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Accuracy</span>
