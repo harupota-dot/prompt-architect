@@ -266,7 +266,8 @@ function WordQuizView({ onCorrect }: { onCorrect: () => void }) {
 // ─────────────────────────────────────────────────────────────────
 function buildSentenceQuiz(items: QuizItem[], prevSentence?: string): QuizItem {
   const pool = items.filter(s => s.sentence !== prevSentence);
-  return pool[Math.floor(Math.random() * pool.length)];
+  const item = pool[Math.floor(Math.random() * pool.length)];
+  return { ...item, choices: shuffle(item.choices) };
 }
 
 function SentenceQuizView({
