@@ -237,9 +237,26 @@ interface QuizState {
 }
 
 function buildQuiz(lv: number, prevEn?: string): QuizState {
-  const pool    = DATASETS[lv].filter(i => i.en !== prevEn);
-  const item    = pool[Math.floor(Math.random() * pool.length)];
-  const choices = shuffle([item.answer, ...item.wrongs]);
+  const all  = DATASETS[lv];
+  const pool = all.filter(i => i.en !== prevEn);
+  const item = pool[Math.floor(Math.random() * pool.length)];
+
+  // 正解と同じものを除外してユニークなダミー候補を収集
+  const otherAnswers = [...new Set(
+    all.filter(i => i.en !== item.en && i.answer !== item.answer).map(i => i.answer)
+  )];
+  const distractors = shuffle(otherAnswers).slice(0, 2);
+
+  // 候補が足りない場合は wrongs でフォールバック
+  if (distractors.length < 2) {
+    for (const w of item.wrongs) {
+      if (distractors.length >= 2) break;
+      if (w !== item.answer && !distractors.includes(w)) distractors.push(w);
+    }
+  }
+
+  // 正解 + ダミー2つを Fisher-Yates で完全シャッフル
+  const choices = shuffle([item.answer, ...distractors]);
   return { item, choices };
 }
 
