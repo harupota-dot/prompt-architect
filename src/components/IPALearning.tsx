@@ -78,15 +78,24 @@ type Category = 'vowel' | 'consonant';
 // Web Speech API ヘルパー
 // ─────────────────────────────────────────────────────────────────
 function speak(text: string, onEnd?: () => void, rate = 0.82): void {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utt  = new SpeechSynthesisUtterance(text);
-  utt.lang   = 'en-US';
-  utt.rate   = rate;
-  utt.pitch  = 1.0;
-  utt.volume = 1.0;
-  if (onEnd) utt.onend = onEnd;
-  setTimeout(() => window.speechSynthesis.speak(utt), 60);
+  if (typeof window === 'undefined' || !window.speechSynthesis) { onEnd?.(); return; }
+  try {
+    window.speechSynthesis.cancel();
+    const utt  = new SpeechSynthesisUtterance(text);
+    utt.lang   = 'en-US';
+    utt.rate   = rate;
+    utt.pitch  = 1.0;
+    utt.volume = 1.0;
+    if (onEnd) {
+      let fired = false;
+      const done = () => { if (!fired) { fired = true; onEnd(); } };
+      utt.onend  = done;
+      utt.onerror = done;
+    }
+    setTimeout(() => {
+      try { window.speechSynthesis.speak(utt); } catch { onEnd?.(); }
+    }, 60);
+  } catch { onEnd?.(); }
 }
 
 // ─────────────────────────────────────────────────────────────────

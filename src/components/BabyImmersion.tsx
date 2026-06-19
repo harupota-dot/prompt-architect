@@ -704,12 +704,21 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function speakText(text: string, onEnd?: () => void, rate = 0.88): void {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = 'en-US'; utt.rate = rate; utt.pitch = 1.05; utt.volume = 1.0;
-  if (onEnd) utt.onend = onEnd;
-  setTimeout(() => window.speechSynthesis.speak(utt), 80);
+  if (typeof window === 'undefined' || !window.speechSynthesis) { onEnd?.(); return; }
+  try {
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'en-US'; utt.rate = rate; utt.pitch = 1.05; utt.volume = 1.0;
+    if (onEnd) {
+      let fired = false;
+      const done = () => { if (!fired) { fired = true; onEnd(); } };
+      utt.onend  = done;
+      utt.onerror = done;
+    }
+    setTimeout(() => {
+      try { window.speechSynthesis.speak(utt); } catch { onEnd?.(); }
+    }, 80);
+  } catch { onEnd?.(); }
 }
 
 function getItemsForLevel(lv: number): QuizItem[] | null {

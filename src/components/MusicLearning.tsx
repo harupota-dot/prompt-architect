@@ -210,16 +210,22 @@ function playNoteAudio(noteKey: string): void {
   if (!f) return;
   const ctx = makeAC();
   if (!ctx) return;
-  tone(ctx, f, ctx.currentTime);
+  try {
+    const go = () => tone(ctx, f, ctx.currentTime);
+    if (ctx.state === 'suspended') { ctx.resume().then(go).catch(() => {}); } else { go(); }
+  } catch { /* ignore */ }
 }
 
 function playChordAudio(chord: ChordName): void {
   const ctx = makeAC();
   if (!ctx) return;
-  CHORD_NOTES[chord].forEach(n => {
-    const f = FREQ[n];
-    if (f) tone(ctx, f, ctx.currentTime, 2.0, 0.28);
-  });
+  try {
+    const go = () => CHORD_NOTES[chord].forEach(n => {
+      const f = FREQ[n];
+      if (f) tone(ctx, f, ctx.currentTime, 2.0, 0.28);
+    });
+    if (ctx.state === 'suspended') { ctx.resume().then(go).catch(() => {}); } else { go(); }
+  } catch { /* ignore */ }
 }
 
 // ─────────────────────────────────────────────────────────────────

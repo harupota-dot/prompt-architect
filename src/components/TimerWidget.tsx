@@ -72,6 +72,7 @@ function startBGAudio(): BGAudio | null {
     // 0.001 = ほぼ無音だが OS に「メディア再生中」と判断させる
     gain.gain.value = 0.001; osc.frequency.value = 1;
     osc.connect(gain); gain.connect(ctx.destination); osc.start();
+    if (ctx.state === 'suspended') { ctx.resume().catch(() => {}); }
     return { ctx, osc };
   } catch { return null; }
 }
