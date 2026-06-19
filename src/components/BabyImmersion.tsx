@@ -248,8 +248,62 @@ interface QAItem {
   hint?:    string;
 }
 
-const QA_ITEMS: QAItem[] = [
-  // ── Greetings & Small Talk ───────────────────────────────────
+// Level 1 — Baby: very short, simple responses
+const QA_LEVEL1: QAItem[] = [
+  {
+    question: 'Hello!',
+    answer:   'Hi there!',
+    wrongs:   ['Goodbye.', 'Thank you.'],
+  },
+  {
+    question: "What's your name?",
+    answer:   'My name is Tom.',
+    wrongs:   ['It is red.', 'Yes, it is.'],
+  },
+  {
+    question: 'How old are you?',
+    answer:   'I am seven years old.',
+    wrongs:   ['I like dogs.', 'It is sunny.'],
+  },
+  {
+    question: 'Do you like apples?',
+    answer:   'Yes, I love apples!',
+    wrongs:   ['No, I am a bird.', 'It is big.'],
+  },
+  {
+    question: 'What color is the sky?',
+    answer:   'The sky is blue.',
+    wrongs:   ['It is a dog.', 'I am happy.'],
+  },
+  {
+    question: 'Is this a dog?',
+    answer:   'Yes, it is a dog!',
+    wrongs:   ['No, it is raining.', 'I like cake.'],
+  },
+  {
+    question: 'Goodbye!',
+    answer:   'Goodbye! See you later!',
+    wrongs:   ['I am hungry.', 'It is a cat.'],
+  },
+  {
+    question: 'Are you happy?',
+    answer:   'Yes, I am very happy!',
+    wrongs:   ['No, it is blue.', 'I like trains.'],
+  },
+  {
+    question: 'What is this?',
+    answer:   'This is an apple.',
+    wrongs:   ['I am fine.', 'Yes, please.'],
+  },
+  {
+    question: 'Thank you!',
+    answer:   "You're welcome!",
+    wrongs:   ['It is cold.', 'I like fish.'],
+  },
+];
+
+// Level 2 — Toddler/Child: short daily conversation
+const QA_LEVEL2: QAItem[] = [
   {
     question: 'How are you today?',
     answer:   'I am fine, thank you.',
@@ -285,7 +339,17 @@ const QA_ITEMS: QAItem[] = [
     answer:   'Nice to meet you too!',
     wrongs:   ['I am going home.', 'Where is the bus?'],
   },
+];
+
+// Level 3 — Adult/Pro: hotel hospitality, travel, business
+const QA_LEVEL3: QAItem[] = [
   // ── Hotel / Inn check-in & welcome ──────────────────────────
+  {
+    question: "Welcome to Brighton Star Inn! Did you find the place okay?",
+    answer:   "Yes, your directions were perfect!",
+    wrongs:   ["I want a hamburger.", "Good morning."],
+    hint:     'Hotel check-in',
+  },
   {
     question: 'Welcome to Brighton Star Inn! How was your trip?',
     answer:   'It was great, thank you.',
@@ -327,6 +391,12 @@ const QA_ITEMS: QAItem[] = [
     answer:   'Yes, please. That sounds lovely.',
     wrongs:   ['I need a map.', 'It is very cloudy today.'],
     hint:     'Hotel hospitality',
+  },
+  {
+    question: "Can we see Mt. Fuji clearly from this area?",
+    answer:   "Yes, you can get a stunning view from here.",
+    wrongs:   ["No, I don't speak English.", "It's twelve o'clock."],
+    hint:     'Sightseeing',
   },
   {
     question: 'Can I see Mt. Fuji from here?',
@@ -428,18 +498,42 @@ const QA_ITEMS: QAItem[] = [
     hint:     'Weather',
   },
   {
+    question: "Would you mind if I check in a bit earlier?",
+    answer:   "Sure, let me check if your room is ready.",
+    wrongs:   ["I like green tea.", "Goodbye."],
+    hint:     'Hotel check-in',
+  },
+  {
     question: 'Did you enjoy your stay?',
     answer:   'It was absolutely wonderful. Thank you for everything.',
     wrongs:   ['I need a new phone.', 'The train is fast.'],
     hint:     'Hotel check-out',
+  },
+  {
+    question: "Is there anything else I can help you with?",
+    answer:   "Could you call a taxi for us, please?",
+    wrongs:   ["I'm from Australia.", "Yes, it is snowing."],
+    hint:     'Hotel service',
+  },
+  {
+    question: "I'd like to extend my stay by one night.",
+    answer:   "Of course! Let me check availability right away.",
+    wrongs:   ["The museum opens at nine.", "I prefer window seats."],
+    hint:     'Hotel extension',
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────
 // Q&A Mode component
 // ─────────────────────────────────────────────────────────────────
-function buildQAQuiz(prevQ?: string): QAItem & { choices: string[] } {
-  const pool = QA_ITEMS.filter(q => q.question !== prevQ);
+function qaPoolForLevel(lv: number): QAItem[] {
+  if (lv <= 1) return QA_LEVEL1;
+  if (lv <= 3) return QA_LEVEL2;
+  return QA_LEVEL3;
+}
+
+function buildQAQuiz(lv: number, prevQ?: string): QAItem & { choices: string[] } {
+  const pool = qaPoolForLevel(lv).filter(q => q.question !== prevQ);
   const item = pool[Math.floor(Math.random() * pool.length)];
   return { ...item, choices: shuffleArr([item.answer, ...item.wrongs]) };
 }
@@ -454,16 +548,26 @@ function shuffleArr<T>(arr: T[]): T[] {
   return a;
 }
 
-function QAMode() {
+function QAMode({ growthLv }: { growthLv: number }) {
   type QAQuiz = QAItem & { choices: string[] };
-  const [quiz,     setQuiz]     = useState<QAQuiz>(() => buildQAQuiz());
+  const [quiz,     setQuiz]     = useState<QAQuiz>(() => buildQAQuiz(growthLv));
   const [result,   setResult]   = useState<'correct' | 'wrong' | null>(null);
   const [locked,   setLocked]   = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [showText, setShowText] = useState(false);
   const [correct,  setCorrect]  = useState(0);
   const [total,    setTotal]    = useState(0);
-  const prevRef = useRef<string | undefined>(undefined);
+  const prevRef   = useRef<string | undefined>(undefined);
+  const prevLvRef = useRef(growthLv);
+
+  // Reset quiz pool when level changes
+  useEffect(() => {
+    if (growthLv !== prevLvRef.current) {
+      prevLvRef.current = growthLv;
+      prevRef.current   = undefined;
+      setQuiz(buildQAQuiz(growthLv));
+    }
+  }, [growthLv]);
 
   const playQuestion = useCallback(() => {
     setSpeaking(true);
@@ -477,7 +581,7 @@ function QAMode() {
 
   const next = () => {
     prevRef.current = quiz.question;
-    setQuiz(buildQAQuiz(prevRef.current));
+    setQuiz(buildQAQuiz(growthLv, prevRef.current));
   };
 
   const handleTap = (choice: string) => {
@@ -825,6 +929,18 @@ function SentenceQuizView({
 // ─────────────────────────────────────────────────────────────────
 // BabyImmersion — root component
 // ─────────────────────────────────────────────────────────────────
+const LS_KEY = 'immersion-progress-v1';
+function loadProgress(): { totalCorrect: number; total: number } {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { totalCorrect: 0, total: 0 };
+}
+function saveProgress(totalCorrect: number, total: number) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ totalCorrect, total })); } catch { /* ignore */ }
+}
+
 type ImmersionMode = 'picture' | 'qa';
 
 export function BabyImmersion() {
@@ -832,7 +948,17 @@ export function BabyImmersion() {
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [total,        setTotal]        = useState(0);
   const [justLevelUp,  setJustLevelUp]  = useState(false);
+  const [hydrated,     setHydrated]     = useState(false);
   const prevLevelRef = useRef(1);
+
+  // Hydrate from localStorage on mount (client-only)
+  useEffect(() => {
+    const saved = loadProgress();
+    setTotalCorrect(saved.totalCorrect);
+    setTotal(saved.total);
+    prevLevelRef.current = getGrowthLevel(saved.totalCorrect).level;
+    setHydrated(true);
+  }, []);
 
   const switchMode = (m: ImmersionMode) => {
     window.speechSynthesis?.cancel();
@@ -855,6 +981,7 @@ export function BabyImmersion() {
         setJustLevelUp(true);
         setTimeout(() => setJustLevelUp(false), 2500);
       }
+      saveProgress(next, total + 1);
       return next;
     });
     setTotal(t => t + 1);
@@ -868,6 +995,10 @@ export function BabyImmersion() {
     5: 'bg-violet-600', 6: 'bg-rose-600',
   };
   const accent = accentColors[growthLevel.level] ?? 'bg-blue-600';
+
+  if (!hydrated) return (
+    <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Loading…</div>
+  );
 
   return (
     <div className="flex flex-col gap-4 pb-32 max-w-md mx-auto px-4">
@@ -943,7 +1074,7 @@ export function BabyImmersion() {
             </div>
             <span className="text-xs text-gray-400">{totalCorrect} / {total} correct</span>
             <button
-              onClick={() => { setTotalCorrect(0); setTotal(0); prevLevelRef.current = 1; }}
+              onClick={() => { setTotalCorrect(0); setTotal(0); prevLevelRef.current = 1; saveProgress(0, 0); }}
               className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 rounded-lg px-2 py-1 transition-colors">
               Reset
             </button>
@@ -952,7 +1083,7 @@ export function BabyImmersion() {
       )}
 
       {/* Quiz — Q&A Mode (has its own score inside) */}
-      {mode === 'qa' && <QAMode />}
+      {mode === 'qa' && <QAMode growthLv={growthLevel.level} />}
 
     </div>
   );
