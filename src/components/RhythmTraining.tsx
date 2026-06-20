@@ -5,11 +5,11 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 // ─────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────
-const LOOKAHEAD_S  = 0.12;   // seconds to look ahead
-const SCHED_MS     = 25;     // scheduler interval ms
-const PERFECT_S    = 0.055;  // ±55ms
-const GOOD_S       = 0.140;  // ±140ms
-const TAP_WINDOW_S = 0.240;  // max deviation to find a tap
+const LOOKAHEAD_S  = 0.12;
+const SCHED_MS     = 25;
+const PERFECT_S    = 0.055;
+const GOOD_S       = 0.140;
+const TAP_WINDOW_S = 0.240;
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -31,8 +31,6 @@ interface PendingTap {
 // ─────────────────────────────────────────────────────────────────
 // Pattern helpers
 // ─────────────────────────────────────────────────────────────────
-// 16 slots per measure (16th-note resolution, 4/4 time)
-// Slot indices: beats = 0,4,8,12; 8th "ands" = 2,6,10,14; 16ths = all others
 function mkPat(id: string, name: string, actives: number[]): Pattern {
   const slots: boolean[] = new Array(16).fill(false);
   actives.forEach(i => { if (i >= 0 && i < 16) slots[i] = true; });
@@ -102,6 +100,19 @@ function schedTick(ctx: AudioContext, t: number): void {
   } catch { /* ignore */ }
 }
 
+/** Bright rhythm hit for Listen playback (sine 880 Hz = A5) */
+function schedRhythm(ctx: AudioContext, t: number): void {
+  try {
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.value = 880;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.55, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+    osc.start(t); osc.stop(t + 0.14);
+  } catch { /* ignore */ }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // RhythmTraining component
 // ─────────────────────────────────────────────────────────────────
@@ -110,14 +121,17 @@ export function RhythmTraining() {
   const [patIdx,      setPatIdx]      = useState(0);
   const [bpm,         setBpm]         = useState(72);
   const [isPlaying,   setIsPlaying]   = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [currentSlot, setCurrentSlot] = useState(-1);
+  const [listenSlot,  setListenSlot]  = useState(-1);
   const [verdict,     setVerdict]     = useState<VerdictType | null>(null);
   const [score,       setScore]       = useState({ perfect: 0, good: 0, miss: 0 });
   const [tapFlash,    setTapFlash]    = useState(false);
 
-  // Refs — never trigger re-renders; scheduler reads these directly
+  // Refs — never trigger re-renders
   const acRef           = useRef<AudioContext | null>(null);
   const schedulerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const listenTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const nextSlotRef     = useRef(0);
   const nextTimeRef     = useRef(0);
   const pendingRef      = useRef<PendingTap[]>([]);
@@ -140,32 +154,28 @@ export function RhythmTraining() {
     verdictTimerRef.current = setTimeout(() => setVerdict(null), 700);
   }, []);
 
-  // The scheduler: called every SCHED_MS; schedules audio + queues tap expectations
+  // ── Live scheduler (metronome + tap timing) ──────────────────
   const runScheduler = useCallback(() => {
     const ctx = acRef.current;
     if (!ctx) return;
     const beatDur = 60 / bpmRef.current;
-    const slotDur = beatDur / 4;   // 16th-note duration
+    const slotDur = beatDur / 4;
     const gen     = genRef.current;
 
     while (nextTimeRef.current < ctx.currentTime + LOOKAHEAD_S) {
       const slot = nextSlotRef.current;
       const t    = nextTimeRef.current;
 
-      // Metronome click on beat positions (0,4,8,12)
       if (slot % 4 === 0) {
         schedClick(ctx, t, slot === 0);
       } else if (levelRef.current >= 2 && slot % 2 === 0) {
-        // Soft 8th-note tick for Level 2+
         schedTick(ctx, t);
       }
 
-      // Register expected tap
       if (patternRef.current.slots[slot]) {
         pendingRef.current.push({ time: t, consumed: false });
       }
 
-      // Visual slot update (fire at the right audio time)
       const delayMs = Math.max(0, (t - ctx.currentTime) * 1000);
       setTimeout(() => {
         if (genRef.current === gen) setCurrentSlot(slot);
@@ -175,7 +185,6 @@ export function RhythmTraining() {
       nextSlotRef.current = (slot + 1) % 16;
     }
 
-    // Expire missed taps
     const now = ctx.currentTime;
     const kept: PendingTap[] = [];
     for (const pt of pendingRef.current) {
@@ -187,7 +196,7 @@ export function RhythmTraining() {
       }
     }
     pendingRef.current = kept;
-  }, []); // stable — uses refs only
+  }, []);
 
   const start = useCallback(() => {
     const ctx = acRef.current ?? (acRef.current = createAC());
@@ -214,8 +223,66 @@ export function RhythmTraining() {
     pendingRef.current = [];
   }, []);
 
-  // Clean up on unmount
-  useEffect(() => () => { stop(); }, [stop]);
+  // ── Listen: one-shot full-measure preview ─────────────────────
+  const listen = useCallback(() => {
+    if (isPlaying) return;
+    const ctx = acRef.current ?? (acRef.current = createAC());
+    if (!ctx) return;
+
+    // Clear any previous listen timers
+    listenTimersRef.current.forEach(id => clearTimeout(id));
+    listenTimersRef.current = [];
+
+    const go = () => {
+      const pat     = patternRef.current;
+      const lv      = levelRef.current;
+      const beatDur = 60 / bpmRef.current;
+      const slotDur = beatDur / 4;
+      // Small lead-in so scheduling always stays ahead of playhead
+      const t0      = ctx.currentTime + 0.18;
+
+      setIsListening(true);
+      setListenSlot(-1);
+
+      // Schedule all 16 slots using AudioContext.currentTime — zero drift
+      for (let slot = 0; slot < 16; slot++) {
+        const t = t0 + slot * slotDur;
+
+        // Metronome (same sounds as live mode)
+        if (slot % 4 === 0) {
+          schedClick(ctx, t, slot === 0);
+        } else if (lv >= 2 && slot % 2 === 0) {
+          schedTick(ctx, t);
+        }
+
+        // Rhythm hit (bright sine at 880 Hz — distinct from metronome)
+        if (pat.slots[slot]) {
+          schedRhythm(ctx, t);
+        }
+
+        // Visual progress: setTimeout is fine here (display only, not audio)
+        const delayMs = (t - ctx.currentTime) * 1000;
+        listenTimersRef.current.push(
+          setTimeout(() => setListenSlot(slot), delayMs),
+        );
+      }
+
+      // End of measure: reset state
+      const endMs = (t0 + 16 * slotDur - ctx.currentTime) * 1000;
+      listenTimersRef.current.push(
+        setTimeout(() => { setIsListening(false); setListenSlot(-1); }, endMs),
+      );
+    };
+
+    if (ctx.state === 'suspended') { ctx.resume().then(go).catch(go); }
+    else { go(); }
+  }, [isPlaying]);
+
+  // Cleanup on unmount
+  useEffect(() => () => {
+    stop();
+    listenTimersRef.current.forEach(id => clearTimeout(id));
+  }, [stop]);
 
   const handleTap = useCallback(() => {
     setTapFlash(true);
@@ -240,16 +307,15 @@ export function RhythmTraining() {
 
     pendingRef.current[bestIdx].consumed = true;
 
-    if (bestErr <= PERFECT_S)      { showVerdict('Perfect!'); setScore(s => ({ ...s, perfect: s.perfect + 1 })); }
-    else if (bestErr <= GOOD_S)    { showVerdict('Good');     setScore(s => ({ ...s, good:    s.good    + 1 })); }
-    else                           { showVerdict('Miss');     setScore(s => ({ ...s, miss:    s.miss    + 1 })); }
+    if (bestErr <= PERFECT_S)   { showVerdict('Perfect!'); setScore(s => ({ ...s, perfect: s.perfect + 1 })); }
+    else if (bestErr <= GOOD_S) { showVerdict('Good');     setScore(s => ({ ...s, good:    s.good    + 1 })); }
+    else                        { showVerdict('Miss');     setScore(s => ({ ...s, miss:    s.miss    + 1 })); }
   }, [isPlaying, showVerdict]);
 
   const pattern   = PATTERNS[level][Math.min(patIdx, PATTERNS[level].length - 1)];
   const totalTaps = score.perfect + score.good + score.miss;
   const accuracy  = totalTaps > 0 ? Math.round(((score.perfect + score.good) / totalTaps) * 100) : 0;
 
-  // Symbol for a slot that has a tap
   function slotSym(i: number): string {
     if (!pattern.slots[i]) return '';
     if (i % 4 === 0) return '♩';
@@ -265,13 +331,38 @@ export function RhythmTraining() {
     verdict === 'Perfect!' ? '🎯 Perfect!' :
     verdict === 'Good'     ? '👍 Good'     : '✗ Miss';
 
+  // Pattern grid background per slot
+  function slotBg(si: number): string {
+    const hasTap    = pattern.slots[si];
+    const isQuarter = si % 4 === 0;
+    const isEighth  = si % 4 === 2;
+
+    // Listen playback highlight (teal)
+    if (isListening && si === listenSlot) {
+      return hasTap
+        ? 'bg-teal-400 text-white scale-110 shadow-lg'
+        : 'bg-teal-200 text-teal-600 scale-105';
+    }
+    // Live playback highlight (orange)
+    if (isPlaying && si === currentSlot) {
+      return hasTap
+        ? 'bg-orange-400 text-white scale-110 shadow-lg'
+        : 'bg-gray-400 text-white scale-105';
+    }
+    // Static
+    if (!hasTap) return 'bg-gray-100 border border-gray-200 text-gray-300';
+    if (isQuarter) return 'bg-indigo-100 border-2 border-indigo-400 text-indigo-700';
+    if (isEighth)  return 'bg-purple-100 border-2 border-purple-400 text-purple-700';
+    return 'bg-rose-100 border-2 border-rose-400 text-rose-700';
+  }
+
+  const listenProgress = listenSlot >= 0 ? ((listenSlot + 1) / 16) * 100 : 0;
+
   return (
     <div className="flex flex-col gap-4 pb-32 max-w-md mx-auto px-3">
 
       {/* ── Level + Pattern selector ── */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-4 py-3 flex flex-col gap-3">
-
-        {/* Level tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
           {([1, 2, 3] as RhythmLevel[]).map(lv => (
             <button key={lv}
@@ -289,7 +380,6 @@ export function RhythmTraining() {
           ))}
         </div>
 
-        {/* Pattern buttons */}
         <div>
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Pattern</p>
           <div className="flex flex-wrap gap-1">
@@ -308,7 +398,7 @@ export function RhythmTraining() {
         </div>
       </div>
 
-      {/* ── Pattern grid (16 slots = 4 beats × 4 subdivisions) ── */}
+      {/* ── Pattern grid (16 slots) ── */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-4 py-3">
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
           Rhythm Pattern — 1 Measure (4/4)
@@ -319,27 +409,11 @@ export function RhythmTraining() {
               <p className="text-[10px] text-center font-black text-gray-500 mb-1">{beat + 1}</p>
               <div className="flex gap-0.5">
                 {[0, 1, 2, 3].map(sub => {
-                  const si        = beat * 4 + sub;
-                  const isCurrent = si === currentSlot && isPlaying;
-                  const hasTap    = pattern.slots[si];
-                  const isQuarter = si % 4 === 0;
-                  const isEighth  = si % 4 === 2;
+                  const si = beat * 4 + sub;
                   return (
                     <div key={sub}
-                      className={`flex-1 h-11 rounded flex items-center justify-center text-sm font-black transition-all duration-75 ${
-                        isCurrent
-                          ? hasTap
-                            ? 'bg-orange-400 text-white scale-110 shadow-lg'
-                            : 'bg-gray-400 text-white scale-105'
-                          : hasTap
-                          ? isQuarter
-                            ? 'bg-indigo-100 border-2 border-indigo-400 text-indigo-700'
-                            : isEighth
-                            ? 'bg-purple-100 border-2 border-purple-400 text-purple-700'
-                            : 'bg-rose-100 border-2 border-rose-400 text-rose-700'
-                          : 'bg-gray-100 border border-gray-200 text-gray-300'
-                      }`}>
-                      {slotSym(si) || (isQuarter && !hasTap ? '·' : '')}
+                      className={`flex-1 h-11 rounded flex items-center justify-center text-sm font-black transition-all duration-75 ${slotBg(si)}`}>
+                      {slotSym(si) || (si % 4 === 0 && !pattern.slots[si] ? '·' : '')}
                     </div>
                   );
                 })}
@@ -347,7 +421,6 @@ export function RhythmTraining() {
             </div>
           ))}
         </div>
-        {/* Legend */}
         <div className="flex gap-3 mt-2 flex-wrap">
           <span className="flex items-center gap-1 text-[9px] text-gray-400">
             <span className="w-2.5 h-2.5 rounded bg-indigo-300 inline-block" /> ♩ 4分
@@ -359,7 +432,10 @@ export function RhythmTraining() {
             <span className="w-2.5 h-2.5 rounded bg-rose-300 inline-block" /> ♬ 16分
           </span>
           <span className="flex items-center gap-1 text-[9px] text-gray-400">
-            <span className="w-2.5 h-2.5 rounded bg-orange-400 inline-block" /> 現在位置
+            <span className="w-2.5 h-2.5 rounded bg-orange-400 inline-block" /> 再生中
+          </span>
+          <span className="flex items-center gap-1 text-[9px] text-gray-400">
+            <span className="w-2.5 h-2.5 rounded bg-teal-400 inline-block" /> お手本
           </span>
         </div>
       </div>
@@ -384,11 +460,45 @@ export function RhythmTraining() {
         </div>
       </div>
 
+      {/* ── Listen button + progress bar ── */}
+      <div>
+        <button
+          onClick={listen}
+          disabled={isListening || isPlaying}
+          className={`w-full py-3 rounded-2xl font-black text-sm shadow-md active:scale-95 transition-all ${
+            isListening
+              ? 'bg-teal-100 text-teal-700 border-2 border-teal-400 cursor-not-allowed'
+              : isPlaying
+              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              : 'bg-teal-500 hover:bg-teal-600 text-white'
+          }`}
+          style={{ WebkitTapHighlightColor: 'transparent' }}>
+          {isListening ? '🎵 お手本再生中...' : '🎧 Listen — お手本を聴く'}
+        </button>
+
+        {/* Progress bar (visible only during listen) */}
+        <div className={`mt-1.5 h-1.5 rounded-full bg-gray-200 overflow-hidden transition-opacity ${isListening ? 'opacity-100' : 'opacity-0'}`}>
+          <div
+            className="h-full bg-teal-400 rounded-full transition-all duration-75"
+            style={{ width: `${listenProgress}%` }}
+          />
+        </div>
+
+        {isListening && (
+          <p className="text-center text-[10px] text-teal-600 mt-1 font-semibold">
+            メトロノーム＋リズム音で1小節再生中
+          </p>
+        )}
+      </div>
+
       {/* ── START / STOP ── */}
       <button
         onClick={isPlaying ? stop : start}
+        disabled={isListening}
         className={`w-full py-3.5 rounded-2xl font-black text-base shadow-md active:scale-95 transition-all ${
-          isPlaying
+          isListening
+            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            : isPlaying
             ? 'bg-gray-700 hover:bg-gray-800 text-white'
             : 'bg-orange-500 hover:bg-orange-600 text-white'
         }`}>
@@ -407,9 +517,9 @@ export function RhythmTraining() {
       {/* ── TAP button ── */}
       <button
         onPointerDown={handleTap}
-        disabled={!isPlaying}
+        disabled={!isPlaying || isListening}
         className={`w-full py-12 rounded-3xl font-black text-5xl tracking-widest shadow-xl transition-all select-none ${
-          !isPlaying
+          !isPlaying || isListening
             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
             : tapFlash
             ? 'bg-orange-300 text-white scale-[0.97] shadow-inner'
@@ -446,12 +556,12 @@ export function RhythmTraining() {
       )}
 
       {/* Tips */}
-      {!isPlaying && (
+      {!isPlaying && !isListening && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
           <p className="text-[11px] font-black text-orange-700 mb-1">🎵 使い方</p>
           <ul className="text-[10px] text-orange-600 space-y-0.5">
-            <li>• レベルとパターンを選んで「Start Metronome」を押す</li>
-            <li>• メトロノームのクリック音に合わせてグリッドが光る</li>
+            <li>• 🎧 Listen でお手本を聴いてリズムを耳で確認</li>
+            <li>• 「Start Metronome」を押して実際にタップ練習</li>
             <li>• オレンジのコマが光ったタイミングで「TAP」を押す</li>
             <li>• Perfect: ±55ms / Good: ±140ms / Miss: それ以外</li>
           </ul>
