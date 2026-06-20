@@ -769,7 +769,7 @@ export function ToeicRoad() {
   const updatePlayer = (idx: 0|1, field: keyof PlayerScore, val: string | number) => {
     if (!players) return;
     const updated: [PlayerScore, PlayerScore] = [{ ...players[0] }, { ...players[1] }];
-    (updated[idx] as Record<string, string | number>)[field] = val;
+    (updated[idx] as unknown as Record<string, string | number>)[field] = val;
     setPlayers(updated);
     savePlayers(updated);
   };

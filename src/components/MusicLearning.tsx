@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { RhythmTraining } from './RhythmTraining';
 
 // ─────────────────────────────────────────────────────────────────
 // 型定義
@@ -8,7 +9,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 type NoteName  = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 type ChordName = 'C' | 'Dm' | 'Em' | 'F' | 'G' | 'Am';
 type Clef      = 'treble' | 'bass';
-type LernMode  = 'kiso' | 'note' | 'advanced' | 'chord';
+type LernMode  = 'kiso' | 'note' | 'advanced' | 'chord' | 'rhythm';
 type ClefOpt   = 'treble' | 'bass' | 'mix';
 type KisoDir   = 'ja-en' | 'en-ja';   // ← 基礎モード出題方向
 type Verdict   = 'correct' | 'wrong' | null;
@@ -302,10 +303,11 @@ function NoteStaff({ notes, clef }: { notes: string[]; clef: Clef }) {
 // MusicLearning — メインコンポーネント
 // ─────────────────────────────────────────────────────────────────
 const MODE_TABS: { id: LernMode; label: string; sub: string }[] = [
-  { id: 'kiso',     label: '🎹 基礎',   sub: 'ドレミと音名' },
-  { id: 'note',     label: '🎵 標準',   sub: '五線譜 ド〜ド' },
-  { id: 'advanced', label: '🌟 発展',   sub: '加線・範囲外' },
+  { id: 'kiso',     label: '🎹 基礎',   sub: 'ドレミ・音名' },
+  { id: 'note',     label: '🎵 標準',   sub: '五線譜' },
+  { id: 'advanced', label: '🌟 発展',   sub: '加線' },
   { id: 'chord',    label: '🎼 コード', sub: '和音' },
+  { id: 'rhythm',   label: '🥁 リズム', sub: 'Rhythm' },
 ];
 
 export function MusicLearning() {
@@ -336,6 +338,7 @@ export function MusicLearning() {
   }, [mode, clefOpt]);
 
   const newQuestion = useCallback(() => {
+    if (mode === 'rhythm') return;
     setVerdict(null);
     setLocked(false);
 
@@ -439,21 +442,27 @@ export function MusicLearning() {
     <div className="flex flex-col gap-3 pb-28 max-w-md mx-auto px-4">
 
       {/* ── モードタブ ── */}
-      <div className="grid grid-cols-4 gap-1 bg-gray-100 p-1 rounded-2xl">
+      <div className="grid grid-cols-5 gap-0.5 bg-gray-100 p-1 rounded-2xl">
         {MODE_TABS.map(({ id, label, sub }) => (
           <button key={id} onClick={() => changeMode(id)}
-            className={`py-2 px-0.5 rounded-xl text-center transition-all ${
+            className={`py-2 px-0 rounded-xl text-center transition-all ${
               mode === id
-                ? 'bg-indigo-600 text-white shadow-md'
+                ? id === 'rhythm' ? 'bg-orange-500 text-white shadow-md' : 'bg-indigo-600 text-white shadow-md'
                 : 'text-gray-500 hover:text-gray-700'
             }`}>
-            <span className="block text-[11px] font-black leading-tight">{label}</span>
-            <span className={`block text-[8px] leading-none mt-0.5 ${
-              mode === id ? 'text-indigo-200' : 'text-gray-400'
+            <span className="block text-[10px] font-black leading-tight">{label}</span>
+            <span className={`block text-[7px] leading-none mt-0.5 ${
+              mode === id ? 'text-white/70' : 'text-gray-400'
             }`}>{sub}</span>
           </button>
         ))}
       </div>
+
+      {/* ── リズム特訓モード ── */}
+      {mode === 'rhythm' && <RhythmTraining />}
+
+      {/* ── 以下は rhythm 以外のモードでのみ表示 ── */}
+      {mode !== 'rhythm' && <>
 
       {/* ── 基礎モード：出題方向トグル ── */}
       {mode === 'kiso' && (
@@ -611,6 +620,8 @@ export function MusicLearning() {
           リセット
         </button>
       </div>
+
+      </> /* end mode !== 'rhythm' */}
 
     </div>
   );
