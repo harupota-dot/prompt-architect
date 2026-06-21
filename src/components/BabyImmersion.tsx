@@ -6,8 +6,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // 定数
 // ─────────────────────────────────────────────────────────────────
 const MASTERY_THRESHOLD = 3;          // この回数正解したら「習得済み」
-const LS_WORDS = 'basic-words-v3';    // localStorage キー（単語）
-const LS_QA    = 'qa-progress-v3';    // localStorage キー（Q&A）
+const RECENT_MAX = 15;                // セッション内で直近何問を除外するか
+const LS_WORDS           = 'basic-words-v3';        // localStorage キー（単語）
+const LS_QA              = 'qa-progress-v3';        // localStorage キー（Q&A）
+const LS_QA_MASTERED     = 'qa-mastered-v3';        // Q&A 正解済みセット
 
 // ─────────────────────────────────────────────────────────────────
 // 単語データ（4段階ティア）
@@ -185,14 +187,45 @@ function countMastered(masteryMap: Record<string, number>, pool: Word[]): number
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 3択クイズ構築（重複バグ防止）
+// 直近履歴ユーティリティ
+// ─────────────────────────────────────────────────────────────────
+function pushRecent(recent: string[], key: string): string[] {
+  const next = [key, ...recent.filter(k => k !== key)];
+  return next.slice(0, RECENT_MAX);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 3択クイズ構築（重複バグ防止 + 履歴 + 未正解優先）
 // ─────────────────────────────────────────────────────────────────
 interface WordQuiz { correct: Word; choices: string[]; }
 
-function buildWordQuiz(pool: Word[], prevEn?: string): WordQuiz {
-  const filtered = pool.filter(w => w.en !== prevEn);
-  const src      = filtered.length >= 1 ? filtered : pool;
-  const correct  = src[Math.floor(Math.random() * src.length)];
+function pickWordCorrect(
+  pool: Word[],
+  recent: string[],
+  masteryMap: Record<string, number>,
+): Word {
+  const recentSet   = new Set(recent);
+  const isMastered  = (w: Word) => (masteryMap[w.en] ?? 0) >= MASTERY_THRESHOLD;
+  const notRecent   = (w: Word) => !recentSet.has(w.en);
+
+  // 優先度1: 未習得 かつ 直近履歴外
+  let cands = pool.filter(w => !isMastered(w) && notRecent(w));
+  // 優先度2: 未習得（履歴制約を外す）
+  if (!cands.length) cands = pool.filter(w => !isMastered(w));
+  // 優先度3: 直近履歴外（習得済みも含む）
+  if (!cands.length) cands = pool.filter(notRecent);
+  // フォールバック: 全体から（直近履歴リセット相当）
+  if (!cands.length) cands = pool;
+
+  return cands[Math.floor(Math.random() * cands.length)];
+}
+
+function buildWordQuiz(
+  pool: Word[],
+  recent: string[],
+  masteryMap: Record<string, number>,
+): WordQuiz {
+  const correct = pickWordCorrect(pool, recent, masteryMap);
 
   // ja が異なる単語からダミーを 2 つ選ぶ（重複排除）
   const distPool = pool.filter(w => w.en !== correct.en && w.ja !== correct.ja);
@@ -206,10 +239,33 @@ function buildWordQuiz(pool: Word[], prevEn?: string): WordQuiz {
 
 interface QAQuiz extends QAItem { choices: string[]; }
 
-function buildQAQuiz(pool: QAItem[], prevQ?: string): QAQuiz {
-  const filtered = pool.filter(q => q.question !== prevQ);
-  const src      = filtered.length >= 1 ? filtered : pool;
-  const item     = src[Math.floor(Math.random() * src.length)];
+function pickQAItem(
+  pool: QAItem[],
+  recent: string[],
+  masteredSet: Set<string>,
+): QAItem {
+  const recentSet  = new Set(recent);
+  const notMastered = (q: QAItem) => !masteredSet.has(q.question);
+  const notRecent   = (q: QAItem) => !recentSet.has(q.question);
+
+  // 優先度1: 未正解 かつ 直近履歴外
+  let cands = pool.filter(q => notMastered(q) && notRecent(q));
+  // 優先度2: 未正解（履歴制約を外す）
+  if (!cands.length) cands = pool.filter(notMastered);
+  // 優先度3: 直近履歴外（正解済みも含む）
+  if (!cands.length) cands = pool.filter(notRecent);
+  // フォールバック: 全体
+  if (!cands.length) cands = pool;
+
+  return cands[Math.floor(Math.random() * cands.length)];
+}
+
+function buildQAQuiz(
+  pool: QAItem[],
+  recent: string[],
+  masteredSet: Set<string>,
+): QAQuiz {
+  const item = pickQAItem(pool, recent, masteredSet);
   return { ...item, choices: shuffle([item.answer, item.wrongs[0], item.wrongs[1]]) };
 }
 
@@ -224,7 +280,8 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
   const [speaking,   setSpeaking]   = useState(false);
   const [showText,   setShowText]   = useState(false);
   const [hydrated,   setHydrated]   = useState(false);
-  const prevRef = useRef<string | undefined>(undefined);
+  // 直近出題履歴（セッション内、localStorage 不要）
+  const recentRef = useRef<string[]>([]);
 
   // localStorage からロード
   useEffect(() => {
@@ -239,7 +296,9 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
   useEffect(() => {
     if (!hydrated) return;
     const { pool } = getActivePool(masteryMap);
-    setQuiz(buildWordQuiz(pool, prevRef.current));
+    const q = buildWordQuiz(pool, recentRef.current, masteryMap);
+    recentRef.current = pushRecent(recentRef.current, q.correct.en);
+    setQuiz(q);
   }, [hydrated]); // eslint-disable-line
 
   const playWord = useCallback(() => {
@@ -252,12 +311,14 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
     if (quiz) { setShowText(false); playWord(); }
   }, [quiz?.correct.en]); // eslint-disable-line
 
-  const next = useCallback(() => {
-    const { pool } = getActivePool(masteryMap);
-    prevRef.current = quiz?.correct.en;
-    setQuiz(buildWordQuiz(pool, prevRef.current));
+  const next = useCallback((currentMastery?: Record<string, number>) => {
+    const mastery = currentMastery ?? masteryMap;
+    const { pool } = getActivePool(mastery);
+    const q = buildWordQuiz(pool, recentRef.current, mastery);
+    recentRef.current = pushRecent(recentRef.current, q.correct.en);
+    setQuiz(q);
     setResult(null); setLocked(false);
-  }, [quiz, masteryMap]);
+  }, [masteryMap]);
 
   const handleTap = (ja: string) => {
     if (locked || !quiz) return;
@@ -270,7 +331,8 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
       try { localStorage.setItem(LS_WORDS, JSON.stringify(updated)); } catch { /* ignore */ }
 
       onCorrect();
-      setTimeout(next, 1400);
+      // 最新の masteryMap を next() に渡す（stale closure 防止）
+      setTimeout(() => next(updated), 1400);
     } else {
       setResult('wrong');
       setTimeout(() => setResult(null), 800);
@@ -352,7 +414,7 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
         ))}
       </div>
 
-      <button onClick={next}
+      <button onClick={() => next()}
         className="w-full py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold text-sm transition-all">
         スキップ →
       </button>
@@ -374,14 +436,16 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
 // QAModeSimple（会話 Q&A 3択）
 // ─────────────────────────────────────────────────────────────────
 function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
-  const [qaCorrect,  setQaCorrect]  = useState(0);
-  const [quiz,       setQuiz]       = useState<QAQuiz | null>(null);
-  const [result,     setResult]     = useState<'correct' | 'wrong' | null>(null);
-  const [locked,     setLocked]     = useState(false);
-  const [speaking,   setSpeaking]   = useState(false);
-  const [showText,   setShowText]   = useState(false);
-  const [hydrated,   setHydrated]   = useState(false);
-  const prevRef = useRef<string | undefined>(undefined);
+  const [qaCorrect,   setQaCorrect]   = useState(0);
+  const [masteredQA,  setMasteredQA]  = useState<Set<string>>(new Set());
+  const [quiz,        setQuiz]        = useState<QAQuiz | null>(null);
+  const [result,      setResult]      = useState<'correct' | 'wrong' | null>(null);
+  const [locked,      setLocked]      = useState(false);
+  const [speaking,    setSpeaking]    = useState(false);
+  const [showText,    setShowText]    = useState(false);
+  const [hydrated,    setHydrated]    = useState(false);
+  // 直近出題履歴（セッション内）
+  const recentRef = useRef<string[]>([]);
 
   function getQAPool(correct: number): QAItem[] {
     if (correct < 20) return QA_T1;
@@ -399,9 +463,19 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
       const raw = localStorage.getItem(LS_QA);
       const n   = raw ? (JSON.parse(raw).correct ?? 0) : 0;
       setQaCorrect(n);
-      setQuiz(buildQAQuiz(getQAPool(n)));
+
+      // 正解済みセットをロード
+      const rawM = localStorage.getItem(LS_QA_MASTERED);
+      const mSet: Set<string> = rawM ? new Set(JSON.parse(rawM)) : new Set();
+      setMasteredQA(mSet);
+
+      const q = buildQAQuiz(getQAPool(n), recentRef.current, mSet);
+      recentRef.current = pushRecent(recentRef.current, q.question);
+      setQuiz(q);
     } catch {
-      setQuiz(buildQAQuiz(QA_T1));
+      const q = buildQAQuiz(QA_T1, [], new Set());
+      recentRef.current = pushRecent(recentRef.current, q.question);
+      setQuiz(q);
     }
     setHydrated(true);
   }, []);
@@ -416,10 +490,13 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
     if (quiz) { setResult(null); setLocked(false); setShowText(false); playQuestion(); }
   }, [quiz?.question]); // eslint-disable-line
 
-  const next = useCallback(() => {
-    prevRef.current = quiz?.question;
-    setQuiz(buildQAQuiz(getQAPool(qaCorrect), prevRef.current));
-  }, [quiz, qaCorrect]);
+  const next = useCallback((currentCorrect?: number, currentMastered?: Set<string>) => {
+    const n  = currentCorrect  ?? qaCorrect;
+    const ms = currentMastered ?? masteredQA;
+    const q = buildQAQuiz(getQAPool(n), recentRef.current, ms);
+    recentRef.current = pushRecent(recentRef.current, q.question);
+    setQuiz(q);
+  }, [qaCorrect, masteredQA]);
 
   const handleTap = (choice: string) => {
     if (locked || !quiz) return;
@@ -428,8 +505,14 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
       const next_n = qaCorrect + 1;
       setQaCorrect(next_n);
       try { localStorage.setItem(LS_QA, JSON.stringify({ correct: next_n })); } catch { /* ignore */ }
+
+      // 正解済みに追加して localStorage へ保存
+      const newMastered = new Set(masteredQA).add(quiz.question);
+      setMasteredQA(newMastered);
+      try { localStorage.setItem(LS_QA_MASTERED, JSON.stringify([...newMastered])); } catch { /* ignore */ }
+
       onCorrect();
-      setTimeout(next, 1400);
+      setTimeout(() => next(next_n, newMastered), 1400);
     } else {
       setResult('wrong');
       setTimeout(() => setResult(null), 800);
@@ -515,7 +598,7 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
         ))}
       </div>
 
-      <button onClick={next}
+      <button onClick={() => next()}
         className="w-full py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold text-sm transition-all">
         スキップ →
       </button>
