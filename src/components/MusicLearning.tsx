@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RhythmTraining } from './RhythmTraining';
 import { SightReading }  from './SightReading';
 import { ChordReading }  from './ChordReading';
 
@@ -11,7 +10,7 @@ import { ChordReading }  from './ChordReading';
 type NoteName  = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 type ChordName = 'C' | 'Dm' | 'Em' | 'F' | 'G' | 'Am';
 type Clef      = 'treble' | 'bass';
-type LernMode  = 'kiso' | 'note' | 'advanced' | 'chord' | 'rhythm' | 'sightread' | 'chordread';
+type LernMode  = 'kiso' | 'note' | 'advanced' | 'chord' | 'sightread' | 'chordread';
 type ClefOpt   = 'treble' | 'bass' | 'mix';
 type KisoDir   = 'ja-en' | 'en-ja';   // ← 基礎モード出題方向
 type Verdict   = 'correct' | 'wrong' | null;
@@ -309,7 +308,6 @@ const MODE_TABS: { id: LernMode; label: string; sub: string }[] = [
   { id: 'note',     label: '🎵 標準',   sub: '五線譜' },
   { id: 'advanced', label: '🌟 発展',   sub: '加線' },
   { id: 'chord',    label: '🎼 コード', sub: '和音' },
-  { id: 'rhythm',    label: '🥁 リズム',   sub: 'Rhythm' },
   { id: 'sightread', label: '👁️ スラスラ',   sub: 'Sight-Read' },
   { id: 'chordread', label: '🎹 コード読み', sub: 'Chords' },
 ];
@@ -342,7 +340,7 @@ export function MusicLearning() {
   }, [mode, clefOpt]);
 
   const newQuestion = useCallback(() => {
-    if (mode === 'rhythm' || mode === 'sightread' || mode === 'chordread') return;
+    if (mode === 'sightread' || mode === 'chordread') return;
     setVerdict(null);
     setLocked(false);
 
@@ -446,13 +444,12 @@ export function MusicLearning() {
     <div className="flex flex-col gap-3 pb-28 max-w-md mx-auto px-4">
 
       {/* ── モードタブ ── */}
-      <div className="grid grid-cols-7 gap-0.5 bg-gray-100 p-1 rounded-2xl">
+      <div className="grid grid-cols-6 gap-0.5 bg-gray-100 p-1 rounded-2xl">
         {MODE_TABS.map(({ id, label, sub }) => (
           <button key={id} onClick={() => changeMode(id)}
             className={`py-2 px-0 rounded-xl text-center transition-all ${
               mode === id
-                ? id === 'rhythm'    ? 'bg-orange-500 text-white shadow-md'
-                  : id === 'sightread'  ? 'bg-purple-600 text-white shadow-md'
+                ? id === 'sightread'  ? 'bg-purple-600 text-white shadow-md'
                   : id === 'chordread'  ? 'bg-teal-600 text-white shadow-md'
                   : 'bg-indigo-600 text-white shadow-md'
                 : 'text-gray-500 hover:text-gray-700'
@@ -465,17 +462,14 @@ export function MusicLearning() {
         ))}
       </div>
 
-      {/* ── リズム特訓モード ── */}
-      {mode === 'rhythm' && <RhythmTraining />}
-
       {/* ── スラスラ読みモード ── */}
       {mode === 'sightread' && <SightReading />}
 
       {/* ── コード読みモード ── */}
       {mode === 'chordread' && <ChordReading />}
 
-      {/* ── 以下は rhythm / sightread / chordread 以外のモードでのみ表示 ── */}
-      {mode !== 'rhythm' && mode !== 'sightread' && mode !== 'chordread' && <>
+      {/* ── 以下は sightread / chordread 以外のモードでのみ表示 ── */}
+      {mode !== 'sightread' && mode !== 'chordread' && <>
 
       {/* ── 基礎モード：出題方向トグル ── */}
       {mode === 'kiso' && (
