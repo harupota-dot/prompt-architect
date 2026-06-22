@@ -494,23 +494,10 @@ function speakText(text: string, onEnd?: () => void, rate = 0.88): void {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 山札ドロー — levelRef が変わった時のみリシャッフル
+// 山札ユーティリティ（シンプル版）
 // ─────────────────────────────────────────────────────────────────
-function drawCard<T>(
-  deckRef:  React.MutableRefObject<T[]>,
-  levelRef: React.MutableRefObject<number>,
-  newLevel: number,
-  pool:     T[],
-): T {
-  // レベルが変わった場合のみ山札をリセット
-  if (newLevel !== levelRef.current || deckRef.current.length === 0) {
-    deckRef.current  = shuffle([...pool]);
-    levelRef.current = newLevel;
-  }
-  // 山札が空になったら（同レベル内で使い切った）補充
-  if (deckRef.current.length === 0) {
-    deckRef.current = shuffle([...pool]);
-  }
+function popFromDeck<T>(deckRef: React.MutableRefObject<T[]>, pool: T[]): T {
+  if (deckRef.current.length === 0) deckRef.current = shuffle([...pool]);
   return deckRef.current.pop() as T;
 }
 
@@ -539,31 +526,47 @@ const LS_WORDS = 'words-combo-v4';
 
 function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
   const [combo,    setCombo]    = useState(0);
+  // ★ level を独立した state として管理 — これが変化した時だけデッキを再構築
+  const [level,    setLevel]    = useState(1);
   const [quiz,     setQuiz]     = useState<WordQuiz | null>(null);
   const [result,   setResult]   = useState<'correct'|'wrong'|null>(null);
   const [locked,   setLocked]   = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [showText, setShowText] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-  // 山札関連の ref — これらは re-render 時に変化しない
-  const deckRef  = useRef<Word[]>([]);
-  const levelRef = useRef<number>(0); // 0 = 未初期化
+  // ready=true になるまで useEffect([level]) をスキップする（初回二重実行防止）
+  const [ready,    setReady]    = useState(false);
+  const deckRef = useRef<Word[]>([]);
 
+  // ① 初回のみ: localStorage からコンボ・レベルを復元し、デッキと最初の問題を準備
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(LS_WORDS);
-      const n   = raw ? (JSON.parse(raw) as number) : 0;
+      const raw      = localStorage.getItem(LS_WORDS);
+      const n        = raw ? (JSON.parse(raw) as number) : 0;
+      const lv       = getLevel(n);
+      const pool     = WORD_LEVELS[lv - 1];
+      deckRef.current = shuffle([...pool]);
+      const card     = deckRef.current.pop()!;
       setCombo(n);
-      const lv   = getLevel(n);
-      const pool = WORD_LEVELS[lv - 1];
-      const card = drawCard(deckRef, levelRef, lv, pool);
+      setLevel(lv);   // level state を保存（ready=false なので useEffect[level] はまだ動かない）
       setQuiz(buildWordQuiz(card, pool));
     } catch {
-      const card = drawCard(deckRef, levelRef, 1, L1);
-      setQuiz(buildWordQuiz(card, L1));
+      deckRef.current = shuffle([...L1]);
+      setQuiz(buildWordQuiz(deckRef.current.pop()!, L1));
     }
-    setHydrated(true);
-  }, []); // ← 一度だけ実行
+    setReady(true);   // ここで ready=true にして以降の useEffect[level] を有効化
+  }, []);
+
+  // ② ★ レベルが変わった時だけ新しいデッキを生成して最初の1問を出す
+  //    ready=false の間（初回 setLevel 時）はスキップ
+  useEffect(() => {
+    if (!ready) return;
+    const pool      = WORD_LEVELS[level - 1];
+    deckRef.current = shuffle([...pool]);
+    const card      = deckRef.current.pop()!;
+    setQuiz(buildWordQuiz(card, pool));
+    setResult(null);
+    setLocked(false);
+  }, [level]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const playWord = useCallback(() => {
     if (!quiz) return;
@@ -575,16 +578,6 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
     if (quiz) { setShowText(false); playWord(); }
   }, [quiz?.correct.en]); // eslint-disable-line
 
-  // next は combo を引数で受け取り、stale closure を完全回避
-  const next = useCallback((newCombo: number) => {
-    const lv   = getLevel(newCombo);
-    const pool = WORD_LEVELS[lv - 1];
-    const card = drawCard(deckRef, levelRef, lv, pool);
-    setQuiz(buildWordQuiz(card, pool));
-    setResult(null);
-    setLocked(false);
-  }, []); // ← deps 不要（外部状態を引数で受け取るため）
-
   const handleTap = (ja: string) => {
     if (locked || !quiz) return;
     if (ja === quiz.correct.ja) {
@@ -594,33 +587,63 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
       setCombo(newCombo);
       try { localStorage.setItem(LS_WORDS, JSON.stringify(newCombo)); } catch { /**/ }
       onCorrect();
-      setTimeout(() => next(newCombo), CORRECT_DELAY);
+
+      const newLevel = getLevel(newCombo);
+      if (newLevel !== level) {
+        // ── レベルアップ: setTimeout 後に setLevel → useEffect[level] がデッキを作り直す
+        setTimeout(() => setLevel(newLevel), CORRECT_DELAY);
+      } else {
+        // ── 同レベル継続: 現在のデッキから次の1枚を引く
+        setTimeout(() => {
+          const pool = WORD_LEVELS[level - 1];
+          const card = popFromDeck(deckRef, pool);
+          setQuiz(buildWordQuiz(card, pool));
+          setResult(null);
+          setLocked(false);
+        }, CORRECT_DELAY);
+      }
     } else {
       setResult('wrong');
       setTimeout(() => setResult(null), 700);
     }
   };
 
-  if (!hydrated || !quiz) return (
+  const handleSkip = () => {
+    const pool = WORD_LEVELS[level - 1];
+    const card = popFromDeck(deckRef, pool);
+    setQuiz(buildWordQuiz(card, pool));
+    setResult(null);
+    setLocked(false);
+  };
+
+  if (!ready || !quiz) return (
     <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Loading…</div>
   );
 
-  const lv        = getLevel(combo);
   const threshold = nextThreshold(combo);
+  const lvStart   = LEVEL_THRESHOLDS[level - 1];
+  const lvEnd     = threshold ?? lvStart + 1;
+  const pct       = Math.min(100, ((combo - lvStart) / (lvEnd - lvStart)) * 100);
   const remaining = deckRef.current.length;
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* レベル進捗 */}
-      <div className="flex items-center justify-between px-1">
-        <span className="text-xs font-bold text-indigo-600">
-          ⭐ Level {lv} — 正解 {combo}問
-        </span>
-        <div className="flex-1 mx-3 h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-            style={{ width: threshold ? `${((combo - LEVEL_THRESHOLDS[lv-1]) / (threshold - LEVEL_THRESHOLDS[lv-1])) * 100}%` : '100%' }} />
+    <div className="flex flex-col gap-3">
+      {/* ── レベル表示（大きく・視認性重視）── */}
+      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-lg font-black text-indigo-700">Level {level} / 20</span>
+          <span className="text-xs font-bold text-indigo-400">
+            {threshold ? `あと ${threshold - combo} 問でLevel ${level + 1}` : '🏆 MAX LEVEL'}
+          </span>
         </div>
-        <span className="text-[10px] text-gray-400">残{remaining}枚</span>
+        <div className="w-full h-3 bg-indigo-100 rounded-full overflow-hidden">
+          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex justify-between mt-1">
+          <span className="text-[10px] text-indigo-400">正解 {combo} 問</span>
+          <span className="text-[10px] text-indigo-300">山札残 {remaining} 枚</span>
+        </div>
       </div>
 
       {/* 問題カード */}
@@ -660,15 +683,10 @@ function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
           </button>
         ))}
       </div>
-      <button onClick={() => next(combo)}
+      <button onClick={handleSkip}
         className="w-full py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold text-sm transition-all">
         スキップ →
       </button>
-      {threshold && (
-        <p className="text-center text-[10px] text-gray-400">
-          あと {threshold - combo} 問正解で Level {lv + 1} へ！
-        </p>
-      )}
     </div>
   );
 }
@@ -680,30 +698,45 @@ const LS_QA = 'qa-combo-v4';
 
 function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
   const [combo,    setCombo]    = useState(0);
+  // ★ level を独立した state として管理
+  const [level,    setLevel]    = useState(1);
   const [quiz,     setQuiz]     = useState<QAQuiz | null>(null);
   const [result,   setResult]   = useState<'correct'|'wrong'|null>(null);
   const [locked,   setLocked]   = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [showText, setShowText] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-  const deckRef  = useRef<QAItem[]>([]);
-  const levelRef = useRef<number>(0);
+  const [ready,    setReady]    = useState(false);
+  const deckRef = useRef<QAItem[]>([]);
 
+  // ① 初回のみ: localStorage から復元
   useEffect(() => {
     try {
       const raw  = localStorage.getItem(LS_QA);
       const n    = raw ? (JSON.parse(raw) as number) : 0;
-      setCombo(n);
       const lv   = getLevel(n);
       const pool = getQABand(lv);
-      const item = drawCard(deckRef, levelRef, lv, pool);
+      deckRef.current = shuffle([...pool]);
+      const item = deckRef.current.pop()!;
+      setCombo(n);
+      setLevel(lv);
       setQuiz(buildQAQuiz(item));
     } catch {
-      const item = drawCard(deckRef, levelRef, 1, QA_B1);
-      setQuiz(buildQAQuiz(item));
+      deckRef.current = shuffle([...QA_B1]);
+      setQuiz(buildQAQuiz(deckRef.current.pop()!));
     }
-    setHydrated(true);
+    setReady(true);
   }, []);
+
+  // ② ★ レベルが変わった時だけ新しいデッキを生成
+  useEffect(() => {
+    if (!ready) return;
+    const pool      = getQABand(level);
+    deckRef.current = shuffle([...pool]);
+    const item      = deckRef.current.pop()!;
+    setQuiz(buildQAQuiz(item));
+    setResult(null);
+    setLocked(false);
+  }, [level]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const playQuestion = useCallback(() => {
     if (!quiz) return;
@@ -715,13 +748,6 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
     if (quiz) { setResult(null); setLocked(false); setShowText(false); playQuestion(); }
   }, [quiz?.question]); // eslint-disable-line
 
-  const next = useCallback((newCombo: number) => {
-    const lv   = getLevel(newCombo);
-    const pool = getQABand(lv);
-    const item = drawCard(deckRef, levelRef, lv, pool);
-    setQuiz(buildQAQuiz(item));
-  }, []);
-
   const handleTap = (choice: string) => {
     if (locked || !quiz) return;
     if (choice === quiz.answer) {
@@ -731,31 +757,61 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
       setCombo(newCombo);
       try { localStorage.setItem(LS_QA, JSON.stringify(newCombo)); } catch { /**/ }
       onCorrect();
-      setTimeout(() => next(newCombo), CORRECT_DELAY);
+
+      const newLevel = getLevel(newCombo);
+      if (newLevel !== level) {
+        setTimeout(() => setLevel(newLevel), CORRECT_DELAY);
+      } else {
+        setTimeout(() => {
+          const pool = getQABand(level);
+          const item = popFromDeck(deckRef, pool);
+          setQuiz(buildQAQuiz(item));
+          setResult(null);
+          setLocked(false);
+        }, CORRECT_DELAY);
+      }
     } else {
       setResult('wrong');
       setTimeout(() => setResult(null), 700);
     }
   };
 
-  if (!hydrated || !quiz) return (
+  const handleSkip = () => {
+    const pool = getQABand(level);
+    const item = popFromDeck(deckRef, pool);
+    setQuiz(buildQAQuiz(item));
+    setResult(null);
+    setLocked(false);
+  };
+
+  if (!ready || !quiz) return (
     <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Loading…</div>
   );
 
-  const lv        = getLevel(combo);
   const threshold = nextThreshold(combo);
+  const lvStart   = LEVEL_THRESHOLDS[level - 1];
+  const lvEnd     = threshold ?? lvStart + 1;
+  const pct       = Math.min(100, ((combo - lvStart) / (lvEnd - lvStart)) * 100);
   const remaining = deckRef.current.length;
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* レベル進捗 */}
-      <div className="flex items-center justify-between px-1">
-        <span className="text-xs font-bold text-teal-600">
-          💬 Level {lv} — 正解 {combo}問
-        </span>
-        <span className="text-[10px] text-gray-400">
-          {threshold ? `あと ${threshold - combo} 問` : `残${remaining}枚`}
-        </span>
+    <div className="flex flex-col gap-3">
+      {/* ── レベル表示 ── */}
+      <div className="bg-teal-50 border border-teal-100 rounded-2xl px-4 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-lg font-black text-teal-700">Level {level} / 20</span>
+          <span className="text-xs font-bold text-teal-400">
+            {threshold ? `あと ${threshold - combo} 問でLevel ${level + 1}` : '🏆 MAX LEVEL'}
+          </span>
+        </div>
+        <div className="w-full h-3 bg-teal-100 rounded-full overflow-hidden">
+          <div className="h-full bg-teal-500 rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex justify-between mt-1">
+          <span className="text-[10px] text-teal-400">正解 {combo} 問</span>
+          <span className="text-[10px] text-teal-300">山札残 {remaining} 枚</span>
+        </div>
       </div>
 
       {/* 問題カード */}
@@ -798,7 +854,7 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
           </button>
         ))}
       </div>
-      <button onClick={() => next(combo)}
+      <button onClick={handleSkip}
         className="w-full py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold text-sm transition-all">
         スキップ →
       </button>
