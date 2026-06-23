@@ -5,10 +5,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // ─────────────────────────────────────────────────────────────────
 // 定数
 // ─────────────────────────────────────────────────────────────────
-const CORRECT_DELAY = 380;
+const CORRECT_DELAY = 420;
 const LEVEL_THRESHOLDS = [0,5,10,15,20,26,33,41,50,60,71,83,96,110,125,141,158,176,195,215];
-const LS_WORDS = 'words-combo-v5';
-const LS_QA    = 'qa-combo-v5';
+const LS_QA = 'qa-combo-v6';
 
 function getLevel(n: number): number {
   let lv = 1;
@@ -23,637 +22,521 @@ function nextThreshold(n: number): number | null {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 単語データ — Level 1〜20 各レベル独立ハードコード（各20語）
+// ストーリーアーク
 // ─────────────────────────────────────────────────────────────────
-interface Word { en: string; emoji: string; ja: string; }
-
-// Lv1: 超基礎（中学1年）
-const W1: Word[] = [
-  {en:'apple',    emoji:'🍎',ja:'りんご'},      {en:'dog',      emoji:'🐶',ja:'いぬ'},
-  {en:'cat',      emoji:'🐱',ja:'ねこ'},        {en:'run',      emoji:'🏃',ja:'はしる'},
-  {en:'eat',      emoji:'🍽️',ja:'たべる'},     {en:'drink',    emoji:'🥤',ja:'のむ'},
-  {en:'big',      emoji:'🐘',ja:'おおきい'},    {en:'small',    emoji:'🐭',ja:'ちいさい'},
-  {en:'red',      emoji:'🔴',ja:'あか'},        {en:'blue',     emoji:'🔵',ja:'あお'},
-  {en:'sun',      emoji:'☀️',ja:'たいよう'},    {en:'water',    emoji:'💧',ja:'みず'},
-  {en:'book',     emoji:'📚',ja:'ほん'},        {en:'happy',    emoji:'😄',ja:'うれしい'},
-  {en:'sad',      emoji:'😢',ja:'かなしい'},    {en:'go',       emoji:'➡️',ja:'いく'},
-  {en:'see',      emoji:'👁️',ja:'みる'},        {en:'yes',      emoji:'✅',ja:'はい'},
-  {en:'no',       emoji:'❌',ja:'いいえ'},      {en:'name',     emoji:'🏷️',ja:'なまえ'},
+const ARCS = [
+  { label: '📞 Phone Booking',   sub: 'Levels 1–4',  bg:'bg-sky-50',    border:'border-sky-100',    text:'text-sky-700',    bar:'bg-sky-500',    soft:'text-sky-400'    },
+  { label: '✈️ Pre-arrival Info', sub: 'Levels 5–8',  bg:'bg-violet-50', border:'border-violet-100', text:'text-violet-700', bar:'bg-violet-500', soft:'text-violet-400' },
+  { label: '🚗 Airport Pickup',  sub: 'Levels 9–12', bg:'bg-emerald-50',border:'border-emerald-100',text:'text-emerald-700',bar:'bg-emerald-500',soft:'text-emerald-400'},
+  { label: '🏡 Check-in',        sub: 'Levels 13–16',bg:'bg-amber-50',  border:'border-amber-100',  text:'text-amber-700',  bar:'bg-amber-500',  soft:'text-amber-400'  },
+  { label: '🗺️ Local Guide',     sub: 'Levels 17–20',bg:'bg-rose-50',   border:'border-rose-100',   text:'text-rose-700',   bar:'bg-rose-500',   soft:'text-rose-400'   },
 ];
-// Lv2: 超基礎（中学1年続き）
-const W2: Word[] = [
-  {en:'banana',   emoji:'🍌',ja:'バナナ'},      {en:'bird',     emoji:'🐦',ja:'とり'},
-  {en:'fish',     emoji:'🐟',ja:'さかな'},      {en:'moon',     emoji:'🌙',ja:'つき'},
-  {en:'star',     emoji:'⭐',ja:'ほし'},        {en:'rain',     emoji:'🌧️',ja:'あめ'},
-  {en:'walk',     emoji:'🚶',ja:'あるく'},      {en:'sleep',    emoji:'😴',ja:'ねる'},
-  {en:'play',     emoji:'🎮',ja:'あそぶ'},      {en:'read',     emoji:'📖',ja:'よむ'},
-  {en:'hot',      emoji:'🔥',ja:'あつい'},      {en:'cold',     emoji:'🥶',ja:'さむい'},
-  {en:'good',     emoji:'👍',ja:'よい'},        {en:'bad',      emoji:'👎',ja:'わるい'},
-  {en:'open',     emoji:'🔓',ja:'あける'},      {en:'close',    emoji:'🔒',ja:'しめる'},
-  {en:'friend',   emoji:'🤝',ja:'ともだち'},    {en:'white',    emoji:'⬜',ja:'しろ'},
-  {en:'black',    emoji:'⬛',ja:'くろ'},        {en:'fast',     emoji:'⚡',ja:'はやい'},
-];
-// Lv3: 基礎（中学2年）
-const W3: Word[] = [
-  {en:'bread',    emoji:'🍞',ja:'パン'},        {en:'rice',     emoji:'🍚',ja:'ごはん'},
-  {en:'milk',     emoji:'🥛',ja:'ぎゅうにゅう'},{en:'tree',     emoji:'🌳',ja:'き'},
-  {en:'flower',   emoji:'🌸',ja:'はな'},        {en:'car',      emoji:'🚗',ja:'くるま'},
-  {en:'bus',      emoji:'🚌',ja:'バス'},        {en:'house',    emoji:'🏠',ja:'いえ'},
-  {en:'school',   emoji:'🏫',ja:'がっこう'},    {en:'door',     emoji:'🚪',ja:'ドア'},
-  {en:'mother',   emoji:'👩',ja:'おかあさん'},  {en:'father',   emoji:'👨',ja:'おとうさん'},
-  {en:'money',    emoji:'💴',ja:'おかね'},      {en:'time',     emoji:'⏰',ja:'じかん'},
-  {en:'music',    emoji:'🎵',ja:'おんがく'},    {en:'color',    emoji:'🎨',ja:'いろ'},
-  {en:'write',    emoji:'✏️',ja:'かく'},        {en:'slow',     emoji:'🐢',ja:'おそい'},
-  {en:'new',      emoji:'🆕',ja:'あたらしい'},  {en:'old',      emoji:'🏚️',ja:'ふるい'},
-];
-// Lv4: 基礎（中学2〜3年）
-const W4: Word[] = [
-  {en:'orange',   emoji:'🍊',ja:'オレンジ'},    {en:'coffee',   emoji:'☕',ja:'コーヒー'},
-  {en:'train',    emoji:'🚂',ja:'でんしゃ'},    {en:'city',     emoji:'🏙️',ja:'まち'},
-  {en:'river',    emoji:'🌊',ja:'かわ'},        {en:'mountain', emoji:'⛰️',ja:'やま'},
-  {en:'morning',  emoji:'🌅',ja:'あさ'},        {en:'evening',  emoji:'🌆',ja:'ゆうがた'},
-  {en:'warm',     emoji:'🌡️',ja:'あたたかい'}, {en:'clean',    emoji:'✨',ja:'きれいな'},
-  {en:'strong',   emoji:'💪',ja:'つよい'},      {en:'weak',     emoji:'😔',ja:'よわい'},
-  {en:'near',     emoji:'📍',ja:'ちかい'},      {en:'far',      emoji:'🔭',ja:'とおい'},
-  {en:'green',    emoji:'🟢',ja:'みどり'},      {en:'yellow',   emoji:'🟡',ja:'きいろ'},
-  {en:'phone',    emoji:'📱',ja:'でんわ'},      {en:'family',   emoji:'👨‍👩‍👧',ja:'かぞく'},
-  {en:'child',    emoji:'👧',ja:'こども'},      {en:'please',   emoji:'🤲',ja:'おねがいします'},
-];
-// Lv5: 中学卒業・高校入口
-const W5: Word[] = [
-  {en:'travel',   emoji:'🧳',ja:'たびをする'},  {en:'dream',    emoji:'💭',ja:'ゆめ'},
-  {en:'problem',  emoji:'⚠️',ja:'もんだい'},    {en:'success',  emoji:'🏆',ja:'せいこう'},
-  {en:'enjoy',    emoji:'😊',ja:'たのしむ'},    {en:'believe',  emoji:'🙏',ja:'しんじる'},
-  {en:'remember', emoji:'🧠',ja:'おぼえる'},    {en:'forget',   emoji:'🤔',ja:'わすれる'},
-  {en:'beautiful',emoji:'✨',ja:'うつくしい'},  {en:'exciting', emoji:'🎉',ja:'わくわくする'},
-  {en:'difficult',emoji:'🤯',ja:'むずかしい'},  {en:'easy',     emoji:'😊',ja:'かんたんな'},
-  {en:'busy',     emoji:'💼',ja:'いそがしい'},  {en:'popular',  emoji:'⭐',ja:'にんきのある'},
-  {en:'special',  emoji:'🌟',ja:'とくべつな'},  {en:'answer',   emoji:'💡',ja:'こたえ'},
-  {en:'question', emoji:'❓',ja:'しつもん'},    {en:'safe',     emoji:'🛡️',ja:'あんぜんな'},
-  {en:'change',   emoji:'🔄',ja:'かえる・へんか'},{en:'plan',    emoji:'📋',ja:'けいかく'},
-];
-// Lv6: 高校基礎（Target 1900前半1）
-const W6: Word[] = [
-  {en:'achieve',  emoji:'🏆',ja:'たっせいする'},{en:'consider', emoji:'💭',ja:'かんがえる'},
-  {en:'describe', emoji:'📝',ja:'せつめいする'},{en:'discuss',  emoji:'💬',ja:'ぎろんする'},
-  {en:'expect',   emoji:'🤞',ja:'きたいする'},  {en:'explain',  emoji:'🗣️',ja:'せつめいする'},
-  {en:'improve',  emoji:'📈',ja:'かいぜんする'},{en:'include',  emoji:'➕',ja:'ふくむ'},
-  {en:'increase', emoji:'🔼',ja:'ふやす'},      {en:'prepare',  emoji:'📋',ja:'じゅんびする'},
-  {en:'provide',  emoji:'🤝',ja:'ていきょうする'},{en:'require', emoji:'📌',ja:'ひつようとする'},
-  {en:'suggest',  emoji:'💡',ja:'ていあんする'},{en:'create',   emoji:'🎨',ja:'つくりだす'},
-  {en:'develop',  emoji:'📈',ja:'はったつさせる'},{en:'manage',  emoji:'📊',ja:'かんりする'},
-  {en:'support',  emoji:'🤝',ja:'しえんする'},  {en:'choose',   emoji:'✅',ja:'えらぶ'},
-  {en:'allow',    emoji:'✔️',ja:'きょかする'},  {en:'reduce',   emoji:'🔽',ja:'へらす'},
-];
-// Lv7: 高校基礎（Target 1900前半2）
-const W7: Word[] = [
-  {en:'benefit',  emoji:'✅',ja:'りえき'},      {en:'challenge',emoji:'💪',ja:'ちょうせん'},
-  {en:'effort',   emoji:'🏋️',ja:'どりょく'},    {en:'factor',   emoji:'📊',ja:'ようそ'},
-  {en:'focus',    emoji:'🎯',ja:'しゅうちゅうする'},{en:'maintain',emoji:'🔧',ja:'いじする'},
-  {en:'obtain',   emoji:'📥',ja:'える'},        {en:'avoid',    emoji:'🚫',ja:'さける'},
-  {en:'admit',    emoji:'🚪',ja:'みとめる'},    {en:'apply',    emoji:'📄',ja:'もうしこむ'},
-  {en:'attract',  emoji:'🧲',ja:'ひきつける'},  {en:'cause',    emoji:'⚡',ja:'ひきおこす'},
-  {en:'combine',  emoji:'🔗',ja:'くみあわせる'},{en:'connect',  emoji:'🔌',ja:'つなぐ'},
-  {en:'continue', emoji:'▶️',ja:'つづける'},    {en:'control',  emoji:'🎛️',ja:'コントロールする'},
-  {en:'limit',    emoji:'🚧',ja:'せいげんする'},{en:'attempt',  emoji:'🎯',ja:'こころみる'},
-  {en:'relate',   emoji:'↔️',ja:'かんけいする'},{en:'involve',  emoji:'🔗',ja:'かかわる'},
-];
-// Lv8: 高校中盤
-const W8: Word[] = [
-  {en:'analyze',  emoji:'🔬',ja:'ぶんせきする'},{en:'approach', emoji:'🚶',ja:'アプローチ'},
-  {en:'confirm',  emoji:'✅',ja:'かくにんする'},{en:'identify', emoji:'🔍',ja:'みわける'},
-  {en:'indicate', emoji:'👉',ja:'しめす'},      {en:'influence',emoji:'💫',ja:'えいきょうする'},
-  {en:'measure',  emoji:'📏',ja:'はかる'},      {en:'produce',  emoji:'🏭',ja:'せいさんする'},
-  {en:'promote',  emoji:'📢',ja:'しょうしんさせる'},{en:'protect', emoji:'🛡️',ja:'まもる'},
-  {en:'recognize',emoji:'💡',ja:'にんしきする'},{en:'replace',  emoji:'🔄',ja:'とりかえる'},
-  {en:'respond',  emoji:'💬',ja:'はんのうする'},{en:'review',   emoji:'📋',ja:'みなおす'},
-  {en:'seek',     emoji:'🔍',ja:'もとめる'},    {en:'select',   emoji:'☑️',ja:'えらびだす'},
-  {en:'solve',    emoji:'🔧',ja:'かいけつする'},{en:'spread',   emoji:'📡',ja:'ひろがる'},
-  {en:'remove',   emoji:'🗑️',ja:'とりのぞく'}, {en:'transfer', emoji:'🔀',ja:'うつす'},
-];
-// Lv9: 高校上級・大学受験入口
-const W9: Word[] = [
-  {en:'acquire',  emoji:'📥',ja:'しゅうとくする'},{en:'adapt',   emoji:'🔄',ja:'てきおうする'},
-  {en:'assess',   emoji:'📊',ja:'ひょうかする'},{en:'assume',   emoji:'💭',ja:'かていする'},
-  {en:'conclude', emoji:'✅',ja:'けつろんづける'},{en:'conduct', emoji:'🎯',ja:'おこなう'},
-  {en:'define',   emoji:'📖',ja:'ていぎする'},  {en:'determine',emoji:'🔍',ja:'けっていする'},
-  {en:'estimate', emoji:'📐',ja:'みつもる'},    {en:'evaluate', emoji:'⚖️',ja:'ひょうかする'},
-  {en:'examine',  emoji:'🔬',ja:'しらべる'},    {en:'execute',  emoji:'▶️',ja:'じっこうする'},
-  {en:'expand',   emoji:'📈',ja:'かくだいする'},{en:'generate', emoji:'⚡',ja:'うみだす'},
-  {en:'illustrate',emoji:'🖼️',ja:'せつめいする'},{en:'implement',emoji:'🔧',ja:'じっしする'},
-  {en:'interpret',emoji:'🌐',ja:'かいしゃくする'},{en:'justify', emoji:'⚖️',ja:'せいとうかする'},
-  {en:'monitor',  emoji:'📺',ja:'かんしする'},  {en:'highlight',emoji:'✨',ja:'めだたせる'},
-];
-// Lv10: 大学受験・TOEIC 500
-const W10: Word[] = [
-  {en:'acquisition',emoji:'📥',ja:'しゅうとく'},{en:'argument', emoji:'💬',ja:'ぎろん・いけん'},
-  {en:'assessment',emoji:'📊',ja:'ひょうか'},   {en:'concept',  emoji:'💡',ja:'がいねん'},
-  {en:'consequence',emoji:'⚡',ja:'けっか'},    {en:'context',  emoji:'📖',ja:'もとにある状況'},
-  {en:'evidence',  emoji:'🔍',ja:'しょうこ'},   {en:'feature',  emoji:'⭐',ja:'とくちょう'},
-  {en:'function',  emoji:'⚙️',ja:'きのう'},     {en:'impact',   emoji:'💥',ja:'えいきょう'},
-  {en:'issue',     emoji:'❗',ja:'もんだい・課題'},{en:'outcome', emoji:'🏁',ja:'けっか'},
-  {en:'pattern',   emoji:'🔢',ja:'パターン'},   {en:'principle',emoji:'📜',ja:'げんり'},
-  {en:'process',   emoji:'🔄',ja:'プロセス'},   {en:'purpose',  emoji:'🎯',ja:'もくてき'},
-  {en:'resource',  emoji:'📦',ja:'しげん'},     {en:'structure',emoji:'🏗️',ja:'こうぞう'},
-  {en:'category',  emoji:'📂',ja:'カテゴリ'},   {en:'role',     emoji:'🎭',ja:'やくわり'},
-];
-// Lv11: TOEIC 600・Target 1900中盤1
-const W11: Word[] = [
-  {en:'accommodate',emoji:'🏨',ja:'みたす・しゅくはくさせる'},{en:'adequate',emoji:'✅',ja:'じゅうぶんな'},
-  {en:'allocate',  emoji:'📊',ja:'わりあてる'},  {en:'colleague',emoji:'👔',ja:'どうりょう'},
-  {en:'competent', emoji:'💪',ja:'かいのうな'},  {en:'comply',   emoji:'✔️',ja:'したがう'},
-  {en:'comprehensive',emoji:'📚',ja:'ほうかつてきな'},{en:'facilitate',emoji:'🤝',ja:'うながす'},
-  {en:'incorporate',emoji:'🔗',ja:'とりいれる'},{en:'initiate', emoji:'🚀',ja:'はじめる'},
-  {en:'integrate', emoji:'🔗',ja:'とうごうする'},{en:'negotiate',emoji:'🤝',ja:'こうしょうする'},
-  {en:'objective', emoji:'🎯',ja:'もくてき・きゃっかんてき'},{en:'perceive',emoji:'👁️',ja:'ちかくする'},
-  {en:'potential', emoji:'🌱',ja:'せんざいりょく'},{en:'relevant',emoji:'🔗',ja:'かんけいのある'},
-  {en:'resolve',   emoji:'🔧',ja:'かいけつする'},{en:'retrieve', emoji:'📥',ja:'とりもどす'},
-  {en:'significant',emoji:'❗',ja:'じゅうような'},{en:'strategic',emoji:'♟️',ja:'せんりゃくてきな'},
-];
-// Lv12: TOEIC 600・Target 1900中盤2
-const W12: Word[] = [
-  {en:'acknowledge',emoji:'🙏',ja:'みとめる'},   {en:'advocate', emoji:'📢',ja:'しじする'},
-  {en:'anticipate',emoji:'🔮',ja:'よそくする'},  {en:'collaborate',emoji:'🤝',ja:'きょうどうする'},
-  {en:'compensate',emoji:'💰',ja:'つぐなう'},    {en:'coordinate',emoji:'📅',ja:'ちょうせいする'},
-  {en:'dedicate',  emoji:'💪',ja:'ささげる'},    {en:'delegate', emoji:'📋',ja:'いにんする'},
-  {en:'demonstrate',emoji:'🎓',ja:'しょうめいする'},{en:'eligible',emoji:'✅',ja:'しかくのある'},
-  {en:'encounter', emoji:'🤝',ja:'であう'},      {en:'fluctuate',emoji:'📈',ja:'へんどうする'},
-  {en:'formulate', emoji:'📝',ja:'くみたてる'},  {en:'hierarchy',emoji:'🏛️',ja:'かいそうせい'},
-  {en:'innovate',  emoji:'💡',ja:'こうしんする'},{en:'inventory',emoji:'📦',ja:'ざいこ'},
-  {en:'leverage',  emoji:'⚖️',ja:'かつようする'},{en:'obligation',emoji:'📜',ja:'ぎむ'},
-  {en:'optimize',  emoji:'⚙️',ja:'さいてきかする'},{en:'transparent',emoji:'🔍',ja:'とうめいな'},
-];
-// Lv13: TOEIC 700
-const W13: Word[] = [
-  {en:'perspective',emoji:'👁️',ja:'してん・みかた'},{en:'preliminary',emoji:'📋',ja:'よびの'},
-  {en:'productive',emoji:'📈',ja:'せいさんてきな'},{en:'regulate', emoji:'📜',ja:'きせいする'},
-  {en:'substantial',emoji:'⚖️',ja:'じつしつてきな'},{en:'coherent', emoji:'🔗',ja:'いっかんした'},
-  {en:'commodity', emoji:'📦',ja:'しょうひん'},   {en:'consensus',emoji:'🤝',ja:'コンセンサス'},
-  {en:'explicit',  emoji:'📢',ja:'めいじてきな'}, {en:'implicit', emoji:'🤫',ja:'あんもくの'},
-  {en:'incentive', emoji:'💰',ja:'インセンティブ'},{en:'manifest', emoji:'📝',ja:'あきらかにする'},
-  {en:'mitigate',  emoji:'🛡️',ja:'かるくする'},  {en:'persistent',emoji:'💪',ja:'ねばりづよい'},
-  {en:'privilege', emoji:'🌟',ja:'とっけん'},     {en:'skeptical',emoji:'🤔',ja:'うたがいぶかい'},
-  {en:'supplement',emoji:'➕',ja:'おぎなう'},     {en:'versatile',emoji:'🔄',ja:'たようなしすい'},
-  {en:'dilemma',   emoji:'⚖️',ja:'ジレンマ'},    {en:'arbitrary',emoji:'🎲',ja:'にんいの'},
-];
-// Lv14: TOEIC 750
-const W14: Word[] = [
-  {en:'alleviate', emoji:'😌',ja:'かるくする・やわらげる'},{en:'articulate',emoji:'🗣️',ja:'はっきりと述べる'},
-  {en:'autonomous',emoji:'🤖',ja:'じりつした'},  {en:'consolidate',emoji:'🔗',ja:'ごうへいする'},
-  {en:'contemplate',emoji:'💭',ja:'じっくりかんがえる'},{en:'discrepancy',emoji:'⚠️',ja:'くいちがい'},
-  {en:'eloquent',  emoji:'🗣️',ja:'ゆうべんな'},  {en:'empower',  emoji:'💪',ja:'ちからをあたえる'},
-  {en:'feasible',  emoji:'✅',ja:'じつこうかのうな'},{en:'formidable',emoji:'🦁',ja:'おそるべき'},
-  {en:'imminent',  emoji:'⏰',ja:'さしせまった'},{en:'inherent', emoji:'🧬',ja:'せいしつとしてもつ'},
-  {en:'meticulous',emoji:'🔬',ja:'こまかいところまで'},{en:'pragmatic',emoji:'🔧',ja:'じつようてきな'},
-  {en:'resilient', emoji:'🌱',ja:'だんりょくせいのある'},{en:'scrutinize',emoji:'🔍',ja:'精しくしらべる'},
-  {en:'streamline',emoji:'⚡',ja:'ごうりかする'},{en:'profound', emoji:'🌊',ja:'しんさんな'},
-  {en:'proactive', emoji:'🚀',ja:'せんこうてきな'},{en:'paradigm', emoji:'🔄',ja:'パラダイム'},
-];
-// Lv15: TOEIC 800入口
-const W15: Word[] = [
-  {en:'astute',    emoji:'🦅',ja:'めざとい'},    {en:'bolster',  emoji:'🛡️',ja:'しえんする'},
-  {en:'catalyst',  emoji:'⚡',ja:'きっかけ・しょくばい'},{en:'cognizant',emoji:'🧠',ja:'じかくしている'},
-  {en:'compelling',emoji:'🔥',ja:'せっとくりょくのある'},{en:'daunting',emoji:'😰',ja:'おじけを出させる'},
-  {en:'empirical', emoji:'🔬',ja:'けいけんてきな'},{en:'lucrative',emoji:'💰',ja:'もうかる'},
-  {en:'nuanced',   emoji:'🎨',ja:'微妙なニュアンスの'},{en:'pivotal', emoji:'🔑',ja:'かなめの'},
-  {en:'prolific',  emoji:'📚',ja:'たさくの'},     {en:'tenacious',emoji:'💪',ja:'ねばりづよい'},
-  {en:'ubiquitous',emoji:'🌍',ja:'どこにでもある'},{en:'unprecedented',emoji:'🆕',ja:'ぜんれいのない'},
-  {en:'volatile',  emoji:'💥',ja:'はくはつしやすい'},{en:'scrutiny',emoji:'🔍',ja:'精密なちょうさ'},
-  {en:'intrinsic', emoji:'💎',ja:'本質てきな'},   {en:'pervasive',emoji:'🌊',ja:'いきわたっている'},
-  {en:'inception', emoji:'🌱',ja:'かいし・おこり'},{en:'novel',   emoji:'📖',ja:'あたらしい・小説'},
-];
-// Lv16: TOEIC 800
-const W16: Word[] = [
-  {en:'aberrant',  emoji:'⚠️',ja:'いじょうな'},  {en:'ameliorate',emoji:'📈',ja:'かいぜんする'},
-  {en:'ambivalent',emoji:'⚖️',ja:'あいまいな感情'},{en:'burgeon',  emoji:'🌱',ja:'急成長する'},
-  {en:'circumvent',emoji:'🔄',ja:'かいひする'},   {en:'convoluted',emoji:'🌀',ja:'ふくざつにからみあった'},
-  {en:'dichotomy', emoji:'⚖️',ja:'にぶんほう'},   {en:'disparate',emoji:'↔️',ja:'まったくちがう'},
-  {en:'enumerate', emoji:'🔢',ja:'列挙する'},     {en:'exacerbate',emoji:'📈',ja:'悪化させる'},
-  {en:'exemplify', emoji:'📌',ja:'典型を示す'},   {en:'extrapolate',emoji:'📊',ja:'外挿する'},
-  {en:'galvanize', emoji:'⚡',ja:'刺激して行動させる'},{en:'impede', emoji:'🚧',ja:'じゃまをする'},
-  {en:'languish',  emoji:'😔',ja:'衰退する'},     {en:'negate',   emoji:'❌',ja:'否定する'},
-  {en:'deliberate',emoji:'🎯',ja:'意図的な'},     {en:'fathom',   emoji:'🌊',ja:'理解する'},
-  {en:'incite',    emoji:'🔥',ja:'こうふんさせる'},{en:'acrimonious',emoji:'🔥',ja:'しんらつな'},
-];
-// Lv17: TOEIC 830
-const W17: Word[] = [
-  {en:'obviate',   emoji:'🚫',ja:'あらかじめ防ぐ'},{en:'oscillate',emoji:'🔄',ja:'ゆれ動く'},
-  {en:'paramount', emoji:'👑',ja:'最高の'},        {en:'parsimonious',emoji:'💰',ja:'けちな'},
-  {en:'perfunctory',emoji:'😑',ja:'おざなりな'},  {en:'placate',  emoji:'🕊️',ja:'なだめる'},
-  {en:'poignant',  emoji:'💔',ja:'心に刺さる'},    {en:'precipitate',emoji:'⬇️',ja:'引き起こす'},
-  {en:'proclivity',emoji:'🎯',ja:'傾向'},          {en:'reconcile',emoji:'🤝',ja:'和解させる'},
-  {en:'rectify',   emoji:'✅',ja:'修正する'},      {en:'relinquish',emoji:'🤲',ja:'手放す'},
-  {en:'repudiate', emoji:'❌',ja:'否認する'},      {en:'reticent', emoji:'🤐',ja:'無口な'},
-  {en:'rhetoric',  emoji:'🗣️',ja:'修辞'},         {en:'sanction', emoji:'⚖️',ja:'制裁・承認する'},
-  {en:'squander',  emoji:'💸',ja:'むだにする'},    {en:'stymie',   emoji:'🚧',ja:'妨害する'},
-  {en:'surmount',  emoji:'🏔️',ja:'のりこえる'},   {en:'truncate', emoji:'✂️',ja:'短縮する'},
-];
-// Lv18: TOEIC 860
-const W18: Word[] = [
-  {en:'abdicate',  emoji:'👑',ja:'退位する・放棄する'},{en:'abrogate',emoji:'📜',ja:'廃止する'},
-  {en:'acumen',    emoji:'🦅',ja:'鋭敏な判断力'},  {en:'admonish', emoji:'☝️',ja:'いましめる'},
-  {en:'affinity',  emoji:'💞',ja:'親和性'},        {en:'anathema', emoji:'🚫',ja:'忌み嫌われるもの'},
-  {en:'antithesis',emoji:'⚖️',ja:'正反対'},        {en:'apocryphal',emoji:'❓',ja:'真偽不確かな'},
-  {en:'approbation',emoji:'✅',ja:'是認'},         {en:'arcane',   emoji:'🔮',ja:'難解な'},
-  {en:'austere',   emoji:'🏔️',ja:'質素な'},        {en:'avarice',  emoji:'💰',ja:'強欲'},
-  {en:'belligerent',emoji:'⚔️',ja:'好戦的な'},    {en:'cajole',   emoji:'🤫',ja:'口ぐるまにのせる'},
-  {en:'callous',   emoji:'🧊',ja:'冷淡な'},        {en:'capitulate',emoji:'🏳️',ja:'降伏する'},
-  {en:'castigate', emoji:'⚡',ja:'きびしく罰する'},{en:'chicanery',emoji:'🎭',ja:'ごまかし'},
-  {en:'coerce',    emoji:'💢',ja:'強制する'},      {en:'cogent',   emoji:'💡',ja:'説得力のある'},
-];
-// Lv19: TOEIC 900
-const W19: Word[] = [
-  {en:'commensurate',emoji:'⚖️',ja:'釣り合った'},{en:'compunction',emoji:'😔',ja:'良心の呵責'},
-  {en:'contrite',  emoji:'🙏',ja:'悔い改めた'},    {en:'credulous',emoji:'😊',ja:'信じやすい'},
-  {en:'culpable',  emoji:'⚠️',ja:'有罪の'},        {en:'cupidity', emoji:'💰',ja:'どんよく'},
-  {en:'debilitate',emoji:'😴',ja:'弱体化させる'},  {en:'deference',emoji:'🙇',ja:'敬意'},
-  {en:'delineate', emoji:'📐',ja:'描写する'},      {en:'deprecate',emoji:'👎',ja:'非難する'},
-  {en:'despondent',emoji:'😞',ja:'意気消沈した'}, {en:'diffident',emoji:'😶',ja:'自信のない'},
-  {en:'dissonance',emoji:'🎵',ja:'不協和音'},      {en:'duplicity',emoji:'🎭',ja:'不誠実'},
-  {en:'ebullient', emoji:'🎉',ja:'はつらつとした'},{en:'efficacy', emoji:'⚡',ja:'有効性'},
-  {en:'effrontery',emoji:'😤',ja:'厚かましさ'},    {en:'egregious',emoji:'😱',ja:'目に余る'},
-  {en:'enervate',  emoji:'😩',ja:'気力を失わせる'},{en:'obsolete', emoji:'🏚️',ja:'時代遅れの'},
-];
-// Lv20: 最難関（難関大・TOEIC 900+）
-const W20: Word[] = [
-  {en:'enigmatic', emoji:'❓',ja:'謎めいた'},      {en:'equanimity',emoji:'😌',ja:'平静'},
-  {en:'equivocate',emoji:'🎭',ja:'言葉を濁す'},    {en:'erudite',  emoji:'📚',ja:'博学な'},
-  {en:'esoteric',  emoji:'🔮',ja:'難解な・秘伝的な'},{en:'euphemism',emoji:'🌸',ja:'婉曲表現'},
-  {en:'exculpate', emoji:'✅',ja:'無罪を証明する'},{en:'extraneous',emoji:'❌',ja:'無関係な'},
-  {en:'facetious', emoji:'😜',ja:'不まじめな'},    {en:'fallacious',emoji:'❌',ja:'誤った'},
-  {en:'garrulous', emoji:'💬',ja:'おしゃべりな'},  {en:'hubris',   emoji:'😤',ja:'傲慢'},
-  {en:'impugn',    emoji:'⚔️',ja:'非難する'},      {en:'inchoate', emoji:'🌱',ja:'まだ形になっていない'},
-  {en:'inimical',  emoji:'⚔️',ja:'有害な・敵対的な'},{en:'grandiloquent',emoji:'👑',ja:'大げさな'},
-  {en:'hapless',   emoji:'😢',ja:'不運な'},        {en:'fervid',   emoji:'🔥',ja:'熱烈な'},
-  {en:'flagrant',  emoji:'🚨',ja:'目に余る'},      {en:'loquacious',emoji:'💬',ja:'多弁な'},
-];
-
-const WORD_LEVELS: Word[][] = [W1,W2,W3,W4,W5,W6,W7,W8,W9,W10,W11,W12,W13,W14,W15,W16,W17,W18,W19,W20];
+function getArc(level: number) { return ARCS[Math.min(4, Math.floor((level - 1) / 4))]; }
 
 // ─────────────────────────────────────────────────────────────────
-// Q&A データ — Level 1〜20 各レベル独立ハードコード（各10問）
+// Q&A データ — 5ストーリーアーク × 4レベル（各10問）
 // ─────────────────────────────────────────────────────────────────
 interface QAItem { question: string; answer: string; wrongs: [string,string]; hint?: string; }
 
-// QA Lv1: 超基本挨拶
+// ── Arc 1: Phone Booking ──────────────────────────────────────────
 const QA1: QAItem[] = [
-  {question:'Hello!',                 answer:'Hi there! How are you?',    wrongs:['Goodbye.','Thank you.']},
-  {question:'Thank you!',             answer:"You're welcome!",            wrongs:['I am sad.','Please help.']},
-  {question:'Goodbye!',               answer:'Bye! See you later!',        wrongs:['I am hungry.','It is hot.']},
-  {question:'Good morning!',          answer:'Good morning! Did you sleep well?', wrongs:['Good night.','I am tired.']},
-  {question:'Are you okay?',          answer:'Yes, I am fine. Thank you!', wrongs:['No, I am a cat.','It is raining.']},
-  {question:'Sorry!',                 answer:"No worries, it's okay!",     wrongs:['I like fish.','The sun is big.']},
-  {question:'Please!',                answer:'Of course, no problem!',     wrongs:['I am running.','It is cold.']},
-  {question:'What is your name?',     answer:'My name is Yuki. Nice to meet you!', wrongs:['I like dogs.','It is sunny.']},
-  {question:'How old are you?',       answer:'I am twelve years old.',     wrongs:['I like cats.','The moon is big.']},
-  {question:'See you tomorrow!',      answer:'See you! Have a great day!', wrongs:['I am cold.','The sun is yellow.']},
+  {question:'Good afternoon, BrightonStar. How may I help you?',         answer:"Hello! I'd like to make a reservation, please.",          wrongs:["I'd like a table for two.","Is the restaurant open?"]},
+  {question:'What date would you like to check in?',                      answer:'From the tenth of July, please.',                         wrongs:['I am not sure yet.','Any date is fine.']},
+  {question:'How many nights will you be staying?',                       answer:'Three nights, please.',                                   wrongs:['I have not decided.','Just one night.']},
+  {question:'How many guests will be staying?',                           answer:'Two adults and one child.',                               wrongs:['Only me.','Maybe three or four.']},
+  {question:'Would you like a single or double room?',                    answer:'A double room, please.',                                  wrongs:['I need a kitchen.','Any room will do.']},
+  {question:'May I have your name, please?',                              answer:'My name is Brown. B-R-O-W-N.',                            wrongs:['It is a long name.','Please check your records.']},
+  {question:'And your phone number?',                                     answer:"Sure, it's 080-1234-5678.",                               wrongs:["I don't have a phone.",'Call me later.']},
+  {question:'We have availability. Shall I confirm the booking?',         answer:'Yes, please! That would be great.',                       wrongs:['I need to think about it.','Can I cancel easily?']},
+  {question:'Your booking is confirmed for July 10th.',                   answer:'Wonderful! Thank you so much.',                           wrongs:['Are you sure that is correct?','I need a written copy.']},
+  {question:'Is there anything else I can help you with?',                answer:"No, that's everything. Thank you!",                       wrongs:['Yes, I am hungry.','I need directions.']},
 ];
-// QA Lv2: 基本日常
+
 const QA2: QAItem[] = [
-  {question:'What do you want to eat?', answer:'I want some pizza, please.',wrongs:['I like trains.','The door is open.']},
-  {question:'Where do you live?',       answer:'I live in Tokyo.',          wrongs:['I have a dog.','The tree is big.']},
-  {question:'Do you like music?',       answer:'Yes, I love music a lot!',  wrongs:['I am a teacher.','The sky is green.']},
-  {question:'What time is it?',         answer:"It's half past two.",       wrongs:['I like apples.','The bus is late.']},
-  {question:'Is this your bag?',        answer:'Yes, it is mine. Thank you!',wrongs:['No, I am tired.','The door is red.']},
-  {question:'Where is the bathroom?',   answer:"It's down the hall on the left.", wrongs:['I like cats.','The car is fast.']},
-  {question:'Can I sit here?',          answer:'Sure, please go ahead!',    wrongs:['I am hungry.','The fish is small.']},
-  {question:'What is that?',            answer:"It's a dictionary.",        wrongs:['I like rain.','The star is big.']},
-  {question:'Do you have a pen?',       answer:'Yes, here you go!',         wrongs:['I need water.','The moon is round.']},
-  {question:'How was your weekend?',    answer:'It was fantastic! I went hiking.', wrongs:['I like books.','The dog is small.']},
+  {question:'Do you have any room preferences?',                          answer:'We would love a room with a view of Mt. Fuji.',           wrongs:['Any room is fine.','I need a parking space.']},
+  {question:'Would you like breakfast included?',                         answer:'Yes, please—breakfast for two.',                          wrongs:['I will eat outside.','No food is needed.']},
+  {question:'We offer Japanese or Western breakfast. Which do you prefer?',answer:'Japanese style, please—that sounds wonderful.',          wrongs:['I want a sandwich.','I skip breakfast.']},
+  {question:'Could you give me your email for the booking confirmation?', answer:'Of course. It is smith at gmail dot com.',                wrongs:["I don't use email.",'Please call me instead.']},
+  {question:'Will you be arriving by car or by train?',                   answer:'By train to Gotemba Station.',                            wrongs:['I have a bicycle.','We will walk.']},
+  {question:'Is this your first time staying with us?',                   answer:'Yes, it is! We are very excited.',                        wrongs:['I have been before.','I prefer larger hotels.']},
+  {question:'We require a credit card to hold the reservation.',          answer:'Of course. Shall I give you the number now?',             wrongs:['I only use cash.','Can I pay on arrival?']},
+  {question:'Is there a special occasion for your visit?',                answer:"Yes, it's our wedding anniversary!",                      wrongs:['Nothing in particular.','We are on a business trip.']},
+  {question:'We will send a confirmation email within the hour.',         answer:'Thank you! I will look out for it.',                      wrongs:["I don't need it.",'Please call instead.']},
+  {question:'We look forward to welcoming you on July 10th.',             answer:"Thank you so much! We can't wait.",                       wrongs:['We might cancel.','The date may change.']},
 ];
-// QA Lv3: 食事・買い物基礎
+
 const QA3: QAItem[] = [
-  {question:'Can I see the menu?',         answer:'Of course! Here it is.',   wrongs:['I want coffee.','The park is open.']},
-  {question:'What do you recommend?',      answer:"I'd recommend the curry.",  wrongs:['I am from Tokyo.','The bus is late.']},
-  {question:'How much is this shirt?',     answer:"It's 2,000 yen.",          wrongs:['I like sushi.','The train is fast.']},
-  {question:'Do you have this in blue?',   answer:"Let me check for you!",    wrongs:['I want fish.','The park is big.']},
-  {question:'Can I try this on?',          answer:'Yes, the fitting room is over there.', wrongs:['I need a key.','The door is open.']},
-  {question:'I am allergic to peanuts.',   answer:'No worries, this dish has none.', wrongs:['I want sushi.','The window is clean.']},
-  {question:"I'll take this one.",         answer:'Great choice! That will be 3,500 yen.', wrongs:['I need a menu.','The bus is here.']},
-  {question:'Could I get a receipt?',      answer:'Absolutely, here is your receipt.', wrongs:['I like this.','The sun is warm.']},
-  {question:'Do you accept card?',         answer:'Yes, we take all major cards.', wrongs:['I need cash.','The shop is closed.']},
-  {question:'Is there a vegetarian option?',answer:"Yes, our tofu salad is very popular!", wrongs:['I want meat.','The menu is small.']},
+  {question:'We have a Fuji View Deluxe plan and a Garden Standard plan. Do you have a preference?',
+    answer:"The Fuji View Deluxe sounds perfect—we'll take that.",        wrongs:['I need the cheapest option.','Do you have a pool view?']},
+  {question:'The Fuji View plan includes dinner as well. Would that suit you?',
+    answer:"That's ideal—dinner included would be wonderful.",            wrongs:['We prefer to eat out.','Is there a surcharge?']},
+  {question:'Do any of your party have dietary requirements?',
+    answer:'Yes, one person is vegetarian, please.',                      wrongs:['We eat everything.','We have no requirements.']},
+  {question:'We can arrange airport pickup from Haneda. Would you like that?',
+    answer:"Yes, please! What time do you recommend we arrange it?",      wrongs:['We will take a taxi.','I prefer the train.']},
+  {question:'Our shuttle from Haneda takes approximately 90 minutes.',
+    answer:"That's fine. Our flight lands at noon, so 1 PM pickup would be perfect.",
+    wrongs:['We arrive at midnight.','90 minutes is too long.']},
+  {question:'May I confirm: two adults, check-in July 10th, Fuji View Deluxe with dinner?',
+    answer:"That's correct—everything looks perfect.",                    wrongs:['I need to change the date.','Can I add one more guest?']},
+  {question:'The total for three nights including dinner and pickup is 75,000 yen.',
+    answer:"That's great value. Please go ahead and book it.",            wrongs:['That seems very expensive.','I need a discount.']},
+  {question:'We ask for a 10,000 yen deposit to confirm the reservation.',
+    answer:'Of course. I will pay by credit card now.',                   wrongs:['I will pay on arrival.','Can I skip the deposit?']},
+  {question:'Your booking reference number is BS-2024-0710.',
+    answer:'Thank you! I will make a note of that.',                      wrongs:["I don't need the number.",'Please email it instead.']},
+  {question:'Please feel free to call us any time if you have questions before your arrival.',
+    answer:"Thank you—you've been very helpful!",                         wrongs:["I won't call again.",'Your line is always busy.']},
 ];
-// QA Lv4: 交通・場所
+
 const QA4: QAItem[] = [
-  {question:'Where is the station?',         answer:"Go straight, then turn left.", wrongs:['I like trains.','The door is big.']},
-  {question:'How do I get to the museum?',   answer:"Take the subway to Ueno station.", wrongs:['I need a bus.','The park is far.']},
-  {question:'Is this the right bus for Shibuya?', answer:'Yes, this bus goes to Shibuya.', wrongs:['No, this is a taxi.','The station is near.']},
-  {question:'How long does it take?',        answer:'About 20 minutes by train.',  wrongs:['I need a map.','The taxi is slow.']},
-  {question:"Excuse me, I'm lost.",          answer:'No problem! Where are you going?', wrongs:['I like walking.','The road is long.']},
-  {question:'Can I buy a train ticket here?',answer:'Yes, the ticket machine is right there.', wrongs:['I need a taxi.','The gate is open.']},
-  {question:'Is there a bus stop nearby?',   answer:'Yes, it is just around the corner.', wrongs:['I want a taxi.','The road is wide.']},
-  {question:'Do I need to change trains?',   answer:'Yes, change at Shinjuku station.', wrongs:['I need a map.','The bus is full.']},
-  {question:'What is the next stop?',        answer:"The next stop is Omotesando.",  wrongs:['I need a seat.','The station is closed.']},
-  {question:'Can you show me on the map?',   answer:"Sure! We are here, and the hotel is here.", wrongs:['I have a map.','The road is short.']},
+  {question:"I see from our records that you stayed with us last autumn. Welcome back!",
+    answer:'Yes, we loved it so much we had to return!',                  wrongs:['I think you have the wrong person.',"I don't remember my last stay."]},
+  {question:'Free cancellation is available up to five days before arrival. After that, there is a charge.',
+    answer:'Understood—what is the charge within three days?',            wrongs:["We won't be cancelling.",'I need to cancel right now.']},
+  {question:'There is a 50 percent charge for cancellations within three days of arrival.',
+    answer:"That's quite reasonable. We'll keep the booking.",            wrongs:['That seems very strict.','I want to pay the full amount now.']},
+  {question:'Would you be interested in adding a couples spa treatment to your package?',
+    answer:"That sounds lovely—what does it include?",                    wrongs:["We don't use spas.",'We are tired of package deals.']},
+  {question:'The spa package includes a 60-minute facial and a traditional onsen ritual.',
+    answer:"That's wonderful—please add it to our booking.",              wrongs:['I prefer a massage.','No extras, thank you.']},
+  {question:'I should mention that Mt. Fuji visibility depends on the weather and season.',
+    answer:'Of course—we understand and will hope for clear skies!',      wrongs:['Is there a guarantee?','I want a refund if it is cloudy.']},
+  {question:'We can arrange a private dining experience if you prefer.',
+    answer:'That would be incredible! Please add it for the first evening.',
+    wrongs:['The restaurant is fine.','We prefer casual dining.']},
+  {question:'Shall I send a pre-arrival information package by email?',
+    answer:"Yes, please—that would be very helpful for our planning.",    wrongs:['No, we know the area.',"We'll figure it out ourselves."]},
+  {question:'Is there anything specific you would like us to prepare for your arrival?',
+    answer:'Perhaps some local flowers in the room—we love Japanese nature.',
+    wrongs:['Nothing in particular.','I will let you know later.']},
+  {question:'On behalf of the entire BrightonStar team, we look forward to making your stay unforgettable.',
+    answer:'Thank you! We are already counting down the days.',           wrongs:['Just do your best.','I hope it will be okay.']},
 ];
-// QA Lv5: 宿泊・基礎
+
+// ── Arc 2: Pre-arrival Info ───────────────────────────────────────
 const QA5: QAItem[] = [
-  {question:'Do you have a room available?', answer:'Yes, we have a twin room free tonight.', wrongs:['I need a taxi.','The hotel is closed.']},
-  {question:'How much is a room per night?', answer:"It's 8,000 yen including breakfast.", wrongs:['I want a suite.','The room is large.']},
-  {question:'What time is check-in?',        answer:'Check-in is from 3 PM.',      wrongs:['I need a key.','The lobby is big.']},
-  {question:'Is breakfast included?',        answer:'Yes, served from 7 to 9 in the morning.', wrongs:['I want coffee.','The room is cold.']},
-  {question:'Can I have a wake-up call at 7?', answer:"Of course! We'll call you at 7 AM.", wrongs:['I need a taxi.','The phone is broken.']},
-  {question:'Where can I park my car?',      answer:'There is a free parking lot behind the hotel.', wrongs:['I need a map.','The road is long.']},
-  {question:'Is there free Wi-Fi?',          answer:'Yes, the password is on your room card.', wrongs:['I need a phone.','The internet is slow.']},
-  {question:"I'd like a non-smoking room.",  answer:'Certainly, all our rooms are non-smoking.', wrongs:['I need a balcony.','The window is small.']},
-  {question:'Can I leave my luggage here?',  answer:'Of course, we will keep it safe.', wrongs:['I need a taxi.','The luggage is heavy.']},
-  {question:'What time is check-out?',       answer:'Check-out is by 11 AM.',      wrongs:['I need a key.','The lobby is busy.']},
+  {question:'Hello, this is BrightonStar confirming your stay from July 10th.',
+    answer:"Yes, hello! We're very excited about our trip.",              wrongs:['I think you have the wrong number.','Please call back later.']},
+  {question:'Could you confirm your arrival time?',
+    answer:'We expect to arrive at around 3 PM.',                         wrongs:['We will come whenever.','Time does not matter.']},
+  {question:'Will you be requiring the airport pickup service?',
+    answer:'Yes, please—from Haneda Terminal 3.',                         wrongs:['We have a rental car.','We will take the train.']},
+  {question:'What time does your flight land?',
+    answer:'We land at 12:45 PM.',                                        wrongs:['The schedule is flexible.','It depends on the weather.']},
+  {question:'Our driver will meet you in the arrivals hall holding a BrightonStar sign.',
+    answer:"Perfect—we'll look out for the sign.",                        wrongs:["We'll find you somehow.",'What does the driver look like?']},
+  {question:'The journey from Haneda to our property takes approximately 90 minutes.',
+    answer:"That's fine—we're looking forward to the scenic drive!",      wrongs:['That seems very long.','Can you make it faster?']},
+  {question:'Please feel free to contact us if your flight is delayed.',
+    answer:"Will do—what's the best number to call?",                     wrongs:["We'll manage on our own.",'Delays never happen to us.']},
+  {question:'The nearest convenience store is a three-minute walk from BrightonStar.',
+    answer:"Good to know—thank you for the tip!",                         wrongs:["We don't need stores.",'Is there a supermarket nearby?']},
+  {question:'Gotemba can be quite cool in the evenings, even in summer.',
+    answer:"Thanks for the warning—we'll pack a light jacket.",           wrongs:['We love the heat.','It is always warm in Japan.']},
+  {question:"We look forward to seeing you on the 10th. Safe travels!",
+    answer:"Thank you! We can't wait to arrive.",                         wrongs:['We may be running late.','I will call when I am close.']},
 ];
-// QA Lv6: 道案内・応用
+
 const QA6: QAItem[] = [
-  {question:'Could you tell me how to get to the post office?', answer:"It's a three-minute walk north of here.", wrongs:['I need a bus.','The park is far.'], hint:'道案内'},
-  {question:'Is it within walking distance?',  answer:'Yes, about ten minutes on foot.',   wrongs:['I need a taxi.','The road is long.'], hint:'道案内'},
-  {question:'Could you write it down for me?', answer:'Sure! Here is the address in Japanese.', wrongs:['I have a map.','The station is close.'], hint:'道案内'},
-  {question:'Am I on the right road for the airport?', answer:"Yes, just keep going straight for two kilometers.", wrongs:['I need a map.','The taxi is near.'], hint:'交通'},
-  {question:"I've missed the last train.",      answer:"I'm sorry to hear that. Shall I call you a taxi?", wrongs:['I need a hotel.','The bus is gone.'], hint:'交通'},
-  {question:'Where can I rent a bicycle?',      answer:"There is a rental shop by the station entrance.", wrongs:['I need a map.','The road is steep.'], hint:'交通'},
-  {question:'Can you recommend a good restaurant nearby?', answer:"Try Sakura Kitchen—their ramen is amazing!", wrongs:['I need a menu.','The park is quiet.'], hint:'観光'},
-  {question:'What sights are worth visiting here?', answer:"Don't miss the old castle and the waterfall.", wrongs:['I need a taxi.','The museum is far.'], hint:'観光'},
-  {question:'Is there a convenience store open now?', answer:"Yes, the FamilyMart on the corner is open 24 hours.", wrongs:['I need a pharmacy.','The shop is closed.'], hint:'ショッピング'},
-  {question:'Could you help me find a pharmacy?', answer:"Certainly! There is one just two blocks away.", wrongs:['I need a doctor.','The hospital is near.'], hint:'ショッピング'},
+  {question:"Have you had a chance to review the information pack we sent?",
+    answer:"Yes! The house rules and map were very helpful.",             wrongs:["I didn't receive it.",'I have not read it yet.']},
+  {question:'Do you have any questions about the route from Gotemba Station?',
+    answer:'Yes—is it walkable, or should we take a taxi?',              wrongs:['We have a GPS navigation.',"We know the area well."]},
+  {question:'We recommend a taxi as the walk is about 25 minutes uphill.',
+    answer:"Good advice—we'll take a taxi then.",                         wrongs:['We enjoy long uphill walks.','25 minutes is nothing.']},
+  {question:'We can arrange a taxi for you in advance. Would you like that?',
+    answer:"Yes, please! That would be very convenient.",                 wrongs:["We'll sort it ourselves.",'There must be a bus.']},
+  {question:'Can you confirm how many bags you will be bringing?',
+    answer:'Two large suitcases and one carry-on.',                       wrongs:['Just one small bag.','I always travel light.']},
+  {question:'Our driver can assist with your luggage at the airport.',
+    answer:"That's very kind—it will be a great help.",                   wrongs:['We can manage by ourselves.','Please do not touch our bags.']},
+  {question:'Shall we prepare a welcome drink in your room for your arrival?',
+    answer:'Oh, how thoughtful! Yes, please.',                            wrongs:["We'll get our own drinks.",'No need for extras.']},
+  {question:'The outdoor hot spring opens at 6 AM and closes at 11 PM.',
+    answer:"Wonderful—we'll definitely try it in the evening.",           wrongs:['We prefer a regular bath.','We will not use the onsen.']},
+  {question:'Mt. Fuji is typically clearest in the early morning or late afternoon.',
+    answer:"Thank you—we'll set an early alarm!",                         wrongs:["We're not morning people.",'We prefer the evening light.']},
+  {question:'Please note that our property is a no-shoe zone—slippers will be provided.',
+    answer:"Understood! We'll remember to take off our shoes.",           wrongs:['We prefer to wear shoes indoors.','Is there an exception?']},
 ];
-// QA Lv7: レストラン・応用
+
 const QA7: QAItem[] = [
-  {question:'Could we have a table for four?',  answer:"Of course! Right this way, please.",  wrongs:['I need a menu.','The room is full.'], hint:'レストラン'},
-  {question:'Do you have a reservation?',        answer:"Yes, under the name Suzuki at seven o'clock.", wrongs:["I don't need one.",'The table is ready.'], hint:'レストラン'},
-  {question:'Could we sit near the window?',     answer:'Certainly, I will show you to a window seat.', wrongs:['I need a chair.','The view is nice.'], hint:'レストラン'},
-  {question:"What's today's special?",           answer:"Grilled sea bream with yuzu butter sauce.", wrongs:['I want ramen.','The dessert is sweet.'], hint:'レストラン'},
-  {question:'How spicy is the curry?',           answer:"It has a gentle warmth—not too hot at all.", wrongs:['I want mild.','The dish is cold.'], hint:'レストラン'},
-  {question:'Could I have mine without onions?', answer:"Absolutely! I will let the kitchen know.", wrongs:['I need a menu.','The salad is fresh.'], hint:'レストラン'},
-  {question:'Could we see the dessert menu?',    answer:"Of course! Our matcha parfait is very popular.", wrongs:['I want coffee.','The dessert is good.'], hint:'レストラン'},
-  {question:'Could I have my steak well done?',  answer:"Certainly! It will be ready in about fifteen minutes.", wrongs:['I want it rare.','The steak is big.'], hint:'レストラン'},
-  {question:'Could we split the bill?',          answer:"Of course! Let me divide it for you.", wrongs:['I need one bill.','The total is cheap.'], hint:'お会計'},
-  {question:'Could I get the check, please?',    answer:"Right away! Here is your bill.",     wrongs:['I want more food.','The service was slow.'], hint:'お会計'},
+  {question:'We noticed you enquired about the Gotemba Premium Outlets. It is just 15 minutes from us.',
+    answer:"Excellent! Could you arrange transport for us one afternoon?", wrongs:["We'll walk there.",'Shopping is not really for us.']},
+  {question:'We offer a complimentary shuttle to the Outlets twice daily.',
+    answer:"That's perfect—we'll take the afternoon one.",                wrongs:['We prefer taxis.','We will rent a car.']},
+  {question:'For the Mt. Fuji 5th Station visit, we recommend going on a weekday to avoid crowds.',
+    answer:"Good tip—we happen to be there on a Tuesday.",               wrongs:['Crowds do not bother us.','We will go at the weekend.']},
+  {question:'Would you like to pre-book a bento box for your Mt. Fuji excursion?',
+    answer:"What a great idea—yes, please!",                              wrongs:["We'll buy food there.",'We skip lunch on excursions.']},
+  {question:'We have a local restaurant guide featuring Gotemba\'s best dining spots in your room.',
+    answer:"That sounds wonderful—we love exploring local food.",          wrongs:["We'll use our phones.",'We always eat at the hotel.']},
+  {question:'Sawayaka restaurant is very popular locally—would you like a reservation?',
+    answer:"Yes! We've heard great things about their hamburg steak.",    wrongs:['We prefer sushi restaurants.','We eat at the hotel.']},
+  {question:'Please note that Sawayaka can be very busy with waits exceeding an hour.',
+    answer:"No problem—we'll enjoy the wait! Is early booking possible?", wrongs:['An hour is far too long.','We will choose somewhere quieter.']},
+  {question:'Shall I arrange a Mt. Fuji photography tour for your stay?',
+    answer:"That sounds amazing—what does the tour include?",             wrongs:['We have our own camera.','We will manage on our own.']},
+  {question:'The Fuji Photography Tour departs at 5 AM to capture the sunrise light.',
+    answer:"We're definitely up for that—please book it for us.",         wrongs:['5 AM is far too early.','We prefer sunset photos.']},
+  {question:'Is there anything you would like us to arrange before your arrival?',
+    answer:'Perhaps some local Shizuoka tea waiting in the room?',        wrongs:['Everything is already perfect.','We will take care of ourselves.']},
 ];
-// QA Lv8: ショッピング・応用
+
 const QA8: QAItem[] = [
-  {question:"I'm looking for a winter jacket.",    answer:"Our new arrivals are on the second floor.", wrongs:['I need shoes.','The jacket is red.'], hint:'ショッピング'},
-  {question:'Do you have this in a larger size?',  answer:"Let me check the stockroom for you.",      wrongs:['I need a medium.','The shirt is blue.'], hint:'ショッピング'},
-  {question:'Is this on sale?',                    answer:"Yes, it is 30 percent off this week.",     wrongs:['I need a receipt.','The price is high.'], hint:'ショッピング'},
-  {question:'Can I exchange this if it does not fit?', answer:"Yes, you have 30 days to exchange with the receipt.", wrongs:['I need cash.','The policy is strict.'], hint:'ショッピング'},
-  {question:'Do you do gift wrapping?',            answer:"Yes, it is a free service at our counter.", wrongs:['I need a bag.','The box is small.'], hint:'ショッピング'},
-  {question:'Could I get a tax refund?',           answer:"Yes, please bring your passport to the tax refund counter.", wrongs:['I need a receipt.','The tax is low.'], hint:'ショッピング'},
-  {question:'Is this brand available at other shops?', answer:"This is exclusive to our store.",      wrongs:['I need a map.','The brand is popular.'], hint:'ショッピング'},
-  {question:"I'd like to return this item.",       answer:"Certainly! May I ask the reason for the return?", wrongs:['I need cash.','The item is nice.'], hint:'ショッピング'},
-  {question:'Do you have a loyalty card?',         answer:"Yes! Signing up earns you points from today.", wrongs:['I need a coupon.','The card is free.'], hint:'ショッピング'},
-  {question:'Could you ship this overseas?',       answer:"Yes, we offer international shipping to over 50 countries.", wrongs:['I need a box.','The shipping is fast.'], hint:'ショッピング'},
+  {question:'We have reviewed your dietary preferences and briefed our kitchen accordingly.',
+    answer:"We really appreciate that thoughtful attention to detail.",   wrongs:["I didn't mention any preferences.",'The kitchen need not know.']},
+  {question:'Our head chef suggests the seasonal Shizuoka tea-smoked duck as a dinner highlight.',
+    answer:"That sounds exquisite—we'll look forward to it greatly.",     wrongs:['We prefer something simpler.','We do not eat duck.']},
+  {question:'Mobile signal can be weak around Mt. Fuji—we recommend downloading maps offline.',
+    answer:"Great advice—I'll do that before we depart.",                 wrongs:['We will rely on our connection.','We know the area well.']},
+  {question:'For the airport pickup, our driver will contact you 30 minutes before your flight lands.',
+    answer:"Perfect—we'll keep our phones on after landing.",             wrongs:['We will find the driver.','Please call the hotel instead.']},
+  {question:'We will place a welcome card, seasonal flowers, and local sweets in your room.',
+    answer:"How wonderfully thoughtful—we truly appreciate it.",          wrongs:['Please keep the room simple.','Flowers may cause allergies.']},
+  {question:'If you experience any issues, please contact our 24-hour concierge directly.',
+    answer:"Good to know—could you provide the concierge number?",        wrongs:['We will manage on our own.','We will come to the front desk.']},
+  {question:'The area around BrightonStar is perfect for evening strolls with mountain views.',
+    answer:"That sounds idyllic—we'll definitely take an evening walk.",  wrongs:['We stay indoors at night.','We prefer the city.']},
+  {question:'We can arrange a private tea ceremony in our Japanese garden on request.',
+    answer:"I'd love that—could we schedule it for our second afternoon?",wrongs:['We prefer coffee.','Tea ceremonies seem too formal.']},
+  {question:'Our property has a strict quiet hours policy from 10 PM to 7 AM.',
+    answer:"Of course—we respect that and appreciate the peaceful environment.",
+    wrongs:['That seems very strict.','We often stay up quite late.']},
+  {question:'We look forward to offering you an authentic Japanese mountain hospitality experience.',
+    answer:"We are incredibly excited. Thank you for your exceptional pre-arrival care.",
+    wrongs:["We'll see when we get there.",'Please just keep it simple.']},
 ];
-// QA Lv9: 医療・緊急
+
+// ── Arc 3: Airport Pickup ─────────────────────────────────────────
 const QA9: QAItem[] = [
-  {question:'I am not feeling well.',               answer:"I am sorry to hear that. Do you have a fever?", wrongs:['I need food.','The doctor is busy.'], hint:'医療'},
-  {question:'Where is the nearest hospital?',       answer:"St. Luke's is about five minutes by taxi.",    wrongs:['I need a pharmacy.','The clinic is far.'], hint:'医療'},
-  {question:'Do I need an appointment?',            answer:"Not for urgent care—please come straight in.",  wrongs:['I need insurance.','The doctor is in.'], hint:'医療'},
-  {question:'I have a severe headache.',            answer:"Please take a seat and the nurse will see you shortly.", wrongs:['I need medicine.','The pain is mild.'], hint:'医療'},
-  {question:'Do you have travel insurance?',        answer:"Yes, it is provided by my company.",            wrongs:['I need a form.','The insurance is good.'], hint:'医療'},
-  {question:'I think I have food poisoning.',       answer:"Please go to the emergency room right away.",   wrongs:['I need water.','The food was bad.'], hint:'医療'},
-  {question:'How do I call an ambulance?',          answer:"Dial 119. I can call for you if you like.",    wrongs:['I need a taxi.','The hospital is near.'], hint:'緊急'},
-  {question:'I lost my passport.',                  answer:"Please report it to the police and contact your embassy.", wrongs:['I need a form.','The hotel can help.'], hint:'緊急'},
-  {question:'My bag was stolen.',                   answer:"I am so sorry. Let me help you call the police.", wrongs:['I need insurance.','The bag is lost.'], hint:'緊急'},
-  {question:"I've been in a minor accident.",       answer:"Are you injured? Shall I call the police?",    wrongs:['I need a map.','The car is fine.'], hint:'緊急'},
+  {question:"Excuse me, are you the Brown family? I'm Kenji from BrightonStar.",
+    answer:'Yes! Hello, Kenji! Wonderful to meet you.',                   wrongs:['No, I am someone else.','We were expecting someone else.']},
+  {question:'Welcome to Japan! How was your flight?',
+    answer:'It was very comfortable, thank you!',                         wrongs:['I am too tired to talk.','The flight was quite terrible.']},
+  {question:'Did you sleep well on the flight?',
+    answer:"A little—we're a bit tired but very excited!",               wrongs:['I never sleep on planes.','I am completely exhausted.']},
+  {question:'Please follow me—the car is just outside.',
+    answer:'Of course! Lead the way.',                                    wrongs:['We need to find our bags first.','Where exactly is the car?']},
+  {question:'May I take your luggage for you?',
+    answer:'Yes, please—thank you very much!',                            wrongs:['No, I prefer to carry it.','We have too many bags.']},
+  {question:'We have water and snacks ready for you in the car.',
+    answer:'Oh, how thoughtful! Thank you.',                              wrongs:['We already ate.','We do not need anything.']},
+  {question:'The drive to Gotemba takes about 90 minutes. Please make yourself comfortable.',
+    answer:"Wonderful! We're excited to see the countryside.",            wrongs:['90 minutes is very long.','Can we stop on the way?']},
+  {question:'Please feel free to sleep in the car if you are tired.',
+    answer:"Thank you—we might take a little nap.",                       wrongs:["We'll stay awake.",'I cannot sleep in cars.']},
+  {question:'The seat belt is just to your right. Please buckle up.',
+    answer:'Of course, safety first! Thank you.',                         wrongs:["I'll be fine without it.",'I cannot find it.']},
+  {question:"We'll be leaving Haneda Airport now. Enjoy the journey!",
+    answer:"We're ready! Let's go to BrightonStar.",                     wrongs:['Can we stop for shopping first?','One moment—I need to call someone.']},
 ];
-// QA Lv10: ビジネス基礎
+
 const QA10: QAItem[] = [
-  {question:'Could I speak to the manager?',         answer:"Of course. Please wait one moment.",          wrongs:['I need a form.','The manager is out.'], hint:'ビジネス'},
-  {question:'May I have your business card?',        answer:"Certainly, here you are. This is mine as well.", wrongs:['I need a pen.','The card is ready.'], hint:'ビジネス'},
-  {question:"I'd like to arrange a meeting.",        answer:"Of course. What date and time suit you?",     wrongs:['I need a form.','The schedule is full.'], hint:'ビジネス'},
-  {question:'Could you send me a quotation?',        answer:"Certainly. I will email it by end of business today.", wrongs:['I need a contract.','The price is fixed.'], hint:'ビジネス'},
-  {question:'We would like to place an order.',      answer:"Wonderful! How many units would you require?", wrongs:['I need a discount.','The order is ready.'], hint:'ビジネス'},
-  {question:'Is there any flexibility on the price?',answer:"Let me discuss it with my team and get back to you.", wrongs:['I need a receipt.','The price is firm.'], hint:'ビジネス'},
-  {question:"We'd like to extend our contract.",     answer:"That sounds great. Let's set up a call to discuss the terms.", wrongs:['I need a lawyer.','The contract is old.'], hint:'ビジネス'},
-  {question:'Could I get an update on my order?',    answer:"Your order has shipped and will arrive Thursday.", wrongs:['I need a receipt.','The order is late.'], hint:'ビジネス'},
-  {question:'We have a complaint about the delivery.',answer:"I sincerely apologize. Let me investigate right away.", wrongs:['I need a refund.','The package is small.'], hint:'ビジネス'},
-  {question:'Shall we confirm the details in writing?',answer:"Absolutely. I will send a written summary this afternoon.", wrongs:['I need a stamp.','The details are clear.'], hint:'ビジネス'},
+  {question:'Is this your first time visiting the Gotemba area?',
+    answer:"Yes, it is! We've been looking forward to this for months.",  wrongs:['We come here every year.','We know Japan very well.']},
+  {question:'The highway will take us past the foot of Mt. Fuji.',
+    answer:'How exciting! Will we be able to see it from the car?',       wrongs:['I prefer the countryside view.','We have seen it in photos.']},
+  {question:'On a clear day, Mt. Fuji is visible from this very spot on the highway.',
+    answer:"Please let us know when—we don't want to miss it!",           wrongs:["We'll look later.",'We have already seen it.']},
+  {question:'There it is! Mt. Fuji at eleven o\'clock on your left.',
+    answer:'Oh, it is magnificent! Absolutely breathtaking.',             wrongs:['I cannot see it.','It is smaller than I imagined.']},
+  {question:"The mountain is 3,776 metres tall—Japan's highest peak.",
+    answer:'Incredible! It looks even more impressive in person.',         wrongs:['I prefer smaller mountains.','We are not interested in facts.']},
+  {question:'The area around Gotemba is known for green tea farms and fresh mountain air.',
+    answer:"We can already sense how different it feels from Tokyo!",     wrongs:['We prefer the city.','The countryside feels boring.']},
+  {question:'BrightonStar is situated at 600 metres elevation with panoramic Fuji views.',
+    answer:"That sounds absolutely spectacular—we can't wait to arrive.", wrongs:['Is there a lift to get there?','We prefer lower-altitude stays.']},
+  {question:'Gotemba is also home to one of Japan\'s largest premium outlet malls.',
+    answer:"Wonderful! We plan to visit for some shopping.",              wrongs:["We're not shoppers.",'We will skip the Outlets.']},
+  {question:"The local specialty is Shizuoka green tea—the finest in Japan.",
+    answer:"We love green tea! We'll try as much as possible.",           wrongs:['We prefer coffee.','Tea is not our thing.']},
+  {question:'We are almost there—just another 10 minutes.',
+    answer:"Perfect! We're getting very excited now.",                    wrongs:['Can we stop somewhere?','We are not in a hurry.']},
 ];
-// QA Lv11: ホテル・中級
+
 const QA11: QAItem[] = [
-  {question:'May I have your name, please?',          answer:"Sure, I have a reservation under Johnson.",    wrongs:['I like sushi.','The weather is nice.'], hint:'ホテル'},
-  {question:'How many nights will you be staying?',   answer:"I will be staying for three nights.",          wrongs:['I am very tired.','Yes, I like it.'], hint:'ホテル'},
-  {question:'Would you prefer a smoking or non-smoking room?', answer:"Non-smoking, please.",               wrongs:['I need a balcony.','The view is great.'], hint:'ホテル'},
-  {question:"I'm afraid your room isn't ready yet.",  answer:"No problem—may I leave my bags here?",        wrongs:['I need a refund.','The room is nice.'], hint:'ホテル'},
-  {question:'Would you like a room with a city view?', answer:"Yes, that would be wonderful, thank you.",   wrongs:['I want a mountain view.','The floor is high.'], hint:'ホテル'},
-  {question:'The elevator is just past the front desk.',answer:"Thank you very much.",                       wrongs:['I need stairs.','The lift is broken.'], hint:'ホテル'},
-  {question:'Would you like a newspaper delivered in the morning?', answer:"Yes, an English paper would be great.", wrongs:['I need a phone.','The morning is early.'], hint:'ホテル'},
-  {question:'Is room service available 24 hours?',    answer:"Yes, our menu is in your room.",              wrongs:['I need a kitchen.','The food is cold.'], hint:'ホテル'},
-  {question:'Could I get an extra pillow?',           answer:"Of course, I will have that sent right away.", wrongs:['I need a blanket.','The bed is hard.'], hint:'ホテル'},
-  {question:'May I have my room cleaned earlier today?', answer:"Certainly—housekeeping will attend to it by noon.", wrongs:['I need towels.','The room is dirty.'], hint:'ホテル'},
+  {question:'If you have any questions about the local area during the drive, please feel free to ask.',
+    answer:"Actually, what's the best restaurant you'd recommend in Gotemba?",
+    wrongs:["We'll use a guidebook.",'We do not eat out.']},
+  {question:"For local food, I'd highly recommend Sawayaka for their famous hamburg steak.",
+    answer:"Oh, we've read about that! Is it easy to get a table?",      wrongs:['We prefer sushi restaurants.','We eat at the hotel.']},
+  {question:'Sawayaka can be popular, but we can arrange a booking through the concierge.',
+    answer:"Excellent—we'll ask at check-in.",                            wrongs:["We'll just walk in.",'We have a booking already.']},
+  {question:'We will also pass the Gotemba Premium Outlets shortly. Shall I slow down for a look?',
+    answer:"Yes please! We'd love to see it from the road.",              wrongs:["We'll visit tomorrow.",'Keep driving, please.']},
+  {question:'The Outlets have over 200 stores, many with tax-free shopping for overseas visitors.',
+    answer:"That's amazing—we'll definitely set aside a half day.",       wrongs:['Shopping does not interest us.','We will go online instead.']},
+  {question:'We are now entering Gotemba city. The air here is noticeably cooler and cleaner.',
+    answer:"You're right—it already feels refreshing compared to Tokyo.", wrongs:['It feels the same to me.','I prefer city air.']},
+  {question:'The area to your right is a popular spot for cycling and running.',
+    answer:"What a beautiful setting! Do guests at BrightonStar use it?", wrongs:['We prefer the gym.','We do not exercise on holiday.']},
+  {question:'We offer complimentary bicycles to guests who wish to explore the area.',
+    answer:"Wonderful! We'll definitely take advantage of that.",          wrongs:["We can't ride bikes.",'We would rather walk.']},
+  {question:"And here we are—welcome to BrightonStar! I hope the journey was comfortable.",
+    answer:'It was perfect—thank you so much, Kenji, for a wonderful drive.',
+    wrongs:['Finally! That took forever.','I need to use the restroom.']},
+  {question:"Please wait one moment—I'll have your bags carried to reception.",
+    answer:"Thank you. You've been absolutely wonderful.",                 wrongs:['We can carry our own.','I will go straight to the room.']},
 ];
-// QA Lv12: 空港・出張
+
 const QA12: QAItem[] = [
-  {question:'May I see your passport and boarding pass?', answer:"Certainly, here they are.",               wrongs:['I need a visa.','The gate is closed.'], hint:'空港'},
-  {question:'Did you pack this bag yourself?',          answer:"Yes, I packed it myself this morning.",      wrongs:['My friend packed it.','The bag is light.'], hint:'空港'},
-  {question:'Do you have any liquids over 100ml?',      answer:"No, all my liquids are in this small bag.", wrongs:['I have a bottle.','The liquid is water.'], hint:'空港'},
-  {question:'Your flight is boarding at gate 32.',      answer:"Thank you! How long do I have?",            wrongs:['I need a seat.','The gate is far.'], hint:'空港'},
-  {question:'Your flight has been delayed by one hour.', answer:"I see. Is there a lounge I can wait in?", wrongs:['I need a refund.','The delay is short.'], hint:'空港'},
-  {question:'Could I check one more bag?',              answer:"Yes, but there is an additional charge of 3,000 yen.", wrongs:['I need a trolley.','The bag is small.'], hint:'空港'},
-  {question:'Do you have any items to declare?',        answer:"Just this bottle of wine as a gift.",       wrongs:['I have nothing.','The bag is empty.'], hint:'税関'},
-  {question:'What is the purpose of your visit?',       answer:"Tourism—I will be here for one week.",      wrongs:['I am working.','The visit is short.'], hint:'入国'},
-  {question:'Where will you be staying?',               answer:"At the BrightonStar hotel in Gotemba.",     wrongs:['I need a hotel.','The address is long.'], hint:'入国'},
-  {question:'Please collect your bags at carousel three.', answer:"Thank you very much!",                   wrongs:['I need a trolley.','The bags are late.'], hint:'空港'},
+  {question:'During the drive, you may notice the landscape changes dramatically as we leave the urban sprawl behind.',
+    answer:"Indeed—it feels as though we're entering a completely different world.",
+    wrongs:['I am reading a book.','I will look when we stop.']},
+  {question:"This stretch of the Tomei Expressway is considered one of Japan's most scenic drives on a clear day.",
+    answer:"I can absolutely see why—the scale of this landscape is extraordinary.",
+    wrongs:['The highway looks ordinary.','We prefer coastal drives.']},
+  {question:'Mt. Fuji is an active volcano, last erupting in 1707—a fact that surprises many first-time visitors.',
+    answer:'Fascinating! I had no idea—that makes it feel even more majestic.',
+    wrongs:['I knew that already.','That sounds rather dangerous.']},
+  {question:"The spiritual significance of the mountain to the Japanese people is profound—it has inspired art for centuries.",
+    answer:"We can completely understand why—there is something truly otherworldly about it.",
+    wrongs:["It's just a mountain.",'I am more interested in the shopping.']},
+  {question:'Gotemba has long been a retreat destination for discerning travellers seeking nature and tranquility.',
+    answer:"That's exactly what drew us here—we needed to escape the pace of the city.",
+    wrongs:['We prefer the beach.','We like busy destinations.']},
+  {question:'BrightonStar was designed specifically to frame Mt. Fuji in every principal room and public space.',
+    answer:"What a beautiful concept—the architecture must be remarkable.",
+    wrongs:['We just need somewhere to sleep.','We are not interested in design.']},
+  {question:'Our property sources ingredients locally—Shizuoka wagyu, fresh wasabi, and seasonal vegetables.',
+    answer:"We appreciate that commitment to local produce—it will make the meals all the more meaningful.",
+    wrongs:['We prefer international cuisine.','Local food is not always reliable.']},
+  {question:'If you have any interest in traditional crafts, our concierge can arrange a lacquerware studio visit.',
+    answer:"That sounds fascinating—we'd love to learn about Japanese artisanship.",
+    wrongs:['We are not into crafts.','We will buy souvenirs at the Outlets.']},
+  {question:"We're now ascending into the foothills—you may notice the temperature has dropped a few degrees.",
+    answer:"Yes—it feels wonderful. Like stepping into a natural air conditioner.",
+    wrongs:['It feels too cold.','We prefer warmer climates.']},
+  {question:'Your room will be ready upon arrival, and our staff are very much looking forward to welcoming you properly.',
+    answer:"After such an exceptional journey, we have the highest expectations for the stay ahead.",
+    wrongs:['I hope the room is clean.','Just make sure the bed is comfortable.']},
 ];
-// QA Lv13: 複雑なリクエスト
+
+// ── Arc 4: Check-in & House Rules ────────────────────────────────
 const QA13: QAItem[] = [
-  {question:'Could you arrange a rental car for tomorrow?', answer:"Certainly! What size vehicle do you need?", wrongs:['I need a taxi.','The car is reserved.'], hint:'手配'},
-  {question:'I need a babysitter for this evening.',        answer:"I will check with our concierge desk for you.", wrongs:['I need a nanny.','The child is quiet.'], hint:'手配'},
-  {question:"I'd like to send this package to Australia.",  answer:"We can ship it via EMS. It takes about a week.", wrongs:['I need a stamp.','The package is heavy.'], hint:'手配'},
-  {question:'Could you translate this letter into Japanese?',answer:"I will be happy to help with a basic translation.", wrongs:['I need a lawyer.','The letter is short.'], hint:'手配'},
-  {question:"I've left my jacket in the taxi.",             answer:"Let me call the taxi company and describe it for you.", wrongs:['I need a coat.','The jacket is old.'], hint:'紛失'},
-  {question:'My laptop was taken from my room.',            answer:"I am so sorry. I will contact security immediately.", wrongs:['I need insurance.','The laptop is mine.'], hint:'紛失'},
-  {question:'Could I borrow an umbrella?',                  answer:"Yes, we have complimentary umbrellas at the front desk.", wrongs:['I need a raincoat.','The umbrella is wet.'], hint:'手配'},
-  {question:'Is there a laundry service available?',        answer:"Yes, drop your laundry off by 9 AM for same-day service.", wrongs:['I need a washing machine.','The service is free.'], hint:'手配'},
-  {question:'Could you recommend a day trip from here?',    answer:"The Hakone area is stunning—about 45 minutes by bus.", wrongs:['I need a guide.','The trip is long.'], hint:'観光'},
-  {question:"I've accidentally broken something in my room.", answer:"No worries—these things happen. Let me arrange a replacement.", wrongs:['I need to pay.','The item is old.'], hint:'ホテル'},
+  {question:'Welcome to BrightonStar! You must be the Brown family.',
+    answer:"Yes! We're so excited to finally be here.",                   wrongs:['Actually, we are the Smiths.','We have no reservation.']},
+  {question:'Please come inside and take off your shoes here. Slippers are provided.',
+    answer:'Of course—thank you for the slippers!',                       wrongs:['We prefer to keep our shoes on.','Where should I put them?']},
+  {question:'Your room is the Fuji View Suite on the third floor.',
+    answer:"Wonderful! How do we get to the third floor?",               wrongs:['We requested the first floor.','Is there a lift?']},
+  {question:'The lift is just to your left, and your room number is 301.',
+    answer:'Perfect—thank you so much.',                                  wrongs:["We'll take the stairs.",'Where is the front desk?']},
+  {question:'Here is your key card. Please keep it with you at all times.',
+    answer:'Understood. Does it open the main entrance too?',             wrongs:["I'll leave it in the room.",'I prefer a traditional key.']},
+  {question:'Yes, the key card opens all doors, including the hot spring entrance.',
+    answer:'Excellent—very convenient!',                                  wrongs:["We won't use the hot spring.",'Can I have two cards?']},
+  {question:'Breakfast is served in the dining room from 7 to 9:30 AM.',
+    answer:"Great—we'll definitely be there. Which floor is the dining room?",
+    wrongs:["We'll skip breakfast.",'We prefer room service.']},
+  {question:'The dining room is on the first floor, just past the front desk.',
+    answer:"Thank you—we'll see you in the morning!",                     wrongs:['We might be late.','Is the food good?']},
+  {question:'Please enjoy your stay and feel free to contact us anytime.',
+    answer:"Thank you! We're looking forward to a wonderful time.",       wrongs:["We'll try not to bother you.",'We know how to manage.']},
+  {question:'If you need anything, press the concierge button on your room phone.',
+    answer:'Perfect—we will keep that in mind.',                          wrongs:["We'll come downstairs.",'We prefer not to be disturbed.']},
 ];
-// QA Lv14: ビジネス・応用
+
 const QA14: QAItem[] = [
-  {question:"We've reviewed your proposal and have some questions.", answer:"Certainly! Please go ahead—I am happy to clarify.", wrongs:['I need a lawyer.','The proposal is final.'], hint:'ビジネス'},
-  {question:'Could we arrange a site visit next week?',       answer:"Absolutely—Tuesday or Wednesday suits us best.", wrongs:['I need notice.','The factory is far.'], hint:'ビジネス'},
-  {question:'The timeline seems tight. Can you expedite?',    answer:"I will do my best. We may need to add resources.", wrongs:['I need more time.','The timeline is clear.'], hint:'ビジネス'},
-  {question:'We need the deliverables by end of month.',      answer:"Understood. I will prioritize accordingly.",    wrongs:['I need more budget.','The deadline is fine.'], hint:'ビジネス'},
-  {question:"We'd like an exclusivity clause in the contract.", answer:"I will discuss that with our legal team and follow up.", wrongs:['I need a lawyer.','The clause is standard.'], hint:'ビジネス'},
-  {question:'The invoice you sent appears to have an error.', answer:"I apologize for the confusion. Let me reissue it today.", wrongs:['I need a receipt.','The amount is correct.'], hint:'ビジネス'},
-  {question:'Could you provide references from past clients?',  answer:"Of course—I will email you a list of three references.", wrongs:['I need time.','The clients are busy.'], hint:'ビジネス'},
-  {question:'We are considering scaling up the partnership.',    answer:"That is exciting news! Let's schedule a call this week.", wrongs:['I need a contract.','The scale is big.'], hint:'ビジネス'},
-  {question:'Could we add a performance-based bonus structure?', answer:"Interesting idea—let me take it back to our team.", wrongs:['I need more time.','The bonus is clear.'], hint:'ビジネス'},
-  {question:"We'd prefer to conduct meetings via video call.",   answer:"No problem at all—I will set up a recurring invite.", wrongs:['I need a projector.','The meeting is short.'], hint:'ビジネス'},
+  {question:'Before you head up, let me explain a few house rules.',
+    answer:'Of course—please go ahead.',                                  wrongs:["We've read the info pack.",'We will figure it out.']},
+  {question:'Please sort your rubbish into the four colour-coded bins provided in your room.',
+    answer:"We'll make sure to do that—thank you for explaining.",        wrongs:["There's only one bin back home.",'That seems very complicated.']},
+  {question:'The combustible waste goes in the red bin, and plastic in the blue one.',
+    answer:'Understood—red for combustible, blue for plastic.',           wrongs:["We'll put it all together.",'Can the staff handle it?']},
+  {question:'Smoking is strictly prohibited inside the building. There is a designated smoking area in the garden.',
+    answer:'No problem at all—neither of us smoke.',                      wrongs:['Can we smoke in the bathroom?','I thought balconies were okay.']},
+  {question:'Quiet hours are from 10 PM to 7 AM. We ask that noise is kept to a minimum.',
+    answer:"Absolutely—we're usually asleep well before then!",           wrongs:['We tend to stay up late.','Can we have an exception?']},
+  {question:'Pets are not permitted anywhere on the property, including the garden.',
+    answer:'We understand. We did not bring any.',                        wrongs:['We have a small dog with us.','What about a fish?']},
+  {question:"Please use the provided laundry bags if you would like your clothes washed.",
+    answer:'Thank you—how do we arrange collection?',                     wrongs:['We brought our own detergent.','We will handwash everything.']},
+  {question:'Simply hang the bag on your door handle before 9 AM and it will be collected.',
+    answer:'How convenient! Thank you.',                                  wrongs:["We'll bring it to reception.",'Is there an extra charge?']},
+  {question:'The hot spring is a shared facility—please shower thoroughly before entering the bath.',
+    answer:'Of course—we are familiar with onsen etiquette.',             wrongs:['We did not know that rule.','We will skip the hot spring then.']},
+  {question:'Tattoos are permitted in our hot spring—please just ensure you have rinsed off beforehand.',
+    answer:'Good to know—thank you for mentioning it.',                   wrongs:['We have no tattoos.','That policy seems unusual.']},
 ];
-// QA Lv15: 宿泊トラブル・上級
+
 const QA15: QAItem[] = [
-  {question:'The noise from the next room is unbearable.',     answer:"I sincerely apologize. I will ask them to keep it down immediately.", wrongs:['I need earplugs.','The noise is minor.'], hint:'ホテル'},
-  {question:'The hot water in my shower stopped working.',     answer:"I am very sorry. I will send maintenance within five minutes.", wrongs:['I need towels.','The water is warm.'], hint:'ホテル'},
-  {question:'There is a strange smell in my room.',            answer:"I apologize for this. Please let me move you to a fresh room.", wrongs:['I need a candle.','The smell is faint.'], hint:'ホテル'},
-  {question:"I wasn't satisfied with the cleanliness.",        answer:"I am terribly sorry. We clearly fell short of our standards.", wrongs:['I need a refund.','The room was fine.'], hint:'ホテル'},
-  {question:'The minibar was not restocked as requested.',     answer:"Please forgive the oversight. I will see to it right away.", wrongs:['I need a drink.','The bar is fine.'], hint:'ホテル'},
-  {question:'The TV remote is not working.',                   answer:"Let me bring you a replacement immediately.",wrongs:['I need a manual.','The TV is broken.'], hint:'ホテル'},
-  {question:'I ordered room service an hour ago.',             answer:"I deeply apologize for the wait. I will chase the order now.", wrongs:['I need a menu.','The food is cold.'], hint:'ホテル'},
-  {question:'Could we extend our stay by one more night?',     answer:"Let me check availability. One moment, please.",wrongs:['I need a discount.','The room is booked.'], hint:'ホテル'},
-  {question:'The air conditioning is far too cold.',           answer:"I am sorry about that. Let me adjust the thermostat setting for your room.", wrongs:['I need a blanket.','The room is warm.'], hint:'ホテル'},
-  {question:'I found an unexpected charge on my bill.',        answer:"Please accept my apologies. Let me review and correct your bill now.", wrongs:['I need a receipt.','The charge is correct.'], hint:'ホテル'},
+  {question:'Allow me to give you a brief tour of the facilities before you settle in.',
+    answer:'That would be wonderful—please lead the way.',                wrongs:['We can explore by ourselves.','We are quite tired, actually.']},
+  {question:'This is our Fuji Dining restaurant. Every table faces the mountain.',
+    answer:"The view is breathtaking—we'll definitely dine here tonight.", wrongs:['The restaurant looks small.','We prefer casual dining.']},
+  {question:'Through those doors is the onsen wing. Separate baths and a mixed outdoor bath for couples.',
+    answer:"Perfect—we'll try the outdoor couple's bath this evening.",   wrongs:['We prefer separate baths.','We will skip the onsen.']},
+  {question:'The outdoor bath is particularly spectacular at dusk when the mountain turns pink.',
+    answer:"We'll make sure to time our visit for sunset then!",          wrongs:['We usually bathe in the morning.','It is too cold at dusk.']},
+  {question:'This is our library lounge—please help yourself to guidebooks, board games, and complimentary herbal teas.',
+    answer:"How lovely! This is the perfect place to relax between activities.",
+    wrongs:['We brought our own books.','We prefer our phones.']},
+  {question:'In case of emergency, the nearest hospital is 10 minutes by taxi. Details are in the room directory.',
+    answer:"Thank you—hopefully we won't need it, but good to know.",     wrongs:['We have travel insurance.','I hope nothing goes wrong.']},
+  {question:'The nearest convenience store is a five-minute walk to the north.',
+    answer:"Perfect—we might pick up some local snacks.",                 wrongs:['We brought everything we need.','We prefer to order online.']},
+  {question:'Local buses run hourly to Gotemba Station. The timetable is by the entrance.',
+    answer:"Thank you—we may use the bus one afternoon.",                 wrongs:["We'll use our phones for routes.",'We will take taxis only.']},
+  {question:'The mountain road outside can be quite dark at night—we recommend reflective gear for evening walks.',
+    answer:"That's a safety tip we would never have thought of! Thank you.",
+    wrongs:["We'll be careful.",'We do not walk at night.']},
+  {question:"And finally, here is your room. I hope you find it absolutely everything you had imagined.",
+    answer:"It's magnificent—the view of Mt. Fuji is beyond anything we expected.",
+    wrongs:["It's smaller than the photos.",'Where is the minibar?']},
 ];
-// QA Lv16: BrightonStar チェックイン・基礎対応
+
 const QA16: QAItem[] = [
-  {question:'Welcome to BrightonStar. Do you have a reservation?',
-    answer:"Yes, I booked a Deluxe Mt. Fuji View Room under the name Brown.",
-    wrongs:["I'd like a table for two.","I'm here for business."], hint:'BrightonStar'},
-  {question:'May I see your passport for check-in, Mr. Brown?',
-    answer:'Of course, here you are.',
-    wrongs:["I only have my driver's license.",'I left it in the taxi.'], hint:'BrightonStar'},
-  {question:'Your room is on the eighth floor with a direct view of Mt. Fuji.',
-    answer:'That sounds absolutely wonderful!',
-    wrongs:['I prefer the lower floor.','Is there a mountain nearby?'], hint:'BrightonStar'},
-  {question:'Would you like a 6 AM wake-up call to see Mt. Fuji at sunrise?',
-    answer:'Yes, please—I would love to catch the sunrise.',
-    wrongs:['I will use my own alarm.','No, I sleep in late.'], hint:'BrightonStar'},
-  {question:'Breakfast is served from 7 to 9:30 in our Fuji Dining restaurant.',
-    answer:'Thank you. Is the Japanese breakfast option available?',
-    wrongs:['I skip breakfast.','I will order room service.'], hint:'BrightonStar'},
-  {question:'Your room includes complimentary access to our outdoor hot spring.',
-    answer:'Wonderful! What are the bathing hours?',
-    wrongs:['I prefer a regular bath.','I have my own towel.'], hint:'BrightonStar'},
-  {question:'Shall I have your luggage sent up to your room?',
-    answer:'Yes please, that would be very helpful.',
-    wrongs:['I will carry it myself.','I have only one bag.'], hint:'BrightonStar'},
-  {question:'Our concierge desk is open until 10 PM for any assistance.',
-    answer:'Great—I may need help booking a local tour.',
-    wrongs:['I do not need help.','I will use the internet.'], hint:'BrightonStar'},
-  {question:'Would you like us to arrange transport to Gotemba outlet mall?',
-    answer:'Yes, please! How far is it from the hotel?',
-    wrongs:['I have a rental car.','I prefer to stay in.'], hint:'BrightonStar'},
-  {question:'Your key card also grants access to our rooftop observatory deck.',
-    answer:'Perfect—I will definitely visit at dusk.',
-    wrongs:['I prefer the lobby.','I do not need access.'], hint:'BrightonStar'},
+  {question:"I'd like to share some aspects of the property that guests often find unexpectedly delightful.",
+    answer:"We're all ears—please do share your favourites.",             wrongs:["We'll discover them ourselves.",'Is there a printed guide?']},
+  {question:'The eastern garden is our secret gem—perfectly framed for Mt. Fuji sunrise photography.',
+    answer:"We'll make a note to be there tomorrow morning with our camera.",
+    wrongs:['We do not take photos.','Is the path lit at night?']},
+  {question:'We deliberately keep the garden lanterns dim to preserve natural darkness for stargazing.',
+    answer:"What a thoughtful approach—we'll definitely look up at the night sky.",
+    wrongs:['It seems too dark.','Can we have more lighting?']},
+  {question:'Our sommelier has curated a Shizuoka sake selection that pairs beautifully with the dinner menu.',
+    answer:"How exciting! Could you recommend a sake to accompany the wagyu?",
+    wrongs:['We prefer wine.','We do not drink alcohol.']},
+  {question:'The Junmai Daiginjo from a local Gotemba brewery is light, floral, and exceptionally smooth.',
+    answer:"That sounds extraordinary—please reserve a bottle for our dinner tonight.",
+    wrongs:["We'll choose on the night.",'We do not like floral flavours.']},
+  {question:'If you wake at 4:30 AM on a clear morning, the sky above the mountain displays the Milky Way in remarkable clarity.',
+    answer:"We're setting that alarm right now—that sounds absolutely unmissable.",
+    wrongs:['We need our sleep.','We have seen the Milky Way before.']},
+  {question:'Our pillow menu offers five options from buckwheat to memory foam.',
+    answer:"Could we try the buckwheat pillow? It sounds authentically Japanese.",
+    wrongs:['The standard one is fine.','We brought our own pillows.']},
+  {question:'We also offer a bedside aromatherapy diffuser with hinoki cypress oil—a quintessentially Japanese mountain scent.',
+    answer:"Yes, please! That sounds like a perfect way to unwind after the journey.",
+    wrongs:['We are sensitive to strong scents.','We prefer no fragrance.']},
+  {question:'The private terrace in your suite faces precisely west-southwest—optimal for both sunset and Mt. Fuji silhouettes.',
+    answer:"We'll spend considerable time on that terrace—thank you for this extraordinary attention to detail.",
+    wrongs:['Any terrace is fine.','We prefer indoor spaces.']},
+  {question:'We truly hope that your stay at BrightonStar exceeds every expectation.',
+    answer:"From everything we've seen so far, we're utterly certain it will. Thank you so much.",
+    wrongs:["We'll see how it goes.",'It had better, at these prices!']},
 ];
-// QA Lv17: BrightonStar 富士山・観光案内
+
+// ── Arc 5: Gotemba Local Guide ────────────────────────────────────
 const QA17: QAItem[] = [
-  {question:'The best spot to photograph Mt. Fuji from our property is the eastern garden.',
-    answer:'Thank you! When is the lighting best for photos?',
-    wrongs:['I have a camera.','The garden is beautiful.'], hint:'富士山'},
-  {question:'Mt. Fuji is clear this morning—visibility is excellent!',
-    answer:'Wonderful! I will head to the garden right after breakfast.',
-    wrongs:['I prefer the city view.','I will sleep more.'], hint:'富士山'},
-  {question:"Unfortunately Mt. Fuji is hidden by clouds today. It sometimes clears around 3 PM.",
-    answer:'I see—I will keep an eye on it from my room.',
-    wrongs:['That is disappointing.','I will go shopping instead.'], hint:'富士山'},
-  {question:'We offer a guided Mt. Fuji 5th Station tour departing at 8 AM.',
-    answer:"I'd love to join! How long is the tour?",
-    wrongs:['I will go alone.','I need a bus pass.'], hint:'富士山'},
-  {question:'The Fuji Visitor Centre is a 20-minute drive and has stunning exhibits.',
-    answer:'Could you arrange transport for two people?',
-    wrongs:['I have a car.','I prefer to walk.'], hint:'富士山'},
-  {question:'The Chureito Pagoda offers the iconic Mt. Fuji and pagoda photograph.',
-    answer:'Absolutely! Is it easy to reach from the hotel?',
-    wrongs:['I have seen photos.','I prefer modern buildings.'], hint:'富士山'},
-  {question:'Lake Kawaguchiko is 40 minutes away and provides beautiful lake reflections of the mountain.',
-    answer:"That sounds perfect for a day trip—shall I book a taxi?",
-    wrongs:['I prefer Lake Biwa.','I have a bicycle.'], hint:'富士山'},
-  {question:'Climbing season for Mt. Fuji is July to early September.',
-    answer:'I am here in August—is it still possible to climb?',
-    wrongs:['I am afraid of heights.','I prefer easy trails.'], hint:'富士山'},
-  {question:'On clear evenings, Mt. Fuji turns a magnificent shade of red at sunset.',
-    answer:"Incredible! I will make sure to be on the terrace at that time.",
-    wrongs:['I prefer sunrises.','The color depends on weather.'], hint:'富士山'},
-  {question:'Our hotel partners with a local nature guide for private Fuji hike experiences.',
-    answer:"That sounds amazing—what is included in the private tour?",
-    wrongs:['I am fit enough alone.','The price is too high.'], hint:'富士山'},
+  {question:"I understand you're interested in visiting Mt. Fuji. May I offer some suggestions?",
+    answer:"Yes, please! We'd love your local knowledge.",                wrongs:['We have a guidebook.','We will figure it out online.']},
+  {question:'The most popular starting point for visitors is the 5th Station at 2,300 metres.',
+    answer:'How long does it take to reach from here?',                   wrongs:['We are experienced climbers.','We do not want to go too high.']},
+  {question:'Our complimentary shuttle reaches the 5th Station in about 40 minutes.',
+    answer:"That's very convenient! What's the best time to go?",         wrongs:['We will drive ourselves.','We have a tour already booked.']},
+  {question:'Early morning is ideal—the crowds are thin and the light is magical.',
+    answer:"We'll plan for tomorrow morning—what time does the shuttle depart?",
+    wrongs:['We prefer afternoons.','Crowds do not bother us.']},
+  {question:'The first shuttle departs at 6 AM. I recommend the 5:30 AM breakfast box to take with you.',
+    answer:"Perfect! Please arrange the bento box and two shuttle seats.",wrongs:["We'll skip breakfast.",'6 AM is too early for us.']},
+  {question:'The viewing platform at the 5th Station offers an unobstructed panorama on clear days.',
+    answer:"That sounds absolutely extraordinary!",                        wrongs:['We prefer valley views.','Panoramas are not our thing.']},
+  {question:'If you prefer a gentler experience, the Oshino Hakkai springs offer stunning Fuji reflections at low altitude.',
+    answer:"That sounds perfect for the afternoon—how far is it?",        wrongs:['We prefer the summit view.','We will stay at the hotel.']},
+  {question:'Oshino Hakkai is about 35 minutes by car, and our concierge can arrange a private transfer.',
+    answer:'Yes please—could we book it for tomorrow afternoon?',         wrongs:["We'll take the public bus.",'We have a rental car.']},
+  {question:"The Chureito Pagoda is often described as one of Japan's most photographed spots.",
+    answer:"Oh, we've seen it in photos! Is it as beautiful in person?",  wrongs:['We prefer modern architecture.','We are not into temples.']},
+  {question:'It is even more spectacular—especially when Mt. Fuji frames perfectly behind the five-storey pagoda.',
+    answer:"We absolutely must go! Could you add it to our itinerary?",   wrongs:["We'll see it another time.",'We are not sure we have time.']},
 ];
-// QA Lv18: BrightonStar 施設・特別サービス
+
 const QA18: QAItem[] = [
-  {question:'We can arrange a private kaiseki dinner in your room with a Fuji view.',
-    answer:'That would be extraordinary. How far in advance should I book?',
-    wrongs:['I prefer the buffet.','The price is high.'], hint:'BrightonStar'},
-  {question:'Our onsen has separate indoor and outdoor baths. The outdoor bath faces Mt. Fuji.',
-    answer:'How wonderful! Are towels and yukata provided?',
-    wrongs:['I brought my own.','I prefer a shower.'], hint:'BrightonStar'},
-  {question:'We notice it is your anniversary—shall we arrange a special room decoration?',
-    answer:'That is so thoughtful! Yes, please—roses if possible.',
-    wrongs:['No, keep it simple.','I did not mention that.'], hint:'BrightonStar'},
-  {question:'BrightonStar offers a free shuttle to Gotemba Station every two hours.',
-    answer:'That is very convenient. What time is the first shuttle?',
-    wrongs:['I have a rental car.','I prefer a taxi.'], hint:'BrightonStar'},
-  {question:'Our spa offers a 90-minute Mt. Fuji Mineral Therapy package.',
-    answer:"I would love to try that! Is it available tomorrow morning?",
-    wrongs:['I do not use spas.','The price is too high.'], hint:'BrightonStar'},
-  {question:'For guests staying three or more nights, we offer a complimentary sake tasting session.',
-    answer:'I am staying four nights, so I qualify—when is the session?',
-    wrongs:['I do not drink alcohol.','I prefer wine.'], hint:'BrightonStar'},
-  {question:'Our rooftop stargazing session runs on clear nights from 8 to 10 PM.',
-    answer:'How magical! Is equipment provided?',
-    wrongs:['I prefer the lobby.','I have a telescope.'], hint:'BrightonStar'},
-  {question:'We can arrange a private cooking class with our head chef on Saturdays.',
-    answer:'Excellent! Can two people join? My partner loves cooking.',
-    wrongs:['I prefer watching.','The kitchen is small.'], hint:'BrightonStar'},
-  {question:'Your suite includes a private outdoor Jacuzzi with an unobstructed Fuji view.',
-    answer:'That is incredible! What are the operating hours?',
-    wrongs:['I prefer an indoor bath.','I need a towel.'], hint:'BrightonStar'},
-  {question:'We can deliver a traditional Japanese tea ceremony experience to your room.',
-    answer:'That sounds delightful—can we schedule it for tomorrow afternoon?',
-    wrongs:['I prefer coffee.','The ceremony is long.'], hint:'BrightonStar'},
+  {question:'For shopping, the Gotemba Premium Outlets are 15 minutes from the hotel and exceptional value.',
+    answer:"We've been looking forward to it! Do they offer tax-free shopping?",
+    wrongs:["We're not big shoppers.",'We will use online stores.']},
+  {question:'Most stores offer immediate tax refunds for overseas visitors upon presentation of a passport.',
+    answer:"Wonderful—we'll bring our passports along.",                  wrongs:["We don't have much cash.",'We forgot our passports at home.']},
+  {question:'The Outlets open at 10 AM and close at 8 PM. Our afternoon shuttle departs at 1 PM.',
+    answer:"The 1 PM shuttle is ideal—could we reserve two seats?",      wrongs:['We prefer the morning shuttle.','We will take a taxi.']},
+  {question:'The Outlets also have an excellent food hall featuring local delicacies from across the Fuji Five Lakes region.',
+    answer:"We'll definitely explore the food hall—thank you for the tip.",
+    wrongs:["We'll eat at the hotel.",'We do not like food halls.']},
+  {question:'For dinner tonight, I would strongly recommend Gyukatsu Kyoto Katsugyu for their premium beef cutlet.',
+    answer:"That sounds incredible—is it within walking distance?",       wrongs:["We're vegetarian today.",'We prefer fish.']},
+  {question:'It is about a 10-minute taxi ride, and reservations are recommended for evenings.',
+    answer:'Please book a table for two at 7 PM if possible.',            wrongs:["We'll try our luck.",'7 PM is too late for us.']},
+  {question:"Sawayaka restaurant is a Gotemba institution—their hamburg steak is genuinely unlike anything else in Japan.",
+    answer:"We've seen it mentioned everywhere! How does it differ from a regular hamburger?",
+    wrongs:["We've tried it already.",'Hamburgers are all the same.']},
+  {question:'The chef carves it open tableside and adds special sauce—quite theatrical and utterly delicious.',
+    answer:"That sounds like a wonderful experience! Please book us in for lunch tomorrow.",
+    wrongs:['We prefer simple presentations.','Theatrical dining is not for us.']},
+  {question:'For artisanal souvenirs, the Komorebi craft market runs on Saturday mornings in the town centre.',
+    answer:"How perfect—we arrive on Friday! Could you arrange transport on Saturday morning?",
+    wrongs:["We'll buy at the airport.",'We prefer known brands.']},
+  {question:'The Gotemba Kogen sake brewery offers distillery tours on weekdays.',
+    answer:"We would love that—please reserve two spots on any available tour.",
+    wrongs:["We don't drink sake.",'We prefer wine tasting.']},
 ];
-// QA Lv19: BrightonStar クレーム・高度対応
+
 const QA19: QAItem[] = [
-  {question:"I'm quite dissatisfied with the service I received at check-in.",
-    answer:'I sincerely apologize. Could you tell me what happened so I can address it personally?',
-    wrongs:['I need a manager.','The staff was rude.'], hint:'BrightonStar'},
-  {question:"The view from my room is completely blocked by a construction crane.",
-    answer:'I am terribly sorry—that is not the experience we promised. Let me move you to a superior room at no charge.',
-    wrongs:['I need a refund.','The crane will move soon.'], hint:'BrightonStar'},
-  {question:"We found the outdoor onsen closed without any prior notice.",
-    answer:'Please accept our sincere apologies. There was an urgent maintenance issue. We will offer a complimentary spa treatment as compensation.',
-    wrongs:['The onsen was open.','I need a schedule.'], hint:'BrightonStar'},
-  {question:"The food at tonight's dinner was not up to the standard I expected.",
-    answer:'I am deeply sorry to hear this. Your feedback will be passed directly to our executive chef tonight.',
-    wrongs:['I need a discount.','The menu is limited.'], hint:'BrightonStar'},
-  {question:"We've been waiting over 40 minutes for our room service order.",
-    answer:'I profoundly apologize for this wait. The meal is on us tonight—it will arrive within ten minutes.',
-    wrongs:['I need a menu.','The food is coming.'], hint:'BrightonStar'},
-  {question:"There seems to be a billing discrepancy on my final invoice.",
-    answer:'I apologize for the inconvenience. Could you point out the item? I will correct it immediately and email you a revised invoice.',
-    wrongs:['I need a receipt.','The price is correct.'], hint:'BrightonStar'},
-  {question:"My personal items were not returned after room cleaning.",
-    answer:'I am so sorry. I will contact housekeeping at once and ensure your belongings are returned.',
-    wrongs:['I need insurance.','The items are mine.'], hint:'BrightonStar'},
-  {question:"The level of noise from the events room last night was unacceptable.",
-    answer:'You have my unreserved apology. I will ensure an appropriate noise policy is enforced tonight.',
-    wrongs:['I need earplugs.','The event was nice.'], hint:'BrightonStar'},
-  {question:"I specifically requested a hypoallergenic pillow and it was not provided.",
-    answer:'I am truly sorry for overlooking your request. I will bring one to your room right now.',
-    wrongs:['I need a blanket.','The pillow is fine.'], hint:'BrightonStar'},
-  {question:"Overall, I feel the price does not match the quality of experience.",
-    answer:'Your feedback is invaluable and I take full responsibility. I would like to offer you a 20% discount on your stay and a complimentary night for your next visit.',
-    wrongs:['I need a refund.','The quality is high.'], hint:'BrightonStar'},
+  {question:"I'd like to share some lesser-known local experiences that our most discerning guests have particularly loved.",
+    answer:"We are always drawn to the authentic over the touristic—please do tell.",
+    wrongs:['We prefer the standard itinerary.','We will look it up ourselves.']},
+  {question:'There is a small, family-owned wasabi farm in the foothills that has operated for six generations.',
+    answer:"That sounds remarkable! Is it open to visitors?",             wrongs:['We do not like wasabi.','We prefer commercial tours.']},
+  {question:'The Abe family welcomes guests for a private tasting and a brief history of wasabi cultivation.',
+    answer:"What an extraordinary experience—could you arrange a visit for us?",
+    wrongs:["We'll see it on a food show.",'A private visit seems intrusive.']},
+  {question:'In September, the trails around the third and fourth stations are stunning with alpine wildflowers.',
+    answer:"We had no idea—could you recommend a specific trail for our fitness level?",
+    wrongs:['We prefer flat walks.','We will go to the summit.']},
+  {question:'The Hoei Crater Trail at the 5th Station offers spectacular views without mountaineering experience.',
+    answer:"That sounds perfectly suited to us—can the concierge arrange a guide?",
+    wrongs:['We prefer to go alone.','The crater sounds dangerous.']},
+  {question:'Our recommended guide is Tanaka-san, who has led guests on this trail for over 25 years.',
+    answer:"With that level of experience, we'd feel entirely safe—please book him.",
+    wrongs:['We prefer a younger guide.','We do not need a guide.']},
+  {question:"The Fuji Five Lakes—Kawaguchiko, Saiko, Yamanakako, Shojiko, and Motosuko—each offer distinct perspectives.",
+    answer:"How fascinating—each lake has its own unique character, I imagine.",
+    wrongs:["We'll just see one.",'Lakes all look the same.']},
+  {question:'Lake Saiko is considered by connoisseurs to offer the most serene and unspoiled reflection of Mt. Fuji.',
+    answer:"Then Saiko is where we must go. Could you build it into our itinerary?",
+    wrongs:['We prefer Lake Kawaguchiko.','We have seen lake reflections before.']},
+  {question:"For an authentic farming experience, a local soba noodle workshop runs on Tuesday and Thursday mornings.",
+    answer:"We are here on a Wednesday—is there any chance of a special session?",
+    wrongs:['We prefer restaurant dining.','We are not into cooking classes.']},
+  {question:'I hope these suggestions help craft an experience truly rooted in the character of this extraordinary region.',
+    answer:"They have been invaluable—you've transformed what could have been a standard visit into something deeply meaningful.",
+    wrongs:["We'll use the guidebook.",'We prefer to leave it to chance.']},
 ];
-// QA Lv20: BrightonStar 最上位ホスピタリティ
+
 const QA20: QAItem[] = [
-  {question:"We are celebrating our 25th wedding anniversary. Could you arrange something truly memorable?",
-    answer:'Congratulations! We will prepare a private candlelit dinner on the terrace with Mt. Fuji illuminated, plus rose petals in your suite.',
-    wrongs:['We need a cake.','We prefer the restaurant.'], hint:'BrightonStar'},
-  {question:"I am writing an article for a luxury travel magazine. Could I speak with the general manager?",
-    answer:'Of course! Our GM, Mr. Takahashi, would be delighted. Shall I arrange a meeting at your convenience?',
-    wrongs:['I need a press kit.','The manager is busy.'], hint:'BrightonStar'},
-  {question:"We would like to host a private corporate incentive event for 30 guests.",
-    answer:'Excellent! We have an exclusive garden pavilion with full A/V, and our events team can craft a bespoke Mt. Fuji viewing experience.',
-    wrongs:['I need a meeting room.','The group is small.'], hint:'BrightonStar'},
-  {question:"Could you arrange a helicopter tour over Mt. Fuji for tomorrow morning?",
-    answer:'Absolutely. We partner with Fuji Air Excursions—I will confirm a 7 AM departure and arrange transfers from the hotel.',
-    wrongs:['I need a tour bus.','The weather is bad.'], hint:'BrightonStar'},
-  {question:"Our guest has severe mobility challenges. How can BrightonStar accommodate?",
-    answer:'We are fully equipped. Our accessible suite on the ground floor has roll-in shower, wide doorways, and direct garden access with a Mt. Fuji view.',
-    wrongs:['I need a wheelchair.','The room is on one floor.'], hint:'BrightonStar'},
-  {question:"I noticed BrightonStar is featured in the new Michelin Guide. Which dishes do you recommend?",
-    answer:'Our signature dish is the Shizuoka wagyu with Fuji mineral water broth—Michelin highlighted it specifically. The seasonal kaiseki menu is also superb.',
-    wrongs:['I prefer Italian food.','The guide is outdated.'], hint:'BrightonStar'},
-  {question:"Could we have our wedding ceremony here with a backdrop of Mt. Fuji?",
-    answer:'What a beautiful vision! Our garden chapel seats up to 60 guests and frames Mt. Fuji perfectly at noon. Our wedding coordinator will walk you through all options.',
-    wrongs:['I need a church.','The garden is private.'], hint:'BrightonStar'},
-  {question:"We require butler service throughout our three-night stay.",
-    answer:'Certainly. Your dedicated butler, Kenji, will be assigned from arrival. He will be available 24 hours via your in-room tablet.',
-    wrongs:['I need room service.','The service is included.'], hint:'BrightonStar'},
-  {question:"Could you source a specific vintage of wine unavailable in Japan?",
-    answer:"Of course—our sommelier has strong import connections. Please share the label details and we will endeavour to source it within 48 hours.",
-    wrongs:['I prefer sake.','The wine is common.'], hint:'BrightonStar'},
-  {question:"We would like to depart at 3 AM for a Mt. Fuji sunrise climb. Can the hotel support this?",
-    answer:'Absolutely. We will prepare a packed mountain breakfast, arrange a 2:45 AM shuttle to the 5th Station, and have warming drinks ready for your return.',
-    wrongs:['I need a guide.','The climb is difficult.'], hint:'BrightonStar'},
+  {question:"As you plan your final day, I'd like to suggest a route that captures the full essence of the Fuji Five Lakes region.",
+    answer:"We trust your expertise entirely—a curated final day would be the perfect conclusion to a remarkable stay.",
+    wrongs:["We'll decide in the morning.",'We prefer to relax on our last day.']},
+  {question:"Begin at Motosu Lake at dawn—it offers the view immortalised on the one-thousand-yen note.",
+    answer:"How extraordinary—the literal image on Japanese currency! We must see it in person.",
+    wrongs:["We've seen enough lakes.",'The yen note does not interest us.']},
+  {question:'From Motosu, we recommend the Narusawa Ice Cave—a lava tube formed during the 864 eruption of Mt. Fuji.',
+    answer:"A lava tube from the ninth century? The geological history here is as captivating as the scenery.",
+    wrongs:['Caves are not our preference.','The eruption history sounds alarming.']},
+  {question:'The cave maintains a constant temperature of three degrees Celsius—a refreshing contrast to the summer heat.',
+    answer:"We'll pack a light layer then. Is there anything particularly remarkable inside?",
+    wrongs:['Three degrees sounds too cold.','We will skip the cave.']},
+  {question:'Ancient ice formations have persisted inside since the Edo period—a genuinely rare natural phenomenon.',
+    answer:"Ice from the Edo period, within sight of an active volcano—Japan's contrasts are endlessly captivating.",
+    wrongs:['We prefer warm destinations.','Ice is just ice.']},
+  {question:'For lunch, I would suggest the Michelin-recommended Hoto Fudo restaurant, where the regional hoto noodle dish is served in traditional earthenware.',
+    answer:"Hoto noodles in a lakeside setting—that sounds like a perfect midday experience.",
+    wrongs:["We'll find somewhere ourselves.",'We are not noodle enthusiasts.']},
+  {question:"The afternoon offers a contemplative walk along Lake Kawaguchiko, where the mountain's reflection creates near-perfect symmetry on calm days.",
+    answer:"A mountain reflected upon water—I can already imagine how meditative and profoundly beautiful that will be.",
+    wrongs:["We've walked enough.",'We prefer to spend the afternoon shopping.']},
+  {question:"For your final evening, our kitchen team has prepared a farewell kaiseki menu inspired entirely by the ingredients you encountered throughout your stay.",
+    answer:"How extraordinarily thoughtful—a menu that narrates the entire journey through flavour. We are deeply moved.",
+    wrongs:['We prefer the regular menu.','We will eat simply on our last night.']},
+  {question:"A complimentary bottle of Gotemba Kogen premium junmai daiginjo will be chilled and waiting on your terrace at sunset.",
+    answer:"You have anticipated our every wish. BrightonStar has set a standard of hospitality we shall measure all future travel against.",
+    wrongs:['We prefer wine at sunset.','Please do not go to any trouble.']},
+  {question:"It has been our profound honour to host you, and we sincerely hope some part of Mt. Fuji's quiet majesty has found its way into your hearts.",
+    answer:"It most certainly has—and so has the warmth of every single member of the BrightonStar family. Until we meet again.",
+    wrongs:['Thank you. Goodbye.','We will book again if we are in the area.']},
 ];
 
 const QA_LEVELS: QAItem[][] = [QA1,QA2,QA3,QA4,QA5,QA6,QA7,QA8,QA9,QA10,QA11,QA12,QA13,QA14,QA15,QA16,QA17,QA18,QA19,QA20];
@@ -703,186 +586,15 @@ function popFromDeck<T>(deckRef: React.MutableRefObject<T[]>, pool: T[]): T {
   return deckRef.current.pop() as T;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// 3択構築（正解位置シャッフル保証）
-// ─────────────────────────────────────────────────────────────────
-interface WordQuiz { correct: Word; choices: string[]; }
-function buildWordQuiz(correct: Word, pool: Word[]): WordQuiz {
-  const dist  = pool.filter(w => w.en !== correct.en && w.ja !== correct.ja);
-  const wrongs = shuffle(dist).slice(0, 2).map(w => w.ja);
-  const fb     = ['その他','わかりません','ちがう'];
-  while (wrongs.length < 2) wrongs.push(fb[wrongs.length]);
-  return { correct, choices: shuffle([correct.ja, ...wrongs]) };
-}
-
 interface QAQuiz extends QAItem { choices: string[]; }
 function buildQAQuiz(item: QAItem): QAQuiz {
   return { ...item, choices: shuffle([item.answer, item.wrongs[0], item.wrongs[1]]) };
 }
 
 // ─────────────────────────────────────────────────────────────────
-// BasicWordsMode — level state で useEffect([level]) を駆動
+// HospitalityQAMode
 // ─────────────────────────────────────────────────────────────────
-function BasicWordsMode({ onCorrect }: { onCorrect: () => void }) {
-  const [combo,    setCombo]    = useState(0);
-  const [level,    setLevel]    = useState(1);
-  const [quiz,     setQuiz]     = useState<WordQuiz | null>(null);
-  const [result,   setResult]   = useState<'correct'|'wrong'|null>(null);
-  const [locked,   setLocked]   = useState(false);
-  const [speaking, setSpeaking] = useState(false);
-  const [showText, setShowText] = useState(false);
-  const [ready,    setReady]    = useState(false);
-  const deckRef = useRef<Word[]>([]);
-
-  // ① 初回のみ: localStorage 復元 → 初期デッキ構築
-  useEffect(() => {
-    try {
-      const raw  = localStorage.getItem(LS_WORDS);
-      const n    = raw ? (JSON.parse(raw) as number) : 0;
-      const lv   = getLevel(n);
-      const pool = WORD_LEVELS[lv - 1];
-      deckRef.current = shuffle([...pool]);
-      setCombo(n);
-      setLevel(lv);
-      setQuiz(buildWordQuiz(deckRef.current.pop()!, pool));
-    } catch {
-      deckRef.current = shuffle([...W1]);
-      setQuiz(buildWordQuiz(deckRef.current.pop()!, W1));
-    }
-    setReady(true);
-  }, []);
-
-  // ② レベルが変わった時だけ新しいプールのデッキを生成し最初の1問を出す
-  useEffect(() => {
-    if (!ready) return;
-    const pool      = WORD_LEVELS[level - 1];
-    deckRef.current = shuffle([...pool]);
-    setQuiz(buildWordQuiz(deckRef.current.pop()!, pool));
-    setResult(null);
-    setLocked(false);
-  }, [level]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const playWord = useCallback(() => {
-    if (!quiz) return;
-    setSpeaking(true);
-    speakText(quiz.correct.en, () => setSpeaking(false));
-  }, [quiz]);
-
-  useEffect(() => {
-    if (quiz) { setShowText(false); playWord(); }
-  }, [quiz?.correct.en]); // eslint-disable-line
-
-  const handleTap = (ja: string) => {
-    if (locked || !quiz) return;
-    if (ja === quiz.correct.ja) {
-      setResult('correct'); setLocked(true);
-      const newCombo = combo + 1;
-      setCombo(newCombo);
-      try { localStorage.setItem(LS_WORDS, JSON.stringify(newCombo)); } catch { /**/ }
-      onCorrect();
-
-      const newLevel = getLevel(newCombo);
-      if (newLevel !== level) {
-        // レベルアップ → useEffect([level]) がデッキを作り直す
-        setTimeout(() => setLevel(newLevel), CORRECT_DELAY);
-      } else {
-        // 同レベル → 現在のデッキから次の1枚
-        setTimeout(() => {
-          const pool = WORD_LEVELS[level - 1];
-          setQuiz(buildWordQuiz(popFromDeck(deckRef, pool), pool));
-          setResult(null); setLocked(false);
-        }, CORRECT_DELAY);
-      }
-    } else {
-      setResult('wrong');
-      setTimeout(() => setResult(null), 700);
-    }
-  };
-
-  const handleSkip = () => {
-    const pool = WORD_LEVELS[level - 1];
-    setQuiz(buildWordQuiz(popFromDeck(deckRef, pool), pool));
-    setResult(null); setLocked(false);
-  };
-
-  if (!ready || !quiz) return (
-    <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Loading…</div>
-  );
-
-  const threshold = nextThreshold(combo);
-  const lvStart   = LEVEL_THRESHOLDS[level - 1];
-  const lvEnd     = threshold ?? lvStart + 1;
-  const pct       = Math.min(100, ((combo - lvStart) / (lvEnd - lvStart)) * 100);
-
-  return (
-    <div className="flex flex-col gap-3">
-      {/* レベル表示 */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-lg font-black text-indigo-700">Level {level} / 20</span>
-          <span className="text-xs font-bold text-indigo-400">
-            {threshold ? `あと ${threshold - combo} 問でLevel ${level + 1}` : '🏆 MAX LEVEL'}
-          </span>
-        </div>
-        <div className="w-full h-3 bg-indigo-100 rounded-full overflow-hidden">
-          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-            style={{ width: `${pct}%` }} />
-        </div>
-        <div className="flex justify-between mt-1">
-          <span className="text-[10px] text-indigo-400">正解 {combo} 問</span>
-          <span className="text-[10px] text-indigo-300">山札残 {deckRef.current.length} 枚</span>
-        </div>
-      </div>
-
-      {/* 問題カード */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex flex-col items-center gap-3">
-        <p className="text-[11px] text-gray-400 font-semibold tracking-wide uppercase">日本語の意味はどれ？</p>
-        <button onClick={playWord}
-          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-base transition-all active:scale-95 ${
-            speaking ? 'bg-blue-400 text-white animate-pulse' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>
-          <span className="text-2xl">🔊</span>
-          <span className="text-sm">{speaking ? '再生中…' : 'もう一度聴く'}</span>
-        </button>
-        <button onClick={() => setShowText(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold border transition-all active:scale-95 ${
-            showText ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-gray-100 border-gray-200 text-gray-500'}`}>
-          {showText ? '🙈 かくす' : '👁️ テキストを見る'}
-        </button>
-        {showText && (
-          <div className="px-5 py-2 bg-amber-50 border border-amber-200 rounded-xl text-center">
-            <p className="text-2xl font-black text-amber-800">{quiz.correct.emoji}</p>
-            <p className="text-xl font-black text-amber-700 mt-1">{quiz.correct.en}</p>
-          </div>
-        )}
-        {result === 'wrong' && <p className="text-gray-500 font-bold text-sm">Try again 💪</p>}
-      </div>
-
-      {/* 3択 */}
-      <div className="flex flex-col gap-3">
-        {quiz.choices.map((ja, idx) => (
-          <button key={idx} onPointerDown={() => handleTap(ja)} disabled={locked}
-            className={`w-full px-5 py-4 rounded-2xl text-center font-black text-lg border transition-all active:scale-[0.98] shadow-sm select-none ${
-              result === 'correct' && ja === quiz.correct.ja
-                ? 'bg-emerald-100 border-emerald-400 text-emerald-800 scale-[1.02]'
-                : locked ? 'bg-gray-100 border-gray-200 text-gray-400'
-                : 'bg-white border-gray-200 text-gray-800 hover:bg-blue-50 hover:border-blue-300'}`}
-            style={{ WebkitTapHighlightColor:'transparent', touchAction:'none' }}>
-            {ja}
-          </button>
-        ))}
-      </div>
-      <button onClick={handleSkip}
-        className="w-full py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold text-sm transition-all">
-        スキップ →
-      </button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────
-// QAModeSimple — level state で useEffect([level]) を駆動
-// ─────────────────────────────────────────────────────────────────
-function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
+function HospitalityQAMode({ onCorrect }: { onCorrect: () => void }) {
   const [combo,    setCombo]    = useState(0);
   const [level,    setLevel]    = useState(1);
   const [quiz,     setQuiz]     = useState<QAQuiz | null>(null);
@@ -893,7 +605,6 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
   const [ready,    setReady]    = useState(false);
   const deckRef = useRef<QAItem[]>([]);
 
-  // ① 初回のみ
   useEffect(() => {
     try {
       const raw  = localStorage.getItem(LS_QA);
@@ -911,7 +622,6 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
     setReady(true);
   }, []);
 
-  // ② レベル変化時のみデッキを再構築
   useEffect(() => {
     if (!ready) return;
     const pool      = QA_LEVELS[level - 1];
@@ -939,7 +649,6 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
       setCombo(newCombo);
       try { localStorage.setItem(LS_QA, JSON.stringify(newCombo)); } catch { /**/ }
       onCorrect();
-
       const newLevel = getLevel(newCombo);
       if (newLevel !== level) {
         setTimeout(() => setLevel(newLevel), CORRECT_DELAY);
@@ -966,6 +675,7 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
     <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Loading…</div>
   );
 
+  const arc       = getArc(level);
   const threshold = nextThreshold(combo);
   const lvStart   = LEVEL_THRESHOLDS[level - 1];
   const lvEnd     = threshold ?? lvStart + 1;
@@ -973,33 +683,33 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* レベル表示 */}
-      <div className="bg-teal-50 border border-teal-100 rounded-2xl px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-lg font-black text-teal-700">Level {level} / 20</span>
-          <span className="text-xs font-bold text-teal-400">
-            {threshold ? `あと ${threshold - combo} 問でLevel ${level + 1}` : '🏆 MAX LEVEL'}
-          </span>
+      {/* ストーリーアーク＋レベルバー */}
+      <div className={`${arc.bg} border ${arc.border} rounded-2xl px-4 py-3`}>
+        <div className="flex items-center justify-between mb-1">
+          <div>
+            <span className={`text-xs font-black ${arc.text} tracking-wide`}>{arc.label}</span>
+            <span className={`ml-2 text-[10px] font-bold ${arc.soft}`}>{arc.sub}</span>
+          </div>
+          <span className={`text-lg font-black ${arc.text}`}>Lv {level}</span>
         </div>
-        <div className="w-full h-3 bg-teal-100 rounded-full overflow-hidden">
-          <div className="h-full bg-teal-500 rounded-full transition-all duration-500"
+        <div className="w-full h-2.5 bg-white/60 rounded-full overflow-hidden">
+          <div className={`h-full ${arc.bar} rounded-full transition-all duration-500`}
             style={{ width: `${pct}%` }} />
         </div>
         <div className="flex justify-between mt-1">
-          <span className="text-[10px] text-teal-400">正解 {combo} 問</span>
-          <span className="text-[10px] text-teal-300">山札残 {deckRef.current.length} 枚</span>
+          <span className={`text-[10px] ${arc.soft}`}>正解 {combo} 問</span>
+          <span className={`text-[10px] ${arc.soft}`}>
+            {threshold ? `あと ${threshold - combo} 問でLv ${level + 1}` : '🏆 MAX LEVEL'}
+          </span>
         </div>
       </div>
 
       {/* 問題カード */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex flex-col items-center gap-3">
         <p className="text-[11px] text-gray-400 font-semibold tracking-wide uppercase">正しい返答を選んでね</p>
-        {quiz.hint && (
-          <span className="text-[10px] font-bold px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full">{quiz.hint}</span>
-        )}
         <button onClick={playQuestion}
           className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-base transition-all active:scale-95 ${
-            speaking ? 'bg-teal-400 text-white animate-pulse' : 'bg-teal-600 hover:bg-teal-700 text-white'}`}>
+            speaking ? `${arc.bar} text-white animate-pulse` : `${arc.bar} hover:opacity-90 text-white`}`}>
           <span className="text-2xl">🔊</span>
           <span className="text-sm">{speaking ? '再生中…' : 'もう一度聴く'}</span>
         </button>
@@ -1024,7 +734,7 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
               result === 'correct' && choice === quiz.answer
                 ? 'bg-emerald-100 border-emerald-400 text-emerald-800 scale-[1.02]'
                 : locked ? 'bg-gray-100 border-gray-200 text-gray-400'
-                : 'bg-white border-gray-200 text-gray-800 hover:bg-teal-50 hover:border-teal-300'}`}
+                : 'bg-white border-gray-200 text-gray-800 hover:bg-blue-50 hover:border-blue-300'}`}
             style={{ WebkitTapHighlightColor:'transparent', touchAction:'none' }}>
             <span className="text-gray-400 font-black mr-2">{['A','B','C'][idx]}.</span>
             {choice}
@@ -1042,10 +752,7 @@ function QAModeSimple({ onCorrect }: { onCorrect: () => void }) {
 // ─────────────────────────────────────────────────────────────────
 // BabyImmersion — ルートコンポーネント
 // ─────────────────────────────────────────────────────────────────
-type ImMode = 'words' | 'qa';
-
 export function BabyImmersion() {
-  const [mode,      setMode]      = useState<ImMode>('words');
   const [celebText, setCelebText] = useState('');
   const [showCeleb, setShowCeleb] = useState(false);
 
@@ -1057,30 +764,15 @@ export function BabyImmersion() {
     setTimeout(() => setShowCeleb(false), 900);
   }, []);
 
-  const switchMode = (m: ImMode) => {
-    window.speechSynthesis?.cancel();
-    setMode(m);
-  };
-
   return (
     <div className="flex flex-col gap-4 pb-32 max-w-md mx-auto px-4">
-      <div className="flex gap-1.5 bg-gray-100 p-1 rounded-2xl">
-        {([
-          ['words','📝','単語3択', 'Basic Words'],
-          ['qa',   '💬','会話Q&A','Conversation'],
-        ] as [ImMode,string,string,string][]).map(([m,icon,label,sub]) => (
-          <button key={m} onClick={() => switchMode(m)}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${
-              mode === m
-                ? m === 'words' ? 'bg-blue-600 text-white shadow-md' : 'bg-teal-600 text-white shadow-md'
-                : 'text-gray-500 hover:text-gray-700'}`}>
-            <span className="block">{icon} {label}</span>
-            <span className={`block text-[9px] mt-0.5 ${mode === m ? 'text-white/70' : 'text-gray-400'}`}>{sub}</span>
-          </button>
-        ))}
+      {/* ヘッダー */}
+      <div className="text-center pt-2">
+        <h2 className="text-base font-black text-gray-700">🏨 Hospitality English</h2>
+        <p className="text-[11px] text-gray-400 mt-0.5">BrightonStar × Gotemba — 20 Levels</p>
       </div>
 
-      {mode === 'words' ? <BasicWordsMode onCorrect={celebrate} /> : <QAModeSimple onCorrect={celebrate} />}
+      <HospitalityQAMode onCorrect={celebrate} />
 
       {showCeleb && (
         <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
