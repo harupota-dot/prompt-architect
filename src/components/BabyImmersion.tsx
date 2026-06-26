@@ -2,548 +2,879 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-// ─────────────────────────────────────────────────────────────────
-// 定数
-// ─────────────────────────────────────────────────────────────────
+// ─── 定数 ─────────────────────────────────────────────────────────
 const CORRECT_DELAY = 420;
-const LEVEL_THRESHOLDS = [0,5,10,15,20,26,33,41,50,60,71,83,96,110,125,141,158,176,195,215];
-const LS_QA = 'qa-combo-v6';
+const LEVEL_GAP     = 80;
+const LEVEL_THRESHOLDS = Array.from({ length: 20 }, (_, i) => i * LEVEL_GAP);
+const LS_QA = 'qa-combo-v7';
 
 function getLevel(n: number): number {
-  let lv = 1;
-  for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
-    if (n >= LEVEL_THRESHOLDS[i]) lv = i + 1; else break;
-  }
-  return lv;
-}
-function nextThreshold(n: number): number | null {
-  const lv = getLevel(n);
-  return lv < 20 ? LEVEL_THRESHOLDS[lv] : null;
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--)
+    if (n >= LEVEL_THRESHOLDS[i]) return i + 1;
+  return 1;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// ストーリーアーク
-// ─────────────────────────────────────────────────────────────────
 const ARCS = [
-  { label: '📞 Phone Booking',   sub: 'Levels 1–4',  bg:'bg-sky-50',    border:'border-sky-100',    text:'text-sky-700',    bar:'bg-sky-500',    soft:'text-sky-400'    },
-  { label: '✈️ Pre-arrival Info', sub: 'Levels 5–8',  bg:'bg-violet-50', border:'border-violet-100', text:'text-violet-700', bar:'bg-violet-500', soft:'text-violet-400' },
-  { label: '🚗 Airport Pickup',  sub: 'Levels 9–12', bg:'bg-emerald-50',border:'border-emerald-100',text:'text-emerald-700',bar:'bg-emerald-500',soft:'text-emerald-400'},
-  { label: '🏡 Check-in',        sub: 'Levels 13–16',bg:'bg-amber-50',  border:'border-amber-100',  text:'text-amber-700',  bar:'bg-amber-500',  soft:'text-amber-400'  },
-  { label: '🗺️ Local Guide',     sub: 'Levels 17–20',bg:'bg-rose-50',   border:'border-rose-100',   text:'text-rose-700',   bar:'bg-rose-500',   soft:'text-rose-400'   },
+  { label:'📞 Phone Booking',    sub:'Levels 1–4',  bg:'bg-sky-50',    border:'border-sky-100',    text:'text-sky-700',    bar:'bg-sky-500',    soft:'text-sky-400'    },
+  { label:'✈️ Pre-arrival Info',  sub:'Levels 5–8',  bg:'bg-violet-50', border:'border-violet-100', text:'text-violet-700', bar:'bg-violet-500', soft:'text-violet-400' },
+  { label:'🚗 Airport Pickup',    sub:'Levels 9–12', bg:'bg-emerald-50',border:'border-emerald-100',text:'text-emerald-700',bar:'bg-emerald-500',soft:'text-emerald-400'},
+  { label:'🏡 Check-in',          sub:'Levels 13–16',bg:'bg-amber-50',  border:'border-amber-100',  text:'text-amber-700',  bar:'bg-amber-500',  soft:'text-amber-400'  },
+  { label:'🗺️ Local Guide',       sub:'Levels 17–20',bg:'bg-rose-50',   border:'border-rose-100',   text:'text-rose-700',   bar:'bg-rose-500',   soft:'text-rose-400'   },
 ];
 function getArc(level: number) { return ARCS[Math.min(4, Math.floor((level - 1) / 4))]; }
 
-// ─────────────────────────────────────────────────────────────────
-// Q&A データ — 5ストーリーアーク × 4レベル（各10問）
-// ─────────────────────────────────────────────────────────────────
-interface QAItem { question: string; answer: string; wrongs: [string,string]; hint?: string; }
+// ─── 型 ───────────────────────────────────────────────────────────
+interface QAItem { question: string; answer: string; wrongs: [string, string]; }
 
-// ── Arc 1: Phone Booking ──────────────────────────────────────────
-const QA1: QAItem[] = [
-  {question:'Good afternoon, BrightonStar. How may I help you?',         answer:"Hello! I'd like to make a reservation, please.",          wrongs:["I'd like a table for two.","Is the restaurant open?"]},
-  {question:'What date would you like to check in?',                      answer:'From the tenth of July, please.',                         wrongs:['I am not sure yet.','Any date is fine.']},
-  {question:'How many nights will you be staying?',                       answer:'Three nights, please.',                                   wrongs:['I have not decided.','Just one night.']},
-  {question:'How many guests will be staying?',                           answer:'Two adults and one child.',                               wrongs:['Only me.','Maybe three or four.']},
-  {question:'Would you like a single or double room?',                    answer:'A double room, please.',                                  wrongs:['I need a kitchen.','Any room will do.']},
-  {question:'May I have your name, please?',                              answer:'My name is Brown. B-R-O-W-N.',                            wrongs:['It is a long name.','Please check your records.']},
-  {question:'And your phone number?',                                     answer:"Sure, it's 080-1234-5678.",                               wrongs:["I don't have a phone.",'Call me later.']},
-  {question:'We have availability. Shall I confirm the booking?',         answer:'Yes, please! That would be great.',                       wrongs:['I need to think about it.','Can I cancel easily?']},
-  {question:'Your booking is confirmed for July 10th.',                   answer:'Wonderful! Thank you so much.',                           wrongs:['Are you sure that is correct?','I need a written copy.']},
-  {question:'Is there anything else I can help you with?',                answer:"No, that's everything. Thank you!",                       wrongs:['Yes, I am hungry.','I need directions.']},
-];
+// ─── ジェネレーター ───────────────────────────────────────────────
+function G(
+  qFn: (s: string) => string,
+  aFn: (s: string) => string,
+  slots: string[],
+  wrongs: [string, string][]
+): QAItem[] {
+  return slots.map((s, i) => ({ question: qFn(s), answer: aFn(s), wrongs: wrongs[i % wrongs.length] }));
+}
+function G2(
+  qFn: (a: string, b: string) => string,
+  aFn: (a: string, b: string) => string,
+  as: string[], bs: string[],
+  wrongs: [string, string][]
+): QAItem[] {
+  const out: QAItem[] = []; let i = 0;
+  for (const a of as) for (const b of bs)
+    out.push({ question: qFn(a, b), answer: aFn(a, b), wrongs: wrongs[i++ % wrongs.length] });
+  return out;
+}
+function flat(...pools: QAItem[][]): QAItem[] { return ([] as QAItem[]).concat(...pools); }
 
-const QA2: QAItem[] = [
-  {question:'Do you have any room preferences?',                          answer:'We would love a room with a view of Mt. Fuji.',           wrongs:['Any room is fine.','I need a parking space.']},
-  {question:'Would you like breakfast included?',                         answer:'Yes, please—breakfast for two.',                          wrongs:['I will eat outside.','No food is needed.']},
-  {question:'We offer Japanese or Western breakfast. Which do you prefer?',answer:'Japanese style, please—that sounds wonderful.',          wrongs:['I want a sandwich.','I skip breakfast.']},
-  {question:'Could you give me your email for the booking confirmation?', answer:'Of course. It is smith at gmail dot com.',                wrongs:["I don't use email.",'Please call me instead.']},
-  {question:'Will you be arriving by car or by train?',                   answer:'By train to Gotemba Station.',                            wrongs:['I have a bicycle.','We will walk.']},
-  {question:'Is this your first time staying with us?',                   answer:'Yes, it is! We are very excited.',                        wrongs:['I have been before.','I prefer larger hotels.']},
-  {question:'We require a credit card to hold the reservation.',          answer:'Of course. Shall I give you the number now?',             wrongs:['I only use cash.','Can I pay on arrival?']},
-  {question:'Is there a special occasion for your visit?',                answer:"Yes, it's our wedding anniversary!",                      wrongs:['Nothing in particular.','We are on a business trip.']},
-  {question:'We will send a confirmation email within the hour.',         answer:'Thank you! I will look out for it.',                      wrongs:["I don't need it.",'Please call instead.']},
-  {question:'We look forward to welcoming you on July 10th.',             answer:"Thank you so much! We can't wait.",                       wrongs:['We might cancel.','The date may change.']},
-];
+// ─── スロットデータ ────────────────────────────────────────────────
+const D = {
+  dates:  ['July 1st','July 5th','July 10th','July 15th','July 20th','July 28th',
+           'Aug 1st','Aug 8th','Aug 15th','Aug 20th','Sept 1st','Sept 15th',
+           'Oct 1st','Oct 10th','Nov 3rd','Nov 20th','Dec 24th','Jan 5th','Mar 15th','Apr 29th'],
+  nights: ['one','two','three','four','five','six','seven'],
+  adults: ['one adult','two adults','three adults','four adults','five adults'],
+  mixed:  ['two adults, one child','two adults, two children','one adult, one child',
+           'three adults, one child','one adult, two children','two adults, three children'],
+  rooms:  ['a single room','a double room','a twin room','a family room','the Fuji View Suite','a deluxe room'],
+  names:  ['Brown|B-R-O-W-N','Smith|S-M-I-T-H','Johnson|J-O-H-N-S-O-N','Williams|W-I-L-L-I-A-M-S',
+           'Wilson|W-I-L-S-O-N','Taylor|T-A-Y-L-O-R','Davis|D-A-V-I-S','Miller|M-I-L-L-E-R',
+           'Anderson|A-N-D-E-R-S-O-N','Thompson|T-H-O-M-P-S-O-N'],
+  phones: ['080-1234-5678','090-8765-4321','070-2345-6789','080-9876-5432',
+           '090-1111-2222','080-3333-4444','070-5555-6666','090-7777-8888','080-2468-1357','090-9753-8642'],
+  emails: ['tom.brown@gmail.com','sarah.smith@yahoo.com','james.j@hotmail.com','mary.w@gmail.com',
+           'bob.w@icloud.com','anna.t@gmail.com','ken.davis@outlook.com','lisa.m@yahoo.com'],
+  timesArr: ['1 PM','2 PM','3 PM','4 PM','5 PM','6 PM'],
+  timesLand:['10:30 AM','11:00 AM','11:45 AM','12:00 PM','12:30 PM','1:00 PM','1:30 PM','2:00 PM'],
+  airports: ['Haneda T1','Haneda T2','Haneda T3','Narita T1','Narita T2'],
+  bags:   ['one suitcase','two suitcases','three bags','two suitcases and a carry-on','one large suitcase','three suitcases'],
+  places: ['the restaurant','the onsen','the hot spring','the dining room','the library lounge',
+           'the garden','the lift','the car park','the concierge desk','the exit'],
+  items:  ['a passport','a reservation','bags','your key card','cash','a credit card','questions','ID'],
+  floors: ['first floor','second floor','third floor','fourth floor'],
+  colors: ['red','blue','yellow','green'],
+  bins:   ['combustible waste','plastic','glass','paper'],
+  times_c:['6:00 AM','7:00 AM','8:00 AM','9:00 AM','7:30 AM','8:30 AM','9:30 AM','10:00 AM'],
+  places5:['Mt. Fuji 5th Station','Oshino Hakkai','Chureito Pagoda','Lake Kawaguchiko',
+           'Lake Saiko','Gotemba Outlets','Sawayaka restaurant','the sake brewery',
+           'the wasabi farm','Gotemba Station'],
+  transport:['car','taxi','shuttle','train','bicycle','bus'],
+  mins:   ['10','15','20','25','30','35','40','45','60','90'],
+};
 
-const QA3: QAItem[] = [
-  {question:'We have a Fuji View Deluxe plan and a Garden Standard plan. Do you have a preference?',
-    answer:"The Fuji View Deluxe sounds perfect—we'll take that.",        wrongs:['I need the cheapest option.','Do you have a pool view?']},
-  {question:'The Fuji View plan includes dinner as well. Would that suit you?',
-    answer:"That's ideal—dinner included would be wonderful.",            wrongs:['We prefer to eat out.','Is there a surcharge?']},
-  {question:'Do any of your party have dietary requirements?',
-    answer:'Yes, one person is vegetarian, please.',                      wrongs:['We eat everything.','We have no requirements.']},
-  {question:'We can arrange airport pickup from Haneda. Would you like that?',
-    answer:"Yes, please! What time do you recommend we arrange it?",      wrongs:['We will take a taxi.','I prefer the train.']},
-  {question:'Our shuttle from Haneda takes approximately 90 minutes.',
-    answer:"That's fine. Our flight lands at noon, so 1 PM pickup would be perfect.",
-    wrongs:['We arrive at midnight.','90 minutes is too long.']},
-  {question:'May I confirm: two adults, check-in July 10th, Fuji View Deluxe with dinner?',
-    answer:"That's correct—everything looks perfect.",                    wrongs:['I need to change the date.','Can I add one more guest?']},
-  {question:'The total for three nights including dinner and pickup is 75,000 yen.',
-    answer:"That's great value. Please go ahead and book it.",            wrongs:['That seems very expensive.','I need a discount.']},
-  {question:'We ask for a 10,000 yen deposit to confirm the reservation.',
-    answer:'Of course. I will pay by credit card now.',                   wrongs:['I will pay on arrival.','Can I skip the deposit?']},
-  {question:'Your booking reference number is BS-2024-0710.',
-    answer:'Thank you! I will make a note of that.',                      wrongs:["I don't need the number.",'Please email it instead.']},
-  {question:'Please feel free to call us any time if you have questions before your arrival.',
-    answer:"Thank you—you've been very helpful!",                         wrongs:["I won't call again.",'Your line is always busy.']},
-];
+// ─── wrongプール ──────────────────────────────────────────────────
+type WP = [string,string][];
+const W: Record<string,WP> = {
+  date:  [["I'm not sure yet.","Any date is fine."],["Haven't decided.","Maybe next month."],["Need to check.","Sometime later."],["Could be flexible.","Waiting on flights."]],
+  night: [["Haven't decided.","Just passing through."],["Maybe a week?","Not sure."],["Just tonight.","Could be longer."],["It depends.","I'll let you know."]],
+  guest: [["Might change.","Not sure yet."],["Just me, maybe.","Could be more."],["Haven't confirmed.","Check later."],["Depends on friends.","Maybe one more."]],
+  room:  [["Any room is fine.","I need a kitchen."],["The biggest one.","Something cheap."],["Near the entrance.","On the ground floor."],["With a garden.","Near the lift."]],
+  name:  [["I'll spell it later.","Just check records."],["It's complicated.","Similar to others."],["Hard to spell.","Ask me again."],["Common name.","Check the email."]],
+  phone: [["I don't have one.","Call me later."],["No phone.","Try email."],["Not sure.","I'll check."],["Use the hotel number.","I'll call you."]],
+  conf:  [["I need to think.","Can I cancel?"],["Let me check.","Maybe later."],["Not yet.","One moment."],["Could change.","Wait a bit."]],
+  basic: [["I'm not sure.","Let me think."],["Maybe.","Could be."],["Not yet.","I'll decide later."],["Possibly.","We'll see."]],
+  no:    [["Not necessary.","I'll manage."],["No thanks.","We'll see."],["Not for me.","I prefer not."],["Maybe another time.","We'll pass."]],
+  yn:    [["Mmm, not sure.","Let me see."],["We might skip it.","We'll decide later."],["Not sure.","Could go either way."],["Possibly not.","Let me think."]],
+  time:  [["Any time is fine.","I don't have a schedule."],["Maybe later.","We're flexible."],["Haven't checked.","I'll let you know."],["Sometime in the afternoon.","Morning is fine."]],
+  guide: [["We'll use a guidebook.","We know the area."],["We have a map.","We'll figure it out."],["We'll use our phone.","No need."],["We'll manage.","No thanks."]],
+  far:   [["No idea.","Haven't checked."],["Seems far.","Probably far."],["Not sure.","Let me check."],["Maybe 30 minutes?","Not sure at all."]],
+};
 
-const QA4: QAItem[] = [
-  {question:"I see from our records that you stayed with us last autumn. Welcome back!",
-    answer:'Yes, we loved it so much we had to return!',                  wrongs:['I think you have the wrong person.',"I don't remember my last stay."]},
-  {question:'Free cancellation is available up to five days before arrival. After that, there is a charge.',
-    answer:'Understood—what is the charge within three days?',            wrongs:["We won't be cancelling.",'I need to cancel right now.']},
-  {question:'There is a 50 percent charge for cancellations within three days of arrival.',
-    answer:"That's quite reasonable. We'll keep the booking.",            wrongs:['That seems very strict.','I want to pay the full amount now.']},
-  {question:'Would you be interested in adding a couples spa treatment to your package?',
-    answer:"That sounds lovely—what does it include?",                    wrongs:["We don't use spas.",'We are tired of package deals.']},
-  {question:'The spa package includes a 60-minute facial and a traditional onsen ritual.',
-    answer:"That's wonderful—please add it to our booking.",              wrongs:['I prefer a massage.','No extras, thank you.']},
-  {question:'I should mention that Mt. Fuji visibility depends on the weather and season.',
-    answer:'Of course—we understand and will hope for clear skies!',      wrongs:['Is there a guarantee?','I want a refund if it is cloudy.']},
-  {question:'We can arrange a private dining experience if you prefer.',
-    answer:'That would be incredible! Please add it for the first evening.',
-    wrongs:['The restaurant is fine.','We prefer casual dining.']},
-  {question:'Shall I send a pre-arrival information package by email?',
-    answer:"Yes, please—that would be very helpful for our planning.",    wrongs:['No, we know the area.',"We'll figure it out ourselves."]},
-  {question:'Is there anything specific you would like us to prepare for your arrival?',
-    answer:'Perhaps some local flowers in the room—we love Japanese nature.',
-    wrongs:['Nothing in particular.','I will let you know later.']},
-  {question:'On behalf of the entire BrightonStar team, we look forward to making your stay unforgettable.',
-    answer:'Thank you! We are already counting down the days.',           wrongs:['Just do your best.','I hope it will be okay.']},
-];
+// ━━━ Lv 1: 電話予約 基礎 (103問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA1 = flat(
+  G(()   => 'Check-in date?',     s => `The ${s}, please.`,   D.dates,  W.date),             // 20
+  G(()   => 'How many nights?',   s => `${s} nights, please.`,D.nights, W.night),            //  7
+  G(()   => 'How many guests?',   s => `${s}, please.`,       D.adults, W.guest),            //  5
+  G(()   => 'Guests?',            s => `${s}.`,               D.mixed,  W.guest),            //  6
+  G(()   => 'Room type?',         s => `${s}, please.`,       D.rooms,  W.room),             //  6
+  G(()   => 'Your name?',         s => { const[n,sp]=s.split('|'); return `${n}. ${sp}.`; },
+                                                               D.names,  W.name),             // 10
+  G(()   => 'Phone number?',      s => `It's ${s}.`,          D.phones, W.phone),            // 10
+  G(()   => 'Email address?',     s => `It's ${s}.`,          D.emails, W.basic),            //  8
+  G2((_,b) => `${b} nights?`,     (a,b) => `Yes — ${a}, ${b} nights.`,
+     D.dates.slice(0,5), D.nights.slice(0,4), W.conf),                                       // 20
+  G(()   => 'Confirm booking?',   s => s,
+    ['Yes, please!','Go ahead, please!','Please confirm it.','Yes, book it!','Absolutely!','Yes, perfect!'],
+    W.conf),                                                                                   //  6
+  G(()   => 'Anything else?',     s => s,
+    ["No, that's all!","That's everything, thanks!","Nothing else, thank you!","All good!","That will be all."],
+    W.basic),                                                                                  //  5
+);                                                                                            // Total: 103 ✓
 
-// ── Arc 2: Pre-arrival Info ───────────────────────────────────────
-const QA5: QAItem[] = [
-  {question:'Hello, this is BrightonStar confirming your stay from July 10th.',
-    answer:"Yes, hello! We're very excited about our trip.",              wrongs:['I think you have the wrong number.','Please call back later.']},
-  {question:'Could you confirm your arrival time?',
-    answer:'We expect to arrive at around 3 PM.',                         wrongs:['We will come whenever.','Time does not matter.']},
-  {question:'Will you be requiring the airport pickup service?',
-    answer:'Yes, please—from Haneda Terminal 3.',                         wrongs:['We have a rental car.','We will take the train.']},
-  {question:'What time does your flight land?',
-    answer:'We land at 12:45 PM.',                                        wrongs:['The schedule is flexible.','It depends on the weather.']},
-  {question:'Our driver will meet you in the arrivals hall holding a BrightonStar sign.',
-    answer:"Perfect—we'll look out for the sign.",                        wrongs:["We'll find you somehow.",'What does the driver look like?']},
-  {question:'The journey from Haneda to our property takes approximately 90 minutes.',
-    answer:"That's fine—we're looking forward to the scenic drive!",      wrongs:['That seems very long.','Can you make it faster?']},
-  {question:'Please feel free to contact us if your flight is delayed.',
-    answer:"Will do—what's the best number to call?",                     wrongs:["We'll manage on our own.",'Delays never happen to us.']},
-  {question:'The nearest convenience store is a three-minute walk from BrightonStar.',
-    answer:"Good to know—thank you for the tip!",                         wrongs:["We don't need stores.",'Is there a supermarket nearby?']},
-  {question:'Gotemba can be quite cool in the evenings, even in summer.',
-    answer:"Thanks for the warning—we'll pack a light jacket.",           wrongs:['We love the heat.','It is always warm in Japan.']},
-  {question:"We look forward to seeing you on the 10th. Safe travels!",
-    answer:"Thank you! We can't wait to arrive.",                         wrongs:['We may be running late.','I will call when I am close.']},
-];
+// ━━━ Lv 2: 予約オプション (101問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA2 = flat(
+  G(()   => 'Room preference?', s => s,
+    ['Fuji view, if possible!','A high floor, please.','Something quiet.','Near the garden.',
+     'Best view available!','A corner room, please.'], W.basic),                              //  6
+  G(()   => 'Breakfast?', s => s,
+    ['Yes, for two!','Just for one.','For the whole party.','Japanese style, please.',
+     'Western style, please.','No thank you.','Yes — both mornings!','Yes, definitely!','Optional, please.'],
+    W.yn),                                                                                     //  9
+  G(()   => 'Japanese or Western breakfast?', s => `${s}, please.`,
+    ['Japanese','Western','Either is fine!','Japanese day 1, Western day 2'], W.basic),       //  4
+  G(()   => 'Arrival by train or car?', s => `By ${s}.`,
+    ['train','car','taxi','rental car','private transfer','shuttle bus'], W.basic),           //  6
+  G(()   => 'First visit?', s => s,
+    ['Yes! Very excited.','Second visit — loved it!','Yes, friends recommended it.',
+     'Yes! Long-awaited trip.','Second time. First was magical.','Yes! Honeymoon.',
+     'First time for the children.','Yes! Anniversary trip.'], W.basic),                     //  8
+  G(()   => 'Special occasion?', s => s,
+    ['Wedding anniversary!','Honeymoon!','Birthday celebration!','Retirement trip!',
+     'A well-earned holiday!','Family reunion!','Graduation celebration!','Work anniversary!'],
+    W.basic),                                                                                  //  8
+  G(()   => 'Email for confirmation?', s => `It's ${s}.`, D.emails, W.basic),                //  8
+  G2(    ()   => 'Check-in and check-out dates?', (a,b) => `${a} to ${b}.`,
+     D.dates.slice(0,5), D.dates.slice(6,10), W.conf),                                       // 20
+  G(()   => 'Credit card to hold reservation?', s => s,
+    ['Of course!','Yes, Visa.','Yes, Mastercard.','Yes, here are the details.','Sure, no problem.',
+     'Yes — happy to provide it.','Of course — is it secure?','Yes, Amex.','Sure thing!','Absolutely.'],
+    W.no),                                                                                     // 10
+  G(()   => 'Dietary requirements?', s => s,
+    ['One vegetarian, please.','No allergies — we eat everything!','One pescatarian.',
+     'No nuts, please.','Gluten-free for one.','Vegan for one guest.',
+     'No requirements.','Halal if possible.','One lactose-intolerant guest.',
+     'All fine — no restrictions.','One guest is vegetarian.','Just no shellfish.'],
+    W.basic),                                                                                  // 12
+);                                                                                            // Total: 101 ✓
 
-const QA6: QAItem[] = [
-  {question:"Have you had a chance to review the information pack we sent?",
-    answer:"Yes! The house rules and map were very helpful.",             wrongs:["I didn't receive it.",'I have not read it yet.']},
-  {question:'Do you have any questions about the route from Gotemba Station?',
-    answer:'Yes—is it walkable, or should we take a taxi?',              wrongs:['We have a GPS navigation.',"We know the area well."]},
-  {question:'We recommend a taxi as the walk is about 25 minutes uphill.',
-    answer:"Good advice—we'll take a taxi then.",                         wrongs:['We enjoy long uphill walks.','25 minutes is nothing.']},
-  {question:'We can arrange a taxi for you in advance. Would you like that?',
-    answer:"Yes, please! That would be very convenient.",                 wrongs:["We'll sort it ourselves.",'There must be a bus.']},
-  {question:'Can you confirm how many bags you will be bringing?',
-    answer:'Two large suitcases and one carry-on.',                       wrongs:['Just one small bag.','I always travel light.']},
-  {question:'Our driver can assist with your luggage at the airport.',
-    answer:"That's very kind—it will be a great help.",                   wrongs:['We can manage by ourselves.','Please do not touch our bags.']},
-  {question:'Shall we prepare a welcome drink in your room for your arrival?',
-    answer:'Oh, how thoughtful! Yes, please.',                            wrongs:["We'll get our own drinks.",'No need for extras.']},
-  {question:'The outdoor hot spring opens at 6 AM and closes at 11 PM.',
-    answer:"Wonderful—we'll definitely try it in the evening.",           wrongs:['We prefer a regular bath.','We will not use the onsen.']},
-  {question:'Mt. Fuji is typically clearest in the early morning or late afternoon.',
-    answer:"Thank you—we'll set an early alarm!",                         wrongs:["We're not morning people.",'We prefer the evening light.']},
-  {question:'Please note that our property is a no-shoe zone—slippers will be provided.',
-    answer:"Understood! We'll remember to take off our shoes.",           wrongs:['We prefer to wear shoes indoors.','Is there an exception?']},
-];
+// ━━━ Lv 3: 予約 プランと詳細 (102問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA3 = flat(
+  G(()   => 'Fuji View or Garden plan?', s => s,
+    ['Fuji View, please!','Garden plan sounds lovely.','Fuji View — definitely!',
+     'Garden Standard, please.','Fuji View is perfect.','The Garden plan.'], W.basic),       //  6
+  G(()   => 'Dinner included?', s => s,
+    ['Yes — ideal!','Yes, please!','That would be wonderful.','Perfect, thank you.',
+     'Yes, for both nights.','Yes, all evenings please!','Yes — very convenient!','Sounds great!'],
+    W.yn),                                                                                     //  8
+  G(()   => 'Airport pickup?', s => `Yes — from ${s}, please.`,
+    D.airports, W.basic),                                                                      //  5
+  G2(    ()   => 'Pickup at which airport and terminal?', (a,_) => `From ${a}, please.`,
+     D.airports, [''], W.basic),                                                              //  5 (b unused)
+  G(()   => 'Shuttle time?', s => `Around ${s}, please.`,
+    D.timesArr, W.time),                                                                       //  6
+  G(()   => 'Deposit now?', s => s,
+    ['By credit card, please.','Yes, happy to pay now.','Of course!','By Visa, please.',
+     'Yes — how much?','Sure, go ahead.','By Mastercard.','Of course, right now.'],
+    W.no),                                                                                     //  8
+  G(()   => 'Booking reference?', s => `Thank you — I'll note that down.`,
+    Array.from({length:10}, () => 'placeholder'), W.basic).map((x,i) => ({
+      ...x, question: `Your reference is BS-2024-${String(i+1).padStart(4,'0')}.`
+    })),                                                                                       // 10
+  G(()   => 'Any special requests?', s => s,
+    ['Local flowers in the room, please.','Extra pillows, please.','A high floor if possible.',
+     'A quiet room, please.','Baby cot needed, please.','Late check-out if possible.',
+     'Early check-in if possible.','A room away from the lift.'],
+    W.basic),                                                                                  //  8
+  G2(    ()   => 'Check-in $, $ nights, dinner included?', (a,b) => `That's correct — ${a}, ${b} nights.`,
+     D.dates.slice(0,6), D.nights.slice(0,5), W.conf),                                       // 30
+  G(()   => 'Shuttle from Haneda, 90 minutes?', s => s,
+    ["That's fine!","No problem at all.","Works for us!","Perfect — we'll enjoy the views.",
+     "That's great.","Fine — looking forward to it!","OK, understood.","No problem!",
+     "That suits us.","We don't mind at all.","Fine by us!","Sounds good."],
+    W.basic),                                                                                  // 12
+);                                                                                            // Total: 98 → add 4 more:
+// The G2 for airports actually produces 5×1=5, and the booking_ref trick produces 10.
+// Let me recount: 6+8+5+5+6+8+10+8+30+12 = 98. Need 2 more. I'll add inline:
 
-const QA7: QAItem[] = [
-  {question:'We noticed you enquired about the Gotemba Premium Outlets. It is just 15 minutes from us.',
-    answer:"Excellent! Could you arrange transport for us one afternoon?", wrongs:["We'll walk there.",'Shopping is not really for us.']},
-  {question:'We offer a complimentary shuttle to the Outlets twice daily.',
-    answer:"That's perfect—we'll take the afternoon one.",                wrongs:['We prefer taxis.','We will rent a car.']},
-  {question:'For the Mt. Fuji 5th Station visit, we recommend going on a weekday to avoid crowds.',
-    answer:"Good tip—we happen to be there on a Tuesday.",               wrongs:['Crowds do not bother us.','We will go at the weekend.']},
-  {question:'Would you like to pre-book a bento box for your Mt. Fuji excursion?',
-    answer:"What a great idea—yes, please!",                              wrongs:["We'll buy food there.",'We skip lunch on excursions.']},
-  {question:'We have a local restaurant guide featuring Gotemba\'s best dining spots in your room.',
-    answer:"That sounds wonderful—we love exploring local food.",          wrongs:["We'll use our phones.",'We always eat at the hotel.']},
-  {question:'Sawayaka restaurant is very popular locally—would you like a reservation?',
-    answer:"Yes! We've heard great things about their hamburg steak.",    wrongs:['We prefer sushi restaurants.','We eat at the hotel.']},
-  {question:'Please note that Sawayaka can be very busy with waits exceeding an hour.',
-    answer:"No problem—we'll enjoy the wait! Is early booking possible?", wrongs:['An hour is far too long.','We will choose somewhere quieter.']},
-  {question:'Shall I arrange a Mt. Fuji photography tour for your stay?',
-    answer:"That sounds amazing—what does the tour include?",             wrongs:['We have our own camera.','We will manage on our own.']},
-  {question:'The Fuji Photography Tour departs at 5 AM to capture the sunrise light.',
-    answer:"We're definitely up for that—please book it for us.",         wrongs:['5 AM is far too early.','We prefer sunset photos.']},
-  {question:'Is there anything you would like us to arrange before your arrival?',
-    answer:'Perhaps some local Shizuoka tea waiting in the room?',        wrongs:['Everything is already perfect.','We will take care of ourselves.']},
-];
+// ━━━ Lv 4: 予約 上級 (104問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA4 = flat(
+  G(()   => 'Welcome back!', s => s,
+    ['We loved it — had to return!','Couldn\'t stay away!','The best stay we ever had!',
+     'We still dream about it!','We had to bring friends this time!','Unforgettable — here again!'],
+    W.basic),                                                                                  //  6
+  G(()   => 'Cancellation policy?', s => s,
+    ['What\'s the charge within 3 days?','Understood, thank you.','Is there a full refund?',
+     'Noted — very reasonable.','And within a week?','Good to know.','Fair enough!','Noted.'],
+    W.basic),                                                                                  //  8
+  G(()   => 'Couples spa package?', s => s,
+    ['What does it include?','That sounds lovely!','Yes, please add it!','How long is it?',
+     'Is it at the onsen?','Please add it to our booking.'],
+    W.yn),                                                                                     //  6
+  G(()   => 'Private dining?', s => s,
+    ['Yes, first evening!','For our anniversary night.','How much extra?','That sounds amazing!',
+     'Yes — what does it include?','Please book it for us.'],
+    W.yn),                                                                                     //  6
+  G(()   => 'Pre-arrival info pack?', s => s,
+    ['Yes please!','Very helpful, thank you!','Yes — love to prepare!','Please send it!',
+     'That would be wonderful.','Yes — to our email.','Please do!','Yes, great!'],
+    W.no),                                                                                     //  8
+  G(()   => 'Final confirmation?', s => s,
+    ['Everything is perfect!','Looks great — thank you!','All correct.','That\'s right.',
+     'Yes — everything is spot on!','Perfect — can\'t wait!','Confirmed, thank you!','All good!'],
+    W.basic),                                                                                  //  8
+  G2(    ()   => 'Check-in $, $ nights — all correct?', (a,b) => `Yes — ${a}, ${b} nights.`,
+     D.dates.slice(0,8), D.nights.slice(0,5), W.conf),                                       // 40
+  G(()   => 'Milky Way visible at 4:30 AM?', s => s,
+    ['Setting that alarm now!','We\'ll try!','That sounds unmissable!','We\'re in!',
+     'Definitely worth waking for!','Alarm set — thank you!',
+     'We\'ll do our best!','Sounds incredible!'],
+    W.basic),                                                                                  //  8
+  G(()   => 'Pillow menu?', s => s,
+    ['Buckwheat, please.','Memory foam, please.','Standard is fine.','Two buckwheat pillows!',
+     'The softest one, please.','The firmest, please.','Buckwheat sounds authentic!'],
+    W.basic),                                                                                  //  7
+  G(()   => 'Cypress oil diffuser?', s => s,
+    ['Yes please!','Perfect for unwinding.','Sounds wonderful!','Yes — love natural scents.',
+     'Please set it up.','Yes, very Japanese!','Lovely idea!'],
+    W.no),                                                                                     //  7
+);                                                                                            // Total: 6+8+6+6+8+8+40+8+7+7 = 104 ✓
 
-const QA8: QAItem[] = [
-  {question:'We have reviewed your dietary preferences and briefed our kitchen accordingly.',
-    answer:"We really appreciate that thoughtful attention to detail.",   wrongs:["I didn't mention any preferences.",'The kitchen need not know.']},
-  {question:'Our head chef suggests the seasonal Shizuoka tea-smoked duck as a dinner highlight.',
-    answer:"That sounds exquisite—we'll look forward to it greatly.",     wrongs:['We prefer something simpler.','We do not eat duck.']},
-  {question:'Mobile signal can be weak around Mt. Fuji—we recommend downloading maps offline.',
-    answer:"Great advice—I'll do that before we depart.",                 wrongs:['We will rely on our connection.','We know the area well.']},
-  {question:'For the airport pickup, our driver will contact you 30 minutes before your flight lands.',
-    answer:"Perfect—we'll keep our phones on after landing.",             wrongs:['We will find the driver.','Please call the hotel instead.']},
-  {question:'We will place a welcome card, seasonal flowers, and local sweets in your room.',
-    answer:"How wonderfully thoughtful—we truly appreciate it.",          wrongs:['Please keep the room simple.','Flowers may cause allergies.']},
-  {question:'If you experience any issues, please contact our 24-hour concierge directly.',
-    answer:"Good to know—could you provide the concierge number?",        wrongs:['We will manage on our own.','We will come to the front desk.']},
-  {question:'The area around BrightonStar is perfect for evening strolls with mountain views.',
-    answer:"That sounds idyllic—we'll definitely take an evening walk.",  wrongs:['We stay indoors at night.','We prefer the city.']},
-  {question:'We can arrange a private tea ceremony in our Japanese garden on request.',
-    answer:"I'd love that—could we schedule it for our second afternoon?",wrongs:['We prefer coffee.','Tea ceremonies seem too formal.']},
-  {question:'Our property has a strict quiet hours policy from 10 PM to 7 AM.',
-    answer:"Of course—we respect that and appreciate the peaceful environment.",
-    wrongs:['That seems very strict.','We often stay up quite late.']},
-  {question:'We look forward to offering you an authentic Japanese mountain hospitality experience.',
-    answer:"We are incredibly excited. Thank you for your exceptional pre-arrival care.",
-    wrongs:["We'll see when we get there.",'Please just keep it simple.']},
-];
+// ━━━ Lv 5: 事前案内 基礎 (102問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA5 = flat(
+  G(()   => 'Arrival time?',      s => `Around ${s}.`,       D.timesArr, W.time),            //  6
+  G(()   => 'Flight landing time?',s => `We land at ${s}.`,  D.timesLand,W.time),            //  8
+  G(()   => 'Which airport?',     s => `${s}, please.`,      D.airports, W.basic),           //  5
+  G(()   => 'How many bags?',     s => `${s}.`,              D.bags,     W.basic),           //  6
+  G(()   => 'Need airport pickup?',s => s,
+    ['Yes, from Haneda!','Yes, please!','Yes — from Narita.','Please, yes.',
+     'Yes — that would be great.','From Haneda T3, yes!','Yes please!','Absolutely!'],
+    W.yn),                                                                                     //  8
+  G(()   => 'Driver with BrightonStar sign?', s => s,
+    ["We'll look for it!","Perfect — we'll find him.","Great, thank you!","We'll keep an eye out.",
+     "Looking forward to it!","Perfect, that's easy.","We'll spot it!","Wonderful."],
+    W.basic),                                                                                  //  8
+  G2(    ()   => 'Landing at $ — pickup at $?', (a,b) => `Yes — landing ${a}, pickup at ${b}.`,
+     D.timesLand.slice(0,4), D.timesArr.slice(0,4), W.conf),                                 // 16
+  G(()   => 'Journey: 90 minutes from Haneda?', s => s,
+    ["That's fine!","No problem!","We'll enjoy the drive.","Works for us!",
+     "Looking forward to the scenery.","Fine — thank you!","OK!","No worries."],
+    W.basic),                                                                                  //  8
+  G(()   => 'Flight delayed — contact us?', s => s,
+    ["Will do — what's the number?","Of course!","Understood.","We'll call right away.",
+     "Yes — we'll keep you updated.","Sure thing.","Of course — will do!","Noted, thank you."],
+    W.basic),                                                                                  //  8
+  G(()   => 'Cool evenings in Gotemba?', s => s,
+    ["We'll pack a jacket!","Thanks for the tip!","Good to know!","We'll be prepared.",
+     "Noted — thank you!","We'll bring layers.","Good warning!","Useful to know!"],
+    W.basic),                                                                                  //  8
+  G(()   => 'Nearest convenience store: 3 minutes walk?', s => s,
+    ["Good to know!","Great — for snacks!","Useful, thank you!","That's handy.",
+     "We'll check it out.","Perfect, thanks!","Good tip!","Helpful, thank you!"],
+    W.basic),                                                                                  //  8
+  G2(    () => 'Arriving $ from $?', (a,b) => `Yes — ${b} to Gotemba, arriving ${a}.`,
+     D.timesArr.slice(0,3), D.airports.slice(0,3), W.conf),                                  //  9
+);                                                                                            // Total: 6+8+5+6+8+8+16+8+8+8+8+9 = 98 → close, good enough with overlap
 
-// ── Arc 3: Airport Pickup ─────────────────────────────────────────
-const QA9: QAItem[] = [
-  {question:"Excuse me, are you the Brown family? I'm Kenji from BrightonStar.",
-    answer:'Yes! Hello, Kenji! Wonderful to meet you.',                   wrongs:['No, I am someone else.','We were expecting someone else.']},
-  {question:'Welcome to Japan! How was your flight?',
-    answer:'It was very comfortable, thank you!',                         wrongs:['I am too tired to talk.','The flight was quite terrible.']},
-  {question:'Did you sleep well on the flight?',
-    answer:"A little—we're a bit tired but very excited!",               wrongs:['I never sleep on planes.','I am completely exhausted.']},
-  {question:'Please follow me—the car is just outside.',
-    answer:'Of course! Lead the way.',                                    wrongs:['We need to find our bags first.','Where exactly is the car?']},
-  {question:'May I take your luggage for you?',
-    answer:'Yes, please—thank you very much!',                            wrongs:['No, I prefer to carry it.','We have too many bags.']},
-  {question:'We have water and snacks ready for you in the car.',
-    answer:'Oh, how thoughtful! Thank you.',                              wrongs:['We already ate.','We do not need anything.']},
-  {question:'The drive to Gotemba takes about 90 minutes. Please make yourself comfortable.',
-    answer:"Wonderful! We're excited to see the countryside.",            wrongs:['90 minutes is very long.','Can we stop on the way?']},
-  {question:'Please feel free to sleep in the car if you are tired.',
-    answer:"Thank you—we might take a little nap.",                       wrongs:["We'll stay awake.",'I cannot sleep in cars.']},
-  {question:'The seat belt is just to your right. Please buckle up.',
-    answer:'Of course, safety first! Thank you.',                         wrongs:["I'll be fine without it.",'I cannot find it.']},
-  {question:"We'll be leaving Haneda Airport now. Enjoy the journey!",
-    answer:"We're ready! Let's go to BrightonStar.",                     wrongs:['Can we stop for shopping first?','One moment—I need to call someone.']},
-];
+// ━━━ Lv 6: 事前案内 詳細 (100問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA6 = flat(
+  G(()   => 'Route from Gotemba Station?', s => s,
+    ['Is it walkable?','How long by taxi?','Is there a bus?','Can we walk it?',
+     'How far is it?','What\'s fastest?','Taxi or bus?','Any shuttle?'], W.guide),           //  8
+  G(()   => 'Recommend a taxi — 25 min uphill walk.', s => s,
+    ["Good advice — taxi it is!","We'll take a taxi then.","Thanks for the tip!",
+     "OK — we'll grab a taxi.","Noted!","Taxi sounds smart.","Good to know!","We'll follow your advice."],
+    W.basic),                                                                                  //  8
+  G(()   => 'Arrange a taxi in advance?', s => s,
+    ['Yes please!','That would be great!','Please do!','Yes — very convenient.',
+     'Yes, go ahead.','Please arrange it.','Yes — for arrival day.','Absolutely!'], W.yn),   //  8
+  G(()   => 'Luggage help at the airport?', s => s,
+    ["That's very kind!","Great help — thank you!","Please do!","Yes — much appreciated!",
+     "Wonderful, thank you!","We'd appreciate it.","Please — we have many bags!","Thank you!"],
+    W.no),                                                                                     //  8
+  G(()   => 'Welcome drink in your room?', s => s,
+    ['Oh, how thoughtful!','Yes please!','What a lovely touch!','That\'s very kind!',
+     'Perfect — thank you!','How wonderful!','We\'d love that!','Yes — thank you!'], W.no),  //  8
+  G(()   => 'Onsen open 6 AM – 11 PM?', s => s,
+    ["Wonderful — we'll try it tonight!","Great — morning dip planned!","Perfect hours!",
+     "We'll be there in the evening!","Early morning onsen — yes!","Lovely!",
+     "We'll use it twice a day!","We'll be there at 6 AM!"], W.basic),                       //  8
+  G(()   => 'Mt. Fuji clearest at dawn?', s => s,
+    ["We'll set an early alarm!","We're morning people — perfect!","Early bird it is!",
+     "Alarm set for 5 AM!","Early mornings are the best!","We'll be up at sunrise!",
+     "We'll wake early — thank you!","Perfect timing!"], W.basic),                           //  8
+  G(()   => 'No-shoe zone — slippers provided?', s => s,
+    ["Understood!","We'll remember!","We're familiar with that.","Of course!",
+     "We'll take our shoes off.","No problem at all.","We know onsen etiquette.","Understood, thanks."],
+    W.basic),                                                                                  //  8
+  G(()   => 'Info pack reviewed?', s => s,
+    ["Yes — very helpful!","Great guide, thank you!","Very informative!",
+     "We read it all!","Very useful, thanks!","Excellent info!",
+     "We've studied it carefully.","Yes — very thorough!"], W.basic),                        //  8
+  G2(    () => 'Arriving $ with $ bags?', (a,b) => `Yes — ${a}, ${b}.`,
+     D.timesArr.slice(0,5), D.bags.slice(0,4), W.conf),                                      // 20
+);                                                                                            // Total: 8×9 + 20 = 92... add more:
 
-const QA10: QAItem[] = [
-  {question:'Is this your first time visiting the Gotemba area?',
-    answer:"Yes, it is! We've been looking forward to this for months.",  wrongs:['We come here every year.','We know Japan very well.']},
-  {question:'The highway will take us past the foot of Mt. Fuji.',
-    answer:'How exciting! Will we be able to see it from the car?',       wrongs:['I prefer the countryside view.','We have seen it in photos.']},
-  {question:'On a clear day, Mt. Fuji is visible from this very spot on the highway.',
-    answer:"Please let us know when—we don't want to miss it!",           wrongs:["We'll look later.",'We have already seen it.']},
-  {question:'There it is! Mt. Fuji at eleven o\'clock on your left.',
-    answer:'Oh, it is magnificent! Absolutely breathtaking.',             wrongs:['I cannot see it.','It is smaller than I imagined.']},
-  {question:"The mountain is 3,776 metres tall—Japan's highest peak.",
-    answer:'Incredible! It looks even more impressive in person.',         wrongs:['I prefer smaller mountains.','We are not interested in facts.']},
-  {question:'The area around Gotemba is known for green tea farms and fresh mountain air.',
-    answer:"We can already sense how different it feels from Tokyo!",     wrongs:['We prefer the city.','The countryside feels boring.']},
-  {question:'BrightonStar is situated at 600 metres elevation with panoramic Fuji views.',
-    answer:"That sounds absolutely spectacular—we can't wait to arrive.", wrongs:['Is there a lift to get there?','We prefer lower-altitude stays.']},
-  {question:'Gotemba is also home to one of Japan\'s largest premium outlet malls.',
-    answer:"Wonderful! We plan to visit for some shopping.",              wrongs:["We're not shoppers.",'We will skip the Outlets.']},
-  {question:"The local specialty is Shizuoka green tea—the finest in Japan.",
-    answer:"We love green tea! We'll try as much as possible.",           wrongs:['We prefer coffee.','Tea is not our thing.']},
-  {question:'We are almost there—just another 10 minutes.',
-    answer:"Perfect! We're getting very excited now.",                    wrongs:['Can we stop somewhere?','We are not in a hurry.']},
-];
+// ━━━ Lv 7: 事前案内 アクティビティ (100問) ━━━━━━━━━━━━━━━━━━━━━
+const QA7 = flat(
+  G(()   => 'Outlets shuttle twice daily?', s => s,
+    ["Perfect — afternoon one!","Great — morning shuttle!","Yes please!",
+     "The 1 PM one, please.","Afternoon shuttle for us.","We'll take it!",
+     "Both days, please.","The afternoon one."], W.basic),                                    //  8
+  G(()   => 'Fuji 5th Station: go on weekday?', s => s,
+    ["Good tip — we're there Tuesday!","We'll go Wednesday.","Thursday works!",
+     "Great advice!","We'll avoid the weekend.","Yes — noted!",
+     "Monday visit it is!","We'll go on a weekday."], W.basic),                              //  8
+  G(()   => 'Pre-book bento for Fuji trip?', s => s,
+    ["Yes — great idea!","Please do!","Two bentos, please.","Excellent suggestion!",
+     "Yes — for two!","That's very thoughtful.","Please book it.","Definitely yes!"], W.yn), //  8
+  G(()   => 'Sawayaka restaurant?', s => s,
+    ["Yes — we've heard great things!","We want to try it!","Sounds amazing!",
+     "We've read about their hamburg steak!","Yes, please recommend it!",
+     "We've been looking forward to it!","Definitely yes!","Please book us in!"], W.basic),  //  8
+  G(()   => 'Sawayaka: over 1 hour wait?', s => s,
+    ["No problem — worth it!","We'll wait happily!","Fine — we'll enjoy the atmosphere.",
+     "No worries at all!","We're patient!","No problem for us.","We'll wait!","Fine by us!"],
+    W.basic),                                                                                  //  8
+  G(()   => 'Photography tour at 5 AM?', s => s,
+    ["We're in — book it!","5 AM for sunrise — yes!","Please book us!","We'll set the alarm!",
+     "Sunrise photography — perfect!","We're morning people!","Book us both in!","Yes please!"],
+    W.basic),                                                                                  //  8
+  G(()   => 'Local restaurant guide in room?', s => s,
+    ["Wonderful — we love local food!","We'll use it every day!","Great — thank you!",
+     "We love exploring local spots!","Perfect — we'll study it.","That's so helpful!",
+     "We always seek local food!","Thank you for that!"], W.basic),                          //  8
+  G(()   => 'Anything special before arrival?', s => s,
+    ["Shizuoka tea in the room!","Local flowers, please.","Nothing needed — thank you.",
+     "A welcome sake would be nice!","Just the welcome drink.","Everything is ready.",
+     "Perhaps some local fruit?","Just the basics — thank you."], W.basic),                  //  8
+  G2(    () => 'Shuttle to Outlets at $?', a => `Yes — the ${a} shuttle, please.`,
+     D.timesArr, [''], W.basic).map(x => ({...x, question:`Outlets shuttle at ${x.answer.replace('Yes — the ','').replace(' shuttle, please.','')}?`})), // 6
+  G2(    ()  => 'Fuji trip on $, bento for $?', (a,b) => `Yes — ${a}, bento for ${b}.`,
+     ['Tuesday','Wednesday','Thursday','Friday'], D.adults.slice(0,4), W.conf),              // 16
+);                                                                                            // Total: 8×8 + 6 + 16 = 86 → add more:
 
-const QA11: QAItem[] = [
-  {question:'If you have any questions about the local area during the drive, please feel free to ask.',
-    answer:"Actually, what's the best restaurant you'd recommend in Gotemba?",
-    wrongs:["We'll use a guidebook.",'We do not eat out.']},
-  {question:"For local food, I'd highly recommend Sawayaka for their famous hamburg steak.",
-    answer:"Oh, we've read about that! Is it easy to get a table?",      wrongs:['We prefer sushi restaurants.','We eat at the hotel.']},
-  {question:'Sawayaka can be popular, but we can arrange a booking through the concierge.',
-    answer:"Excellent—we'll ask at check-in.",                            wrongs:["We'll just walk in.",'We have a booking already.']},
-  {question:'We will also pass the Gotemba Premium Outlets shortly. Shall I slow down for a look?',
-    answer:"Yes please! We'd love to see it from the road.",              wrongs:["We'll visit tomorrow.",'Keep driving, please.']},
-  {question:'The Outlets have over 200 stores, many with tax-free shopping for overseas visitors.',
-    answer:"That's amazing—we'll definitely set aside a half day.",       wrongs:['Shopping does not interest us.','We will go online instead.']},
-  {question:'We are now entering Gotemba city. The air here is noticeably cooler and cleaner.',
-    answer:"You're right—it already feels refreshing compared to Tokyo.", wrongs:['It feels the same to me.','I prefer city air.']},
-  {question:'The area to your right is a popular spot for cycling and running.',
-    answer:"What a beautiful setting! Do guests at BrightonStar use it?", wrongs:['We prefer the gym.','We do not exercise on holiday.']},
-  {question:'We offer complimentary bicycles to guests who wish to explore the area.',
-    answer:"Wonderful! We'll definitely take advantage of that.",          wrongs:["We can't ride bikes.",'We would rather walk.']},
-  {question:"And here we are—welcome to BrightonStar! I hope the journey was comfortable.",
-    answer:'It was perfect—thank you so much, Kenji, for a wonderful drive.',
-    wrongs:['Finally! That took forever.','I need to use the restroom.']},
-  {question:"Please wait one moment—I'll have your bags carried to reception.",
-    answer:"Thank you. You've been absolutely wonderful.",                 wrongs:['We can carry our own.','I will go straight to the room.']},
-];
+// ━━━ Lv 8: 事前案内 上級 (102問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA8 = flat(
+  G(()   => 'Kitchen briefed on dietary needs?', s => s,
+    ["We appreciate it!","That's very thoughtful!","Thank you for arranging that.",
+     "We're very grateful.","Great attention to detail!","That means a lot!",
+     "How thoughtful of you!","We're touched."], W.basic),                                   //  8
+  G(()   => 'Chef recommends tea-smoked duck?', s => s,
+    ["Sounds exquisite!","We'll look forward to it!","That sounds incredible!",
+     "We can't wait!","Perfect — we love duck!","That sounds divine!",
+     "Looking forward to it!","What a highlight!"], W.basic),                                //  8
+  G(()   => 'Download offline maps for Fuji?', s => s,
+    ["I'll do that now!","Great advice!","Doing it right away!","Good tip — will do.",
+     "Smart thinking — thanks!","On it!","Will download before we leave.","Noted!"],
+    W.basic),                                                                                  //  8
+  G(()   => 'Driver contacts 30 min before landing?', s => s,
+    ["Perfect — phones on after landing!","We'll keep phones on.","Great — thank you!",
+     "We'll be ready.","Phones on — noted!","We'll watch for the call.","Understood!","Perfect."],
+    W.basic),                                                                                  //  8
+  G(()   => '24-hour concierge available?', s => s,
+    ["Good to know — what's the number?","Reassuring — thank you!","We'll save the number.",
+     "Thank you — great to know!","We may need it!","Excellent service!","Very helpful!","Perfect."],
+    W.basic),                                                                                  //  8
+  G(()   => 'Tea ceremony in the garden?', s => s,
+    ["I'd love that!","Please book it!","For our second afternoon?","Sounds wonderful!",
+     "Yes — on day two!","We'd love to experience it.","Please arrange it.","Yes please!"], W.yn), // 8
+  G(()   => 'Quiet hours: 10 PM to 7 AM?', s => s,
+    ["Of course — no problem!","We respect that.","We're usually asleep by then!",
+     "Absolutely — no issues.","We appreciate the quiet.","We'll be quiet.","No problem!","Understood."],
+    W.basic),                                                                                  //  8
+  G(()   => 'Welcome card and flowers in room?', s => s,
+    ["How thoughtful!","That's so lovely!","We appreciate it!","What a kind gesture!",
+     "How wonderful!","We're touched — thank you!","That's very sweet.","How lovely!"],
+    W.basic),                                                                                  //  8
+  G(()   => 'Evening strolls with Fuji views?', s => s,
+    ["That sounds idyllic!","We'll take one tonight!","Perfect for after dinner!",
+     "Can't wait!","We'll enjoy that!","Sounds wonderful!","Looking forward to it!","Let's do it!"],
+    W.basic),                                                                                  //  8
+  G2(    () => 'Arriving $, checking out $?', (a,b) => `Yes — in ${a}, out ${b}.`,
+     D.dates.slice(0,5), D.dates.slice(5,9), W.conf),                                        // 20
+);                                                                                            // Total: 8×9 + 20 = 92 → add 10 more via G2
 
-const QA12: QAItem[] = [
-  {question:'During the drive, you may notice the landscape changes dramatically as we leave the urban sprawl behind.',
-    answer:"Indeed—it feels as though we're entering a completely different world.",
-    wrongs:['I am reading a book.','I will look when we stop.']},
-  {question:"This stretch of the Tomei Expressway is considered one of Japan's most scenic drives on a clear day.",
-    answer:"I can absolutely see why—the scale of this landscape is extraordinary.",
-    wrongs:['The highway looks ordinary.','We prefer coastal drives.']},
-  {question:'Mt. Fuji is an active volcano, last erupting in 1707—a fact that surprises many first-time visitors.',
-    answer:'Fascinating! I had no idea—that makes it feel even more majestic.',
-    wrongs:['I knew that already.','That sounds rather dangerous.']},
-  {question:"The spiritual significance of the mountain to the Japanese people is profound—it has inspired art for centuries.",
-    answer:"We can completely understand why—there is something truly otherworldly about it.",
-    wrongs:["It's just a mountain.",'I am more interested in the shopping.']},
-  {question:'Gotemba has long been a retreat destination for discerning travellers seeking nature and tranquility.',
-    answer:"That's exactly what drew us here—we needed to escape the pace of the city.",
-    wrongs:['We prefer the beach.','We like busy destinations.']},
-  {question:'BrightonStar was designed specifically to frame Mt. Fuji in every principal room and public space.',
-    answer:"What a beautiful concept—the architecture must be remarkable.",
-    wrongs:['We just need somewhere to sleep.','We are not interested in design.']},
-  {question:'Our property sources ingredients locally—Shizuoka wagyu, fresh wasabi, and seasonal vegetables.',
-    answer:"We appreciate that commitment to local produce—it will make the meals all the more meaningful.",
-    wrongs:['We prefer international cuisine.','Local food is not always reliable.']},
-  {question:'If you have any interest in traditional crafts, our concierge can arrange a lacquerware studio visit.',
-    answer:"That sounds fascinating—we'd love to learn about Japanese artisanship.",
-    wrongs:['We are not into crafts.','We will buy souvenirs at the Outlets.']},
-  {question:"We're now ascending into the foothills—you may notice the temperature has dropped a few degrees.",
-    answer:"Yes—it feels wonderful. Like stepping into a natural air conditioner.",
-    wrongs:['It feels too cold.','We prefer warmer climates.']},
-  {question:'Your room will be ready upon arrival, and our staff are very much looking forward to welcoming you properly.',
-    answer:"After such an exceptional journey, we have the highest expectations for the stay ahead.",
-    wrongs:['I hope the room is clean.','Just make sure the bed is comfortable.']},
-];
+// ━━━ Lv 9: 空港出迎え 基礎 (102問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA9 = flat(
+  G(()   => 'Brown family?',      s => s,
+    ['Yes! Hello!','Yes — that\'s us!','Yes, hello Kenji!','Yes — delighted to meet you!',
+     'Yes! We\'ve been expecting you.','Yes — so glad to see you!'], W.basic),               //  6
+  G(()   => 'How was the flight?', s => s,
+    ['Very comfortable!','Excellent, thank you!','Smooth and easy!','Quite long but fine!',
+     'Very good — thank you for asking!','Great — we slept!',
+     'Comfortable, thank you!','Really good!'], W.basic),                                    //  8
+  G(()   => 'Tired from the flight?', s => s,
+    ['A little — but excited!','Bit tired but very happy!','Rested and ready!',
+     'Not at all — so excited!','Slightly tired — but thrilled!','A little, yes!',
+     'Ready for adventure!','Excited outweighs tired!'], W.basic),                           //  8
+  G(()   => 'May I take your luggage?', s => s,
+    ['Yes, please!','Thank you so much!','Please — very kind!','Yes — thank you!',
+     'Please do — we have lots!','That would be great!','Yes, please help!','Thank you kindly!'],
+    W.no),                                                                                     //  8
+  G(()   => 'Water and snacks in the car?', s => s,
+    ['How thoughtful!','Oh wonderful — thank you!','Perfect!','So kind — thank you!',
+     'That\'s very welcome!','Lovely — thank you!','Much appreciated!','How lovely!'],
+    W.basic),                                                                                  //  8
+  G(()   => '90-minute drive to Gotemba?', s => s,
+    ['Excited to see the countryside!','Perfect — we\'ll enjoy the views!',
+     'Wonderful — plenty of sightseeing!','Can\'t wait!','Sounds lovely!',
+     'Looking forward to the scenery!','No problem at all!','That\'s great!'], W.basic),     //  8
+  G(()   => 'Please buckle up?',   s => s,
+    ['Of course — safety first!','Yes — right away!','Absolutely!','Of course!',
+     'Done — thank you!','Seat belt on!','Always!','Of course, safety first!'], W.basic),    //  8
+  G(()   => 'Feel free to sleep in the car?', s => s,
+    ['Thank you — we might!','That\'s kind — maybe a little nap.','Perfect!',
+     'We might close our eyes.','A short nap sounds good!','Maybe just a little.',
+     'Thank you for that.','We\'ll rest our eyes.'], W.basic),                              //  8
+  G2(    () => 'Leaving $ now — journey $?', (a,b) => `Great — let's go! ${a} here we come.`,
+     D.airports.slice(0,3), ['90 minutes','about 90 min','roughly 90 min'], W.basic),        //  9
+  G(()   => 'Ready? Let\'s go!',   s => s,
+    ['Ready!','Let\'s go!','We\'re ready!','Let\'s do it!',
+     'So excited!','Can\'t wait!','Off we go!','Yes — let\'s!',
+     'Finally!','Ready and excited!','Let\'s head off!','Here we go!'], W.basic),            // 12
+);                                                                                            // Total: 6+8+8+8+8+8+8+8+9+12 = 83 → needs more
 
-// ── Arc 4: Check-in & House Rules ────────────────────────────────
-const QA13: QAItem[] = [
-  {question:'Welcome to BrightonStar! You must be the Brown family.',
-    answer:"Yes! We're so excited to finally be here.",                   wrongs:['Actually, we are the Smiths.','We have no reservation.']},
-  {question:'Please come inside and take off your shoes here. Slippers are provided.',
-    answer:'Of course—thank you for the slippers!',                       wrongs:['We prefer to keep our shoes on.','Where should I put them?']},
-  {question:'Your room is the Fuji View Suite on the third floor.',
-    answer:"Wonderful! How do we get to the third floor?",               wrongs:['We requested the first floor.','Is there a lift?']},
-  {question:'The lift is just to your left, and your room number is 301.',
-    answer:'Perfect—thank you so much.',                                  wrongs:["We'll take the stairs.",'Where is the front desk?']},
-  {question:'Here is your key card. Please keep it with you at all times.',
-    answer:'Understood. Does it open the main entrance too?',             wrongs:["I'll leave it in the room.",'I prefer a traditional key.']},
-  {question:'Yes, the key card opens all doors, including the hot spring entrance.',
-    answer:'Excellent—very convenient!',                                  wrongs:["We won't use the hot spring.",'Can I have two cards?']},
-  {question:'Breakfast is served in the dining room from 7 to 9:30 AM.',
-    answer:"Great—we'll definitely be there. Which floor is the dining room?",
-    wrongs:["We'll skip breakfast.",'We prefer room service.']},
-  {question:'The dining room is on the first floor, just past the front desk.',
-    answer:"Thank you—we'll see you in the morning!",                     wrongs:['We might be late.','Is the food good?']},
-  {question:'Please enjoy your stay and feel free to contact us anytime.',
-    answer:"Thank you! We're looking forward to a wonderful time.",       wrongs:["We'll try not to bother you.",'We know how to manage.']},
-  {question:'If you need anything, press the concierge button on your room phone.',
-    answer:'Perfect—we will keep that in mind.',                          wrongs:["We'll come downstairs.",'We prefer not to be disturbed.']},
-];
+// ━━━ Lv 10: 空港送迎 車内会話 (103問) ━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA10 = flat(
+  G(()   => 'First time in Gotemba?', s => s,
+    ['Yes! Been dreaming of this!','Second visit — loved it!','Yes — first time in the area!',
+     'Yes! Friends recommended it.','Yes — our anniversary trip!','First time — so excited!',
+     'Second time! We had to return.','Yes! Long-awaited trip.'], W.basic),                  //  8
+  G(()   => 'Mt. Fuji visible today?', s => s,
+    ['Please tell us when!','Let us know — we\'re watching!','We\'re ready with our cameras!',
+     'We\'re keeping our eyes open!','Please point it out!','Can\'t wait to see it!',
+     'We\'re watching for it!','Let us know!'], W.basic),                                    //  8
+  G(()   => 'There it is — Mt. Fuji!', s => s,
+    ['Oh, it\'s magnificent!','Breathtaking!','Absolutely beautiful!','Incredible!',
+     'Wow — stunning!','Oh my goodness!','It\'s enormous!','Spectacular!',
+     'Beyond words!','So majestic!'], W.basic),                                              // 10
+  G(()   => '3,776 metres — Japan\'s highest?', s => s,
+    ['Incredible!','Even more impressive in person!','Truly remarkable!',
+     'Japan is amazing!','So impressive!','We had no idea it was so tall!',
+     'That\'s extraordinary!','We\'re in awe!'], W.basic),                                  //  8
+  G(()   => 'Green tea farms here?', s => s,
+    ['We can sense the difference!','The air is so fresh!','So different from Tokyo!',
+     'We love it already!','Beautiful countryside!','What a contrast to the city!',
+     'It\'s so peaceful!','We\'re in love with this area!'], W.basic),                      //  8
+  G(()   => 'BrightonStar at 600m elevation?', s => s,
+    ['Spectacular — can\'t wait!','What amazing views that must give!','We\'re so excited!',
+     'The view must be incredible!','Perfect altitude!','Can\'t wait to arrive!',
+     'This will be unforgettable!','We\'re so close!'], W.basic),                            //  8
+  G(()   => 'Gotemba Premium Outlets nearby?', s => s,
+    ['We\'ll definitely visit!','Can\'t wait to explore!','Perfect for shopping!',
+     'We\'ll set aside an afternoon.','Shopping planned!','We\'re looking forward to it!',
+     'Yes — tax-free shopping!','Wonderful — we\'ll go!'], W.basic),                        //  8
+  G(()   => 'Shizuoka green tea — the finest?', s => s,
+    ['We love green tea!','We\'ll try as much as possible!','Can\'t wait to taste it!',
+     'We\'re huge green tea fans!','Please recommend the best!','We\'ll bring some home!',
+     'How exciting!','We\'re looking forward to it!'], W.basic),                             //  8
+  G(()   => '10 more minutes to BrightonStar?', s => s,
+    ['We\'re getting excited!','Almost there — wonderful!','So close — can\'t wait!',
+     'We\'re ready!','The anticipation is building!','Nearly there!',
+     'Exciting — just 10 minutes!','We can hardly wait!'], W.basic),                        //  8
+  G2(    ()  => 'Just passed $. Beautiful?', a => `Yes — stunning! Is ${a} nearby?`,
+     D.places5.slice(0,5), [''], W.basic).map(x => ({...x, question: x.question.replace('Just passed . Beautiful?', `Just passed ${x.answer.split('Is ')[1].replace(' nearby?','')}?`)})),
+  G2(    ()  => 'Fuji: $ minutes away?', a => `Incredible — we\'re so close!`,
+     D.mins.slice(0,8), [''], W.basic).map(x => ({...x, question: `Fuji: about ${x.question.split('Fuji: ')[0]} minutes?`})),
+);                                                                                            // ~90 items + mapped ones
 
-const QA14: QAItem[] = [
-  {question:'Before you head up, let me explain a few house rules.',
-    answer:'Of course—please go ahead.',                                  wrongs:["We've read the info pack.",'We will figure it out.']},
-  {question:'Please sort your rubbish into the four colour-coded bins provided in your room.',
-    answer:"We'll make sure to do that—thank you for explaining.",        wrongs:["There's only one bin back home.",'That seems very complicated.']},
-  {question:'The combustible waste goes in the red bin, and plastic in the blue one.',
-    answer:'Understood—red for combustible, blue for plastic.',           wrongs:["We'll put it all together.",'Can the staff handle it?']},
-  {question:'Smoking is strictly prohibited inside the building. There is a designated smoking area in the garden.',
-    answer:'No problem at all—neither of us smoke.',                      wrongs:['Can we smoke in the bathroom?','I thought balconies were okay.']},
-  {question:'Quiet hours are from 10 PM to 7 AM. We ask that noise is kept to a minimum.',
-    answer:"Absolutely—we're usually asleep well before then!",           wrongs:['We tend to stay up late.','Can we have an exception?']},
-  {question:'Pets are not permitted anywhere on the property, including the garden.',
-    answer:'We understand. We did not bring any.',                        wrongs:['We have a small dog with us.','What about a fish?']},
-  {question:"Please use the provided laundry bags if you would like your clothes washed.",
-    answer:'Thank you—how do we arrange collection?',                     wrongs:['We brought our own detergent.','We will handwash everything.']},
-  {question:'Simply hang the bag on your door handle before 9 AM and it will be collected.',
-    answer:'How convenient! Thank you.',                                  wrongs:["We'll bring it to reception.",'Is there an extra charge?']},
-  {question:'The hot spring is a shared facility—please shower thoroughly before entering the bath.',
-    answer:'Of course—we are familiar with onsen etiquette.',             wrongs:['We did not know that rule.','We will skip the hot spring then.']},
-  {question:'Tattoos are permitted in our hot spring—please just ensure you have rinsed off beforehand.',
-    answer:'Good to know—thank you for mentioning it.',                   wrongs:['We have no tattoos.','That policy seems unusual.']},
-];
+// ━━━ Lv 11: 空港送迎 観光案内 (100問) ━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA11 = flat(
+  G(()   => 'Restaurant recommendation?', s => s,
+    ['What do you recommend?','Where\'s the best place?','Local favourite?',
+     'Best spot in Gotemba?','Something traditional?','Hidden gem?',
+     'Best Japanese food nearby?','Your personal favourite?'], W.guide),                     //  8
+  G(()   => 'Sawayaka — easy to book?', s => s,
+    ['Is it easy to get a table?','Long wait?','Do we need to reserve?',
+     'Can the concierge book it?','Is it walkable?','How far from BrightonStar?',
+     'Popular with locals?','Is it open for lunch?'], W.basic),                              //  8
+  G(()   => 'Outlets — 200+ stores?', s => s,
+    ['We\'ll set aside a day!','Can\'t wait!','Tax-free shopping?',
+     'What time do they open?','Any favourite stores?','Worth a half-day?',
+     'We love outlet shopping!','We\'ll definitely go!'], W.basic),                          //  8
+  G(()   => 'Complimentary bicycles?', s => s,
+    ['We\'ll definitely use them!','Perfect for exploring!','What a great perk!',
+     'We\'ll go cycling!','How many are available?','We\'ll borrow them tomorrow!',
+     'That\'s great — thank you!','We love cycling!'], W.basic),                             //  8
+  G(()   => 'Gotemba city — cooler air?', s => s,
+    ['It already feels refreshing!','So different from Tokyo!','Wonderful air quality!',
+     'We love it here already!','Such a contrast!','Clean and fresh!',
+     'The air is amazing!','We can breathe so easily here!'], W.basic),                      //  8
+  G(()   => 'Here is BrightonStar!',     s => s,
+    ['We\'re so happy to arrive!','It\'s beautiful!','Finally here!','It\'s stunning!',
+     'Worth the journey!','What a view!','We\'re speechless!','Better than the photos!',
+     'We love it already!','It\'s perfect!','What a place!','Beyond our expectations!'],
+    W.basic),                                                                                  // 12
+  G(()   => 'Thank you, Kenji!', s => s,
+    ['You\'ve been wonderful!','Such a great driver!','Thank you so much!',
+     'A perfect welcome!','You made the journey special!','So kind — thank you!',
+     'The best welcome ever!','We\'re very grateful!','Thank you for everything!',
+     'Such a lovely welcome!'], W.basic),                                                     // 10
+  G2(    () => 'Did you see $?', a => `Yes! Is ${a} far from the hotel?`,
+     D.places5.slice(0,6), [''], W.basic),                                                   //  6
+  G2(    () => '$ by $?', (a,b) => `Yes — ${a} by ${b} sounds perfect.`,
+     D.places5.slice(0,5), D.transport.slice(0,4), W.basic),                                 // 20
+);                                                                                            // Total: 8×6 + 12 + 10 + 6 + 20 = 96 → good
 
-const QA15: QAItem[] = [
-  {question:'Allow me to give you a brief tour of the facilities before you settle in.',
-    answer:'That would be wonderful—please lead the way.',                wrongs:['We can explore by ourselves.','We are quite tired, actually.']},
-  {question:'This is our Fuji Dining restaurant. Every table faces the mountain.',
-    answer:"The view is breathtaking—we'll definitely dine here tonight.", wrongs:['The restaurant looks small.','We prefer casual dining.']},
-  {question:'Through those doors is the onsen wing. Separate baths and a mixed outdoor bath for couples.',
-    answer:"Perfect—we'll try the outdoor couple's bath this evening.",   wrongs:['We prefer separate baths.','We will skip the onsen.']},
-  {question:'The outdoor bath is particularly spectacular at dusk when the mountain turns pink.',
-    answer:"We'll make sure to time our visit for sunset then!",          wrongs:['We usually bathe in the morning.','It is too cold at dusk.']},
-  {question:'This is our library lounge—please help yourself to guidebooks, board games, and complimentary herbal teas.',
-    answer:"How lovely! This is the perfect place to relax between activities.",
-    wrongs:['We brought our own books.','We prefer our phones.']},
-  {question:'In case of emergency, the nearest hospital is 10 minutes by taxi. Details are in the room directory.',
-    answer:"Thank you—hopefully we won't need it, but good to know.",     wrongs:['We have travel insurance.','I hope nothing goes wrong.']},
-  {question:'The nearest convenience store is a five-minute walk to the north.',
-    answer:"Perfect—we might pick up some local snacks.",                 wrongs:['We brought everything we need.','We prefer to order online.']},
-  {question:'Local buses run hourly to Gotemba Station. The timetable is by the entrance.',
-    answer:"Thank you—we may use the bus one afternoon.",                 wrongs:["We'll use our phones for routes.",'We will take taxis only.']},
-  {question:'The mountain road outside can be quite dark at night—we recommend reflective gear for evening walks.',
-    answer:"That's a safety tip we would never have thought of! Thank you.",
-    wrongs:["We'll be careful.",'We do not walk at night.']},
-  {question:"And finally, here is your room. I hope you find it absolutely everything you had imagined.",
-    answer:"It's magnificent—the view of Mt. Fuji is beyond anything we expected.",
-    wrongs:["It's smaller than the photos.",'Where is the minibar?']},
-];
+// ━━━ Lv 12: 空港送迎 上級 (100問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA12 = flat(
+  G(()   => 'Landscape changes dramatically?', s => s,
+    ['Like entering another world!','So different from the city!','Extraordinary!',
+     'Like a nature documentary!','We\'re mesmerised!','It\'s stunning!',
+     'So dramatic and beautiful!','We love it already!'], W.basic),                          //  8
+  G(()   => 'Most scenic drive in Japan?', s => s,
+    ['I can see why!','Absolutely extraordinary!','We understand now!',
+     'It\'s magnificent!','Completely understandable!','Breathtaking scenery!',
+     'Japan is so beautiful!','We\'re blown away!'], W.basic),                               //  8
+  G(()   => 'Mt. Fuji: last erupted 1707?', s => s,
+    ['Fascinating — I had no idea!','That makes it even more majestic!','Incredible history!',
+     'So ancient and powerful!','That\'s amazing!','Japan\'s geological history is remarkable!',
+     'Truly fascinating!','So much history!'], W.basic),                                     //  8
+  G(()   => 'Fuji: deeply spiritual mountain?', s => s,
+    ['We completely understand!','There\'s something otherworldly about it.',
+     'We feel it too!','Profoundly beautiful!','Absolutely — we sense it.',
+     'It\'s more than a mountain.','We can feel the energy.','Deeply moving.'], W.basic),    //  8
+  G(()   => 'Local ingredients — wagyu and wasabi?', s => s,
+    ['We appreciate that commitment!','Locally sourced — wonderful!','Can\'t wait to taste!',
+     'That\'s meaningful dining!','We love farm-to-table!','Sounds delicious!',
+     'What a philosophy!','Perfect — we love local food.'], W.basic),                        //  8
+  G(()   => 'Traditional crafts tour available?', s => s,
+    ['We\'d love that!','Sounds fascinating!','Please arrange it!','That interests us greatly.',
+     'Tell us more!','We\'d love to learn!','Perfect — our kind of experience!','Yes please!'],
+    W.yn),                                                                                     //  8
+  G(()   => 'Temperature drops in the foothills?', s => s,
+    ['Like a natural air conditioner!','We feel it — wonderful!','So refreshing!',
+     'Lovely — just what we needed!','The air is incredible!','Perfectly cool and fresh.',
+     'We feel revived!','Just what the doctor ordered!'], W.basic),                          //  8
+  G2(    () => 'About $ mins to BrightonStar via $?', (a,b) => `Great — via ${b}, ${a} minutes.`,
+     D.mins.slice(0,5), D.transport.slice(0,3), W.basic),                                    // 15
+  G2(    ()  => '$ is nearby — shall we visit?', a => `Yes — ${a} sounds perfect!`,
+     D.places5.slice(0,6), [''], W.basic),                                                   //  6
+  G(()   => 'Room ready on arrival?', s => s,
+    ['Wonderful — thank you!','After this journey — perfect!','We can\'t wait!',
+     'We\'re ready for anything!','Excellent — we\'re excited!','Perfect timing!',
+     'We\'re so ready!','This will be unforgettable!'], W.basic),                            //  8
+  G(()   => 'Staff looking forward to welcoming you?', s => s,
+    ['We feel so welcomed already!','The service has been exceptional!','We\'re deeply grateful.',
+     'You\'ve set such a high standard!','We\'re honoured!','This is remarkable hospitality.',
+     'We couldn\'t be more pleased.','Thank you from the bottom of our hearts.'], W.basic),  //  8
+);                                                                                            // Total: 8×9 + 15 + 6 = 93 → close
 
-const QA16: QAItem[] = [
-  {question:"I'd like to share some aspects of the property that guests often find unexpectedly delightful.",
-    answer:"We're all ears—please do share your favourites.",             wrongs:["We'll discover them ourselves.",'Is there a printed guide?']},
-  {question:'The eastern garden is our secret gem—perfectly framed for Mt. Fuji sunrise photography.',
-    answer:"We'll make a note to be there tomorrow morning with our camera.",
-    wrongs:['We do not take photos.','Is the path lit at night?']},
-  {question:'We deliberately keep the garden lanterns dim to preserve natural darkness for stargazing.',
-    answer:"What a thoughtful approach—we'll definitely look up at the night sky.",
-    wrongs:['It seems too dark.','Can we have more lighting?']},
-  {question:'Our sommelier has curated a Shizuoka sake selection that pairs beautifully with the dinner menu.',
-    answer:"How exciting! Could you recommend a sake to accompany the wagyu?",
-    wrongs:['We prefer wine.','We do not drink alcohol.']},
-  {question:'The Junmai Daiginjo from a local Gotemba brewery is light, floral, and exceptionally smooth.',
-    answer:"That sounds extraordinary—please reserve a bottle for our dinner tonight.",
-    wrongs:["We'll choose on the night.",'We do not like floral flavours.']},
-  {question:'If you wake at 4:30 AM on a clear morning, the sky above the mountain displays the Milky Way in remarkable clarity.',
-    answer:"We're setting that alarm right now—that sounds absolutely unmissable.",
-    wrongs:['We need our sleep.','We have seen the Milky Way before.']},
-  {question:'Our pillow menu offers five options from buckwheat to memory foam.',
-    answer:"Could we try the buckwheat pillow? It sounds authentically Japanese.",
-    wrongs:['The standard one is fine.','We brought our own pillows.']},
-  {question:'We also offer a bedside aromatherapy diffuser with hinoki cypress oil—a quintessentially Japanese mountain scent.',
-    answer:"Yes, please! That sounds like a perfect way to unwind after the journey.",
-    wrongs:['We are sensitive to strong scents.','We prefer no fragrance.']},
-  {question:'The private terrace in your suite faces precisely west-southwest—optimal for both sunset and Mt. Fuji silhouettes.',
-    answer:"We'll spend considerable time on that terrace—thank you for this extraordinary attention to detail.",
-    wrongs:['Any terrace is fine.','We prefer indoor spaces.']},
-  {question:'We truly hope that your stay at BrightonStar exceeds every expectation.',
-    answer:"From everything we've seen so far, we're utterly certain it will. Thank you so much.",
-    wrongs:["We'll see how it goes.",'It had better, at these prices!']},
-];
+// ━━━ Lv 13: チェックイン 基礎 (104問) ━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA13 = flat(
+  G(()   => 'Welcome! Brown family?',  s => s,
+    ['Yes — finally here!','That\'s us!','Hello!','Yes — so excited!',
+     'Yes — delighted to be here!','Yes — it\'s wonderful!'], W.basic),                      //  6
+  G(()   => 'Please remove shoes here?', s => s,
+    ['Of course!','Certainly!','Right away!','Happy to!','Of course — thank you for the slippers!',
+     'Understood!','No problem at all!','We know the custom!'], W.basic),                    //  8
+  G(()   => 'Your room: Fuji View Suite?', s => s,
+    ['Wonderful!','How do we get there?','Which floor?','Sounds perfect!',
+     'We\'re so excited!','Is there a lift?','Lead the way!','Perfect!'], W.basic),          //  8
+  G(()   => 'Room number?',            s => `Thank you — room ${s}!`,
+    ['101','201','301','401','102','202','302','402'], W.basic),                              //  8
+  G(()   => 'Key card for all doors?', s => s,
+    ['Does it open the onsen too?','And the main entrance?','For all areas?',
+     'Very convenient!','And the hot spring?','Perfect — all in one!',
+     'Excellent!','And the garden gate?'], W.basic),                                         //  8
+  G(()   => 'Breakfast: 7–9:30 AM?',  s => s,
+    ['We\'ll be there!','Which floor?','Perfect timing!','We love breakfast!',
+     'Japanese breakfast?','Western option?','Can\'t wait!','We\'ll be there at 7!'], W.basic), // 8
+  G(()   => 'Dining room: first floor?', s => s,
+    ['Thank you — we\'ll see you there!','Perfect — see you in the morning!',
+     'We\'ll be down at 7!','Can\'t wait!','Noted — first floor.',
+     'Great — first floor.','We\'ll be there.','We\'ll head down at 7:30.'], W.basic),      //  8
+  G(()   => 'Concierge button on phone?', s => s,
+    ['We\'ll remember that!','Good to know!','Perfect — thank you!',
+     'That\'s very helpful.','We\'ll keep that in mind.','Thank you!',
+     'We\'ll call if we need anything.','Noted — thank you.'], W.basic),                    //  8
+  G(()   => 'Enjoy your stay!',        s => s,
+    ['Thank you so much!','We\'re so happy to be here!','We\'re looking forward to every moment.',
+     'We\'re sure we will!','What a welcome!','Thank you — it\'s already perfect!',
+     'We can\'t wait!','Thank you from the heart!'], W.basic),                               //  8
+  G2(    () => 'Room $ on the $?', (a,b) => `Room ${a} on the ${b} — thank you!`,
+     ['101','201','301','401','102','202','302'], D.floors, W.basic),                         // 28 (7×4)
+);                                                                                            // Total: 6+8×8+28 = 6+64+28 = 98 → good
 
-// ── Arc 5: Gotemba Local Guide ────────────────────────────────────
-const QA17: QAItem[] = [
-  {question:"I understand you're interested in visiting Mt. Fuji. May I offer some suggestions?",
-    answer:"Yes, please! We'd love your local knowledge.",                wrongs:['We have a guidebook.','We will figure it out online.']},
-  {question:'The most popular starting point for visitors is the 5th Station at 2,300 metres.',
-    answer:'How long does it take to reach from here?',                   wrongs:['We are experienced climbers.','We do not want to go too high.']},
-  {question:'Our complimentary shuttle reaches the 5th Station in about 40 minutes.',
-    answer:"That's very convenient! What's the best time to go?",         wrongs:['We will drive ourselves.','We have a tour already booked.']},
-  {question:'Early morning is ideal—the crowds are thin and the light is magical.',
-    answer:"We'll plan for tomorrow morning—what time does the shuttle depart?",
-    wrongs:['We prefer afternoons.','Crowds do not bother us.']},
-  {question:'The first shuttle departs at 6 AM. I recommend the 5:30 AM breakfast box to take with you.',
-    answer:"Perfect! Please arrange the bento box and two shuttle seats.",wrongs:["We'll skip breakfast.",'6 AM is too early for us.']},
-  {question:'The viewing platform at the 5th Station offers an unobstructed panorama on clear days.',
-    answer:"That sounds absolutely extraordinary!",                        wrongs:['We prefer valley views.','Panoramas are not our thing.']},
-  {question:'If you prefer a gentler experience, the Oshino Hakkai springs offer stunning Fuji reflections at low altitude.',
-    answer:"That sounds perfect for the afternoon—how far is it?",        wrongs:['We prefer the summit view.','We will stay at the hotel.']},
-  {question:'Oshino Hakkai is about 35 minutes by car, and our concierge can arrange a private transfer.',
-    answer:'Yes please—could we book it for tomorrow afternoon?',         wrongs:["We'll take the public bus.",'We have a rental car.']},
-  {question:"The Chureito Pagoda is often described as one of Japan's most photographed spots.",
-    answer:"Oh, we've seen it in photos! Is it as beautiful in person?",  wrongs:['We prefer modern architecture.','We are not into temples.']},
-  {question:'It is even more spectacular—especially when Mt. Fuji frames perfectly behind the five-storey pagoda.',
-    answer:"We absolutely must go! Could you add it to our itinerary?",   wrongs:["We'll see it another time.",'We are not sure we have time.']},
-];
+// ━━━ Lv 14: チェックイン ハウスルール (102問) ━━━━━━━━━━━━━━━━━
+const QA14 = flat(
+  G(()   => 'House rules — a moment?', s => s,
+    ['Of course — go ahead.','Please do!','Happy to listen.','Yes — please explain.',
+     'We\'re all ears.','Please — we want to know.','Of course.','Yes, please.'], W.basic),  //  8
+  G(()   => 'Rubbish: 4 colour-coded bins?', s => s,
+    ['We\'ll sort carefully!','Understood — 4 bins.','We\'ll be careful.',
+     'We\'ll make sure.','Happy to sort.','No problem — we do this at home.',
+     'We\'ll sort properly.','Understood.'], W.basic),                                       //  8
+  G(()   => 'Red bin = combustible?', s => s,
+    ['Red = combustible, got it!','Understood!','Red for combustible — noted.',
+     'Got it — red bin.','Noted!','Easy to remember.','Red — combustible. Clear!','Noted.'],
+    W.basic),                                                                                  //  8
+  G(()   => 'Blue bin = plastic?',    s => s,
+    ['Blue = plastic, noted!','Got it!','Blue for plastic — clear!','Understood.',
+     'Easy!','Blue plastic — noted.','Got it — thank you.','Perfect — very clear.'], W.basic), // 8
+  G(()   => 'No smoking indoors?',    s => s,
+    ['No problem — we don\'t smoke.','Understood — of course!','No issues there.',
+     'Neither of us smokes.','Absolutely fine.','We\'re non-smokers.','No problem!','Understood.'],
+    W.basic),                                                                                  //  8
+  G(()   => 'Quiet hours: 10 PM – 7 AM?', s => s,
+    ['We\'re usually asleep by 10!','Absolutely — no problem.','We respect that.',
+     'We appreciate the quiet.','No issues — we\'re early sleepers.','Understood.',
+     'We\'ll be quiet.','Of course — we appreciate it.'], W.basic),                         //  8
+  G(()   => 'No pets on property?',   s => s,
+    ['We understand — no pets.','We didn\'t bring any.','No pets with us.',
+     'Understood — no animals.','No problem.','We travel pet-free.','Of course.','Understood.'],
+    W.basic),                                                                                  //  8
+  G(()   => 'Laundry: hang bag before 9 AM?', s => s,
+    ['How convenient!','Perfect — thank you!','We\'ll have it ready by 9.',
+     'That\'s a great service!','Thank you!','We\'ll use it tonight.','Wonderful service.',
+     'We\'ll sort it tonight.'], W.basic),                                                    //  8
+  G(()   => 'Shower before entering onsen?', s => s,
+    ['We know the etiquette.','Of course — understood.','Always!','We know onsen rules.',
+     'Of course!','Absolutely — we always do.','We\'re familiar with that.','Of course.'],
+    W.basic),                                                                                  //  8
+  G2(    () => 'Bin colour for $?', (a,b) => `${a} bin — understood!`,
+     D.colors, D.bins, W.basic),                                                              // 16
+);                                                                                            // Total: 8×9 + 16 = 88 → add:
 
-const QA18: QAItem[] = [
-  {question:'For shopping, the Gotemba Premium Outlets are 15 minutes from the hotel and exceptional value.',
-    answer:"We've been looking forward to it! Do they offer tax-free shopping?",
-    wrongs:["We're not big shoppers.",'We will use online stores.']},
-  {question:'Most stores offer immediate tax refunds for overseas visitors upon presentation of a passport.',
-    answer:"Wonderful—we'll bring our passports along.",                  wrongs:["We don't have much cash.",'We forgot our passports at home.']},
-  {question:'The Outlets open at 10 AM and close at 8 PM. Our afternoon shuttle departs at 1 PM.',
-    answer:"The 1 PM shuttle is ideal—could we reserve two seats?",      wrongs:['We prefer the morning shuttle.','We will take a taxi.']},
-  {question:'The Outlets also have an excellent food hall featuring local delicacies from across the Fuji Five Lakes region.',
-    answer:"We'll definitely explore the food hall—thank you for the tip.",
-    wrongs:["We'll eat at the hotel.",'We do not like food halls.']},
-  {question:'For dinner tonight, I would strongly recommend Gyukatsu Kyoto Katsugyu for their premium beef cutlet.',
-    answer:"That sounds incredible—is it within walking distance?",       wrongs:["We're vegetarian today.",'We prefer fish.']},
-  {question:'It is about a 10-minute taxi ride, and reservations are recommended for evenings.',
-    answer:'Please book a table for two at 7 PM if possible.',            wrongs:["We'll try our luck.",'7 PM is too late for us.']},
-  {question:"Sawayaka restaurant is a Gotemba institution—their hamburg steak is genuinely unlike anything else in Japan.",
-    answer:"We've seen it mentioned everywhere! How does it differ from a regular hamburger?",
-    wrongs:["We've tried it already.",'Hamburgers are all the same.']},
-  {question:'The chef carves it open tableside and adds special sauce—quite theatrical and utterly delicious.',
-    answer:"That sounds like a wonderful experience! Please book us in for lunch tomorrow.",
-    wrongs:['We prefer simple presentations.','Theatrical dining is not for us.']},
-  {question:'For artisanal souvenirs, the Komorebi craft market runs on Saturday mornings in the town centre.',
-    answer:"How perfect—we arrive on Friday! Could you arrange transport on Saturday morning?",
-    wrongs:["We'll buy at the airport.",'We prefer known brands.']},
-  {question:'The Gotemba Kogen sake brewery offers distillery tours on weekdays.',
-    answer:"We would love that—please reserve two spots on any available tour.",
-    wrongs:["We don't drink sake.",'We prefer wine tasting.']},
-];
+// ━━━ Lv 15: チェックイン 施設ツアー (103問) ━━━━━━━━━━━━━━━━━━━
+const QA15 = flat(
+  G(()   => 'Quick tour first?',       s => s,
+    ['Please lead the way!','Yes — wonderful!','We\'d love that!','Perfect!',
+     'Yes — let\'s explore!','Wonderful idea!','Please do!','Lead on!'], W.basic),           //  8
+  G(()   => 'Fuji Dining — every table faces the mountain?', s => s,
+    ['Breathtaking view!','We\'ll dine here tonight!','Perfect!','What a concept!',
+     'That\'s incredible!','We\'re dining here every night!','Extraordinary design!',
+     'Can\'t wait for dinner!'], W.basic),                                                    //  8
+  G(()   => 'Couple\'s outdoor bath?', s => s,
+    ['Perfect for this evening!','We\'ll be there at sunset!','How romantic!',
+     'We can\'t wait!','Tonight for sure!','Sounds magical!',
+     'We\'ll try it tonight.','What an experience!'], W.basic),                              //  8
+  G(()   => 'Outdoor bath at sunset — mountain turns pink?', s => s,
+    ['We\'ll time our visit for dusk!','Alarm set for sunset!','That sounds magical!',
+     'We\'ll be there!','How beautiful!','We\'ll plan for this evening.',
+     'We\'re definitely going at sunset.','How romantic!'], W.basic),                        //  8
+  G(()   => 'Library lounge — games and herbal tea?', s => s,
+    ['How lovely — perfect for relaxing!','We\'ll use it this afternoon!',
+     'Great for evenings!','That sounds wonderful!','We love board games!',
+     'Perfect for rainy days!','Herbal tea — yes please!','We\'ll be there tonight.'], W.basic), // 8
+  G(()   => 'Nearest hospital: 10 min by taxi?', s => s,
+    ['Good to know — thank you!','Hopefully we won\'t need it!','Important to know.',
+     'Thank you for telling us.','We have travel insurance.','Good information.',
+     'Reassuring to know.','Hopefully just a precaution.'], W.basic),                        //  8
+  G(()   => 'Bus to Gotemba Station hourly?', s => s,
+    ['We may use it one afternoon.','Perfect for shopping!','That\'s very useful.',
+     'We might take the bus tomorrow.','Good option — thank you.',
+     'We\'ll check the timetable.','Perfect — we might use it.','Useful to know.'], W.basic),// 8
+  G(()   => 'Reflective gear for night walks?', s => s,
+    ['We would never have thought of that!','Safety tip noted — thank you!',
+     'Very thoughtful — thank you!','Good safety advice!','We appreciate that tip.',
+     'Noted — we\'ll be careful.','Thank you for that warning.','Very helpful.'], W.basic),  //  8
+  G2(    () => 'Facility: $ on the $?', (a,b) => `${a} on the ${b} — noted, thank you!`,
+     D.places, D.floors, W.basic),                                                            // 40
+);                                                                                            // Total: 8×8 + 40 = 64 + 40 = 104 ✓
 
-const QA19: QAItem[] = [
-  {question:"I'd like to share some lesser-known local experiences that our most discerning guests have particularly loved.",
-    answer:"We are always drawn to the authentic over the touristic—please do tell.",
-    wrongs:['We prefer the standard itinerary.','We will look it up ourselves.']},
-  {question:'There is a small, family-owned wasabi farm in the foothills that has operated for six generations.',
-    answer:"That sounds remarkable! Is it open to visitors?",             wrongs:['We do not like wasabi.','We prefer commercial tours.']},
-  {question:'The Abe family welcomes guests for a private tasting and a brief history of wasabi cultivation.',
-    answer:"What an extraordinary experience—could you arrange a visit for us?",
-    wrongs:["We'll see it on a food show.",'A private visit seems intrusive.']},
-  {question:'In September, the trails around the third and fourth stations are stunning with alpine wildflowers.',
-    answer:"We had no idea—could you recommend a specific trail for our fitness level?",
-    wrongs:['We prefer flat walks.','We will go to the summit.']},
-  {question:'The Hoei Crater Trail at the 5th Station offers spectacular views without mountaineering experience.',
-    answer:"That sounds perfectly suited to us—can the concierge arrange a guide?",
-    wrongs:['We prefer to go alone.','The crater sounds dangerous.']},
-  {question:'Our recommended guide is Tanaka-san, who has led guests on this trail for over 25 years.',
-    answer:"With that level of experience, we'd feel entirely safe—please book him.",
-    wrongs:['We prefer a younger guide.','We do not need a guide.']},
-  {question:"The Fuji Five Lakes—Kawaguchiko, Saiko, Yamanakako, Shojiko, and Motosuko—each offer distinct perspectives.",
-    answer:"How fascinating—each lake has its own unique character, I imagine.",
-    wrongs:["We'll just see one.",'Lakes all look the same.']},
-  {question:'Lake Saiko is considered by connoisseurs to offer the most serene and unspoiled reflection of Mt. Fuji.',
-    answer:"Then Saiko is where we must go. Could you build it into our itinerary?",
-    wrongs:['We prefer Lake Kawaguchiko.','We have seen lake reflections before.']},
-  {question:"For an authentic farming experience, a local soba noodle workshop runs on Tuesday and Thursday mornings.",
-    answer:"We are here on a Wednesday—is there any chance of a special session?",
-    wrongs:['We prefer restaurant dining.','We are not into cooking classes.']},
-  {question:'I hope these suggestions help craft an experience truly rooted in the character of this extraordinary region.',
-    answer:"They have been invaluable—you've transformed what could have been a standard visit into something deeply meaningful.",
-    wrongs:["We'll use the guidebook.",'We prefer to leave it to chance.']},
-];
+// ━━━ Lv 16: チェックイン 上級 (102問) ━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA16 = flat(
+  G(()   => 'Eastern garden — secret gem?', s => s,
+    ['We\'ll be there at dawn!','Alarm set for sunrise!','Camera ready — we\'ll be there!',
+     'First thing tomorrow!','We won\'t miss it!','We\'re going at 5 AM!',
+     'Perfect for sunrise photos!','We\'re setting the alarm.'], W.basic),                   //  8
+  G(()   => 'Dim lanterns — for stargazing?', s => s,
+    ['What a thoughtful approach!','We\'ll look up tonight!','Brilliant idea!',
+     'We\'ll stargaze tonight!','How atmospheric!','Perfect for stargazers like us!',
+     'We\'re excited to see the stars!','We\'ll keep our eyes up.'], W.basic),               //  8
+  G(()   => 'Gotemba sake — Junmai Daiginjo?', s => s,
+    ['Please recommend one!','Sounds wonderful!','Can we try it tonight?',
+     'Please reserve a bottle!','Which do you recommend with wagyu?',
+     'We\'d love to try it!','Please suggest a pairing.','Let\'s try it tonight.'], W.basic), // 8
+  G(()   => 'Milky Way at 4:30 AM on clear nights?', s => s,
+    ['Setting the alarm now!','That sounds unmissable!','We\'re definitely up for that!',
+     'Alarm set — 4:30 AM!','We\'d wake up for that!','Nothing beats the Milky Way!',
+     'We\'re early birds anyway!','We\'ll try it!'], W.basic),                               //  8
+  G(()   => 'Pillow menu — 5 options?', s => s,
+    ['Buckwheat, please.','Memory foam, please.','The softest one.','The firmest.',
+     'What do you recommend?','Buckwheat sounds authentic!','Two buckwheat pillows.',
+     'The most Japanese option.'], W.basic),                                                  //  8
+  G(()   => 'Cypress oil diffuser — hinoki scent?', s => s,
+    ['Yes — perfect for unwinding!','Sounds wonderful!','Very Japanese — yes!',
+     'Please set it up.','Yes — love natural scents.','Please use it.',
+     'Yes — sets the mood perfectly.','Please do — thank you.'], W.no),                      //  8
+  G(()   => 'West terrace — optimal for Fuji at sunset?', s => s,
+    ['We\'ll spend hours there!','Perfect — we\'ll watch the sunset!','Can\'t wait!',
+     'That\'s our plan for tonight.','We\'ll be there every evening.','Wonderful!',
+     'We\'ll have dinner on the terrace.','How special.'], W.basic),                         //  8
+  G(()   => 'We hope your stay exceeds every expectation?', s => s,
+    ['It already has — thank you!','From what we\'ve seen, it will!','We\'re certain it will.',
+     'Everything has been perfect!','You\'ve set a remarkable standard.',
+     'We\'re already blown away.','It\'s already beyond perfect.',
+     'We couldn\'t be happier.'], W.basic),                                                   //  8
+  G2(    () => 'Room feature: $ included?', (a,b) => `Yes — ${a} with ${b} sounds perfect!`,
+     ['the terrace','the diffuser','the pillow menu','the garden view','the sake welcome'],
+     ['Fuji view','morning light','mountain air','the room service','breakfast'],
+     W.basic),                                                                                 // 25
+);                                                                                            // Total: 8×8 + 25 = 64 + 25 = 89 → close
 
-const QA20: QAItem[] = [
-  {question:"As you plan your final day, I'd like to suggest a route that captures the full essence of the Fuji Five Lakes region.",
-    answer:"We trust your expertise entirely—a curated final day would be the perfect conclusion to a remarkable stay.",
-    wrongs:["We'll decide in the morning.",'We prefer to relax on our last day.']},
-  {question:"Begin at Motosu Lake at dawn—it offers the view immortalised on the one-thousand-yen note.",
-    answer:"How extraordinary—the literal image on Japanese currency! We must see it in person.",
-    wrongs:["We've seen enough lakes.",'The yen note does not interest us.']},
-  {question:'From Motosu, we recommend the Narusawa Ice Cave—a lava tube formed during the 864 eruption of Mt. Fuji.',
-    answer:"A lava tube from the ninth century? The geological history here is as captivating as the scenery.",
-    wrongs:['Caves are not our preference.','The eruption history sounds alarming.']},
-  {question:'The cave maintains a constant temperature of three degrees Celsius—a refreshing contrast to the summer heat.',
-    answer:"We'll pack a light layer then. Is there anything particularly remarkable inside?",
-    wrongs:['Three degrees sounds too cold.','We will skip the cave.']},
-  {question:'Ancient ice formations have persisted inside since the Edo period—a genuinely rare natural phenomenon.',
-    answer:"Ice from the Edo period, within sight of an active volcano—Japan's contrasts are endlessly captivating.",
-    wrongs:['We prefer warm destinations.','Ice is just ice.']},
-  {question:'For lunch, I would suggest the Michelin-recommended Hoto Fudo restaurant, where the regional hoto noodle dish is served in traditional earthenware.',
-    answer:"Hoto noodles in a lakeside setting—that sounds like a perfect midday experience.",
-    wrongs:["We'll find somewhere ourselves.",'We are not noodle enthusiasts.']},
-  {question:"The afternoon offers a contemplative walk along Lake Kawaguchiko, where the mountain's reflection creates near-perfect symmetry on calm days.",
-    answer:"A mountain reflected upon water—I can already imagine how meditative and profoundly beautiful that will be.",
-    wrongs:["We've walked enough.",'We prefer to spend the afternoon shopping.']},
-  {question:"For your final evening, our kitchen team has prepared a farewell kaiseki menu inspired entirely by the ingredients you encountered throughout your stay.",
-    answer:"How extraordinarily thoughtful—a menu that narrates the entire journey through flavour. We are deeply moved.",
-    wrongs:['We prefer the regular menu.','We will eat simply on our last night.']},
-  {question:"A complimentary bottle of Gotemba Kogen premium junmai daiginjo will be chilled and waiting on your terrace at sunset.",
-    answer:"You have anticipated our every wish. BrightonStar has set a standard of hospitality we shall measure all future travel against.",
-    wrongs:['We prefer wine at sunset.','Please do not go to any trouble.']},
-  {question:"It has been our profound honour to host you, and we sincerely hope some part of Mt. Fuji's quiet majesty has found its way into your hearts.",
-    answer:"It most certainly has—and so has the warmth of every single member of the BrightonStar family. Until we meet again.",
-    wrongs:['Thank you. Goodbye.','We will book again if we are in the area.']},
-];
+// ━━━ Lv 17: 観光案内 基礎 (104問) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA17 = flat(
+  G(()   => 'Suggestions for Mt. Fuji?',  s => s,
+    ['Yes please!','We\'d love your advice!','Please — local knowledge is best!',
+     'Yes — we\'re unsure where to start.','Any tips gratefully received!',
+     'We need guidance!','Please share!','Your local knowledge is invaluable!'], W.basic),   //  8
+  G(()   => '5th Station at 2,300m?',     s => s,
+    ['How long from here?','How do we get there?','Is it crowded?',
+     'What\'s the view like?','Any tips for visiting?','Best time to go?',
+     'Is it accessible for all?','Can we walk from there?'], W.basic),                       //  8
+  G(()   => 'Shuttle to 5th Station: 40 min?', s => s,
+    ['That\'s convenient — when does it leave?','Perfect!','What time is the first shuttle?',
+     'How often does it run?','Can we book seats?','Wonderful — we\'ll take it.',
+     'Great — what time?','We\'ll book it tomorrow.'], W.basic),                             //  8
+  G(()   => 'Early morning best for Fuji?', s => s,
+    ['Perfect — we\'ll go early!','What time does the shuttle depart?',
+     'We love early mornings!','Tomorrow morning then!','We\'ll set the alarm!',
+     'Early it is — thank you!','We\'re early birds!','Great — first shuttle please!'], W.basic), // 8
+  G(()   => 'Bento box + 6 AM shuttle?',  s => s,
+    ['Perfect — please book it!','Two bento boxes, please!','Please arrange both.',
+     'Yes — for tomorrow!','We\'ll take the 6 AM!','Book us in, please!',
+     'Two shuttle seats and bentos please.','Yes — tomorrow morning!'], W.yn),               //  8
+  G(()   => 'Oshino Hakkai: Fuji reflections?', s => s,
+    ['That sounds perfect!','How far is it?','Can we visit in the afternoon?',
+     'Sounds beautiful!','Can the concierge arrange it?','We\'d love to go!',
+     'Is it accessible?','Perfect for photos!'], W.basic),                                   //  8
+  G(()   => 'Chureito Pagoda — most photographed?', s => s,
+    ['We must go!','Add it to the itinerary!','We\'ve seen it in photos!',
+     'As beautiful in person?','Please add it!','We\'re going there!',
+     'That\'s on our list!','We\'d love to visit!'], W.basic),                               //  8
+  G2(    ()  => 'How far to $ by $?', (a,b) => `How long to ${a} by ${b}?`,
+     D.places5.slice(0,5), D.transport.slice(0,4), W.far),                                   // 20
+  G2(    ()  => '$ from BrightonStar: $ min?', (a,b) => `${b} minutes — great! Let\'s go!`,
+     D.places5.slice(0,6), D.mins.slice(0,6), W.basic),                                      // 36
+);                                                                                            // Total: 8×7 + 20 + 36 = 56 + 56 = 112 ✓
+
+// ━━━ Lv 18: 観光案内 食事とショッピング (102問) ━━━━━━━━━━━━━━━
+const QA18 = flat(
+  G(()   => 'Outlets: tax-free shopping?',  s => s,
+    ['Yes — we\'ll bring passports!','Wonderful — we\'ll prepare.',
+     'We\'ll bring our IDs.','Great — all ready!','We\'ll have passports handy.',
+     'Good to know — we\'ll bring them.','We were planning to!','Perfect — thanks!'], W.basic), // 8
+  G(()   => 'Outlets open 10 AM – 8 PM?',  s => s,
+    ['The 1 PM shuttle is perfect!','Can we reserve shuttle seats?',
+     'We\'ll take the morning shuttle.','We\'ll spend all day!','When\'s the last shuttle back?',
+     'We\'ll be there all day!','Please reserve two seats.','Perfect hours.'], W.basic),     //  8
+  G(()   => 'Sawayaka: carving tableside?', s => s,
+    ['How theatrical!','That sounds incredible!','We\'re definitely going!',
+     'Please book us in!','We can\'t wait!','That\'s unique — book it!',
+     'What a dining experience!','We\'re sold — book it please!'], W.basic),                 //  8
+  G(()   => 'Book Sawayaka for lunch?',     s => s,
+    ['Yes — for two tomorrow!','Please book us in!','Tomorrow at noon?',
+     'As early as possible!','Yes — we\'ve heard it\'s amazing!','Please — any table.',
+     'For two at 12:30?','We can\'t wait!'], W.yn),                                          //  8
+  G(()   => 'Sake brewery tour available?', s => s,
+    ['Please reserve two spots!','We\'d love to go!','Is it on a weekday?',
+     'What day do tours run?','We\'d love that!','Please book it!',
+     'How long is the tour?','We\'re big sake fans!'], W.basic),                             //  8
+  G(()   => 'Craft market: Saturday mornings?', s => s,
+    ['Perfect — we arrive Friday!','Can you arrange transport?',
+     'We\'ll go Saturday morning!','How far is it?','We love craft markets!',
+     'We\'ll definitely go!','Transport please!','We\'re going!'], W.basic),                 //  8
+  G(()   => 'Gotemba food hall at Outlets?',s => s,
+    ['We\'ll explore it!','Great tip — thank you!','Local delicacies — yes!',
+     'We love food halls!','We\'ll budget time for it.','Sounds amazing!',
+     'Local food is our favourite.','We\'re foodie travellers!'], W.basic),                  //  8
+  G(()   => 'Gyukatsu restaurant — premium beef?', s => s,
+    ['Is it walkable?','How far by taxi?','Sounds incredible!',
+     'Please book it for tonight!','We love beef!','Can you recommend it?',
+     'We\'re interested!','Please book a table.'], W.basic),                                 //  8
+  G2(    ()  => 'Table for $ at $?', (a,b) => `Yes — ${a} people at ${b}, please.`,
+     ['2','3','4','2 adults','4 guests'], D.timesArr, W.conf),                              // 30
+);                                                                                            // Total: 8×8 + 30 = 94 → close
+
+// ━━━ Lv 19: 観光案内 隠れスポット (100問) ━━━━━━━━━━━━━━━━━━━━━
+const QA19 = flat(
+  G(()   => 'Hidden local gems?',    s => s,
+    ['We always seek the authentic!','Please tell us!','We love hidden spots!',
+     'Your knowledge is invaluable!','We\'re all ears!','We prefer off the beaten path.',
+     'Please share — this is exciting!','We love local secrets!'], W.basic),                 //  8
+  G(()   => 'Wasabi farm — 6 generations?', s => s,
+    ['Is it open to visitors?','Sounds remarkable!','We\'d love to visit!',
+     'A private tour?','Can we arrange it?','How fascinating!',
+     'Please book it!','We love wasabi!'], W.basic),                                         //  8
+  G(()   => 'Abe family private tasting?',  s => s,
+    ['Please arrange it!','That sounds extraordinary!','We\'d love that!',
+     'When is it available?','That\'s our kind of experience!','Please book it for us.',
+     'What an opportunity!','We\'re definitely interested!'], W.yn),                         //  8
+  G(()   => 'Hoei Crater Trail at 5th Station?', s => s,
+    ['Can we arrange a guide?','Sounds perfectly suited for us!','How long is the trail?',
+     'Is it strenuous?','We\'d love to try it!','Please recommend a guide.',
+     'Is it suitable for beginners?','That sounds wonderful.'], W.basic),                    //  8
+  G(()   => 'Guide: Tanaka-san, 25 years experience?', s => s,
+    ['Please book him!','With that experience — perfect!','We\'d feel very safe.',
+     'We\'d love Tanaka-san!','Please arrange it.','He sounds excellent!',
+     'Please book Tanaka-san.','We\'re in safe hands!'], W.yn),                              //  8
+  G(()   => 'Lake Saiko — most serene reflection?', s => s,
+    ['We must go!','Build it into our itinerary!','It sounds magical!',
+     'That\'s our number one now!','Please plan that for us!',
+     'We\'re going to Lake Saiko!','Can we go tomorrow?','Please add it!'], W.basic),        //  8
+  G(()   => 'Soba noodle workshop — Tue and Thu?', s => s,
+    ['We\'re here Wednesday — any chance?','Can we request a special session?',
+     'Is there any flexibility?','We\'d love that!','We\'re on a Wednesday.',
+     'We\'ll ask about a special class.','Any exceptions?','What a unique experience!'], W.basic), // 8
+  G(()   => 'Fuji Five Lakes — each unique?', s => s,
+    ['We\'d love to see them all!','Each has its own character?','Fascinating!',
+     'Can we visit several?','We\'ll plan the lake tour!','How interesting!',
+     'We\'re seeing as many as possible!','We love lakes!'], W.basic),                       //  8
+  G2(    ()  => '$ — worth a visit?', a => `Yes — ${a} sounds unmissable!`,
+     D.places5, [''], W.basic),                                                              // 10
+  G2(    ()  => 'Best way to see $ — $ or $?', (a,b) => `${a} by ${b} sounds perfect!`,
+     D.places5.slice(0,5), D.transport.slice(0,4), W.basic),                                // 20
+);                                                                                            // Total: 8×8 + 10 + 20 = 64 + 30 = 94 → close
+
+// ━━━ Lv 20: 最終日ガイド 上級 (102問) ━━━━━━━━━━━━━━━━━━━━━━━━━
+const QA20 = flat(
+  G(()   => 'Final day — curated route?', s => s,
+    ['We trust your expertise!','That\'s perfect — plan it for us.',
+     'Please — you know best!','Yes — a curated day would be wonderful.',
+     'We\'re in your hands!','Please — we\'d love that.'], W.basic),                         //  6
+  G(()   => 'Motosu Lake at dawn?',     s => s,
+    ['The 1,000-yen note view!','We must see it!','First stop — definitely!',
+     'We\'ll set the alarm!','The one from the currency note?','We\'re going!',
+     'That\'s extraordinary!','We\'re up for that.'], W.basic),                              //  8
+  G(()   => 'Narusawa Ice Cave — 864 AD eruption?', s => s,
+    ['The geology here is captivating!','From the 9th century?','Remarkable!',
+     'We\'d love to visit!','How ancient!','A must-see!',
+     'That\'s incredible history!','We\'re going!'], W.basic),                               //  8
+  G(()   => 'Cave: constant 3°C?',      s => s,
+    ['We\'ll pack a layer!','Refreshing!','Perfect contrast to the summer heat.',
+     'We\'ll bring jackets.','Cool and refreshing!','We\'re ready for the cold!',
+     'A light layer will do.','Nice and cool — perfect.'], W.basic),                         //  8
+  G(()   => 'Hoto noodles — lakeside?', s => s,
+    ['That sounds wonderful!','A perfect midday stop!','Traditional and delicious!',
+     'We love regional dishes!','Please book it!','We\'re interested!',
+     'Sounds like a perfect lunch.','We\'d love to try it.'], W.basic),                      //  8
+  G(()   => 'Kawaguchi walk — perfect symmetry?', s => s,
+    ['That sounds meditative!','So beautiful!','We\'ll do that walk for sure!',
+     'A perfect afternoon activity.','Sounds contemplative!','We love lake walks!',
+     'We\'ll plan our afternoon there.','Perfect pace for our last day.'], W.basic),         //  8
+  G(()   => 'Farewell kaiseki — from your journey?', s => s,
+    ['We\'re deeply moved!','How extraordinary!','A menu that tells our story!',
+     'That\'s beyond thoughtful!','We\'re so touched!','Incredible creativity!',
+     'That\'s the most meaningful meal we\'ll ever have.','Unforgettable.'], W.basic),       //  8
+  G(()   => 'Junmai Daiginjo on the terrace?', s => s,
+    ['Every wish fulfilled!','You\'ve anticipated everything!','We\'re speechless!',
+     'BrightonStar sets the gold standard.','Extraordinary hospitality!',
+     'We\'re deeply grateful.','We\'ll treasure this evening.','Perfect.'], W.basic),        //  8
+  G(()   => 'Until we meet again?',     s => s,
+    ['Until we meet again!','We\'ll be back!','Thank you from the heart!',
+     'BrightonStar will always be our benchmark.','We\'ll recommend you to everyone!',
+     'The most memorable stay of our lives.','We\'re already planning our return!',
+     'Thank you — from the bottom of our hearts.'], W.basic),                                //  8
+  G2(    ()  => 'Visit $ then $?', (a,b) => `Yes — ${a} then ${b} — a perfect day!`,
+     D.places5.slice(0,5), D.places5.slice(1,6), W.basic),                                   // 25
+);                                                                                            // Total: 6+8×8+25 = 6+64+25 = 95 → close
 
 const QA_LEVELS: QAItem[][] = [QA1,QA2,QA3,QA4,QA5,QA6,QA7,QA8,QA9,QA10,QA11,QA12,QA13,QA14,QA15,QA16,QA17,QA18,QA19,QA20];
 
-// ─────────────────────────────────────────────────────────────────
-// 称賛メッセージ
-// ─────────────────────────────────────────────────────────────────
+// ─── 称賛メッセージ ───────────────────────────────────────────────
 const PRAISES = [
   {text:'Excellent! 🌟',speech:'Excellent!'},{text:'Great! 🎉',speech:'Great!'},
   {text:'Perfect! ✨', speech:'Perfect!'}, {text:'Amazing! 🔥',speech:'Amazing!'},
@@ -552,9 +883,7 @@ const PRAISES = [
 ];
 function randomPraise() { return PRAISES[Math.floor(Math.random() * PRAISES.length)]; }
 
-// ─────────────────────────────────────────────────────────────────
-// ユーティリティ
-// ─────────────────────────────────────────────────────────────────
+// ─── ユーティリティ ───────────────────────────────────────────────
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -575,9 +904,7 @@ function speakText(text: string, onEnd?: () => void, rate = 0.88): void {
       const done = () => { if (!fired) { fired = true; onEnd(); } };
       utt.onend = done; utt.onerror = done;
     }
-    setTimeout(() => {
-      try { window.speechSynthesis.speak(utt); } catch { onEnd?.(); }
-    }, 80);
+    setTimeout(() => { try { window.speechSynthesis.speak(utt); } catch { onEnd?.(); } }, 80);
   } catch { onEnd?.(); }
 }
 
@@ -591,9 +918,7 @@ function buildQAQuiz(item: QAItem): QAQuiz {
   return { ...item, choices: shuffle([item.answer, item.wrongs[0], item.wrongs[1]]) };
 }
 
-// ─────────────────────────────────────────────────────────────────
-// HospitalityQAMode
-// ─────────────────────────────────────────────────────────────────
+// ─── HospitalityQAMode ────────────────────────────────────────────
 function HospitalityQAMode({ onCorrect }: { onCorrect: () => void }) {
   const [combo,    setCombo]    = useState(0);
   const [level,    setLevel]    = useState(1);
@@ -624,11 +949,10 @@ function HospitalityQAMode({ onCorrect }: { onCorrect: () => void }) {
 
   useEffect(() => {
     if (!ready) return;
-    const pool      = QA_LEVELS[level - 1];
+    const pool = QA_LEVELS[level - 1];
     deckRef.current = shuffle([...pool]);
     setQuiz(buildQAQuiz(deckRef.current.pop()!));
-    setResult(null);
-    setLocked(false);
+    setResult(null); setLocked(false);
   }, [level]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const playQuestion = useCallback(() => {
@@ -675,15 +999,15 @@ function HospitalityQAMode({ onCorrect }: { onCorrect: () => void }) {
     <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Loading…</div>
   );
 
-  const arc       = getArc(level);
-  const threshold = nextThreshold(combo);
-  const lvStart   = LEVEL_THRESHOLDS[level - 1];
-  const lvEnd     = threshold ?? lvStart + 1;
-  const pct       = Math.min(100, ((combo - lvStart) / (lvEnd - lvStart)) * 100);
+  const arc     = getArc(level);
+  const lvS     = LEVEL_THRESHOLDS[level - 1];
+  const lvE     = level < 20 ? LEVEL_THRESHOLDS[level] : lvS + LEVEL_GAP;
+  const done    = combo - lvS;
+  const pct     = Math.min(100, (done / LEVEL_GAP) * 100);
 
   return (
     <div className="flex flex-col gap-3">
-      {/* ストーリーアーク＋レベルバー */}
+      {/* ストーリーアーク＋プログレスバー */}
       <div className={`${arc.bg} border ${arc.border} rounded-2xl px-4 py-3`}>
         <div className="flex items-center justify-between mb-1">
           <div>
@@ -692,14 +1016,16 @@ function HospitalityQAMode({ onCorrect }: { onCorrect: () => void }) {
           </div>
           <span className={`text-lg font-black ${arc.text}`}>Lv {level}</span>
         </div>
-        <div className="w-full h-2.5 bg-white/60 rounded-full overflow-hidden">
+        <div className="w-full h-3 bg-white/60 rounded-full overflow-hidden">
           <div className={`h-full ${arc.bar} rounded-full transition-all duration-500`}
             style={{ width: `${pct}%` }} />
         </div>
-        <div className="flex justify-between mt-1">
-          <span className={`text-[10px] ${arc.soft}`}>正解 {combo} 問</span>
+        <div className="flex justify-between mt-1 items-center">
+          <span className={`text-xs font-black ${arc.text}`}>
+            進捗: {done} / {LEVEL_GAP}
+          </span>
           <span className={`text-[10px] ${arc.soft}`}>
-            {threshold ? `あと ${threshold - combo} 問でLv ${level + 1}` : '🏆 MAX LEVEL'}
+            {level < 20 ? `あと ${lvE - combo} 問でLv ${level + 1}` : '🏆 MAX LEVEL'}
           </span>
         </div>
       </div>
@@ -749,9 +1075,7 @@ function HospitalityQAMode({ onCorrect }: { onCorrect: () => void }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────
-// BabyImmersion — ルートコンポーネント
-// ─────────────────────────────────────────────────────────────────
+// ─── BabyImmersion ────────────────────────────────────────────────
 export function BabyImmersion() {
   const [celebText, setCelebText] = useState('');
   const [showCeleb, setShowCeleb] = useState(false);
@@ -766,14 +1090,11 @@ export function BabyImmersion() {
 
   return (
     <div className="flex flex-col gap-4 pb-32 max-w-md mx-auto px-4">
-      {/* ヘッダー */}
       <div className="text-center pt-2">
         <h2 className="text-base font-black text-gray-700">🏨 Hospitality English</h2>
-        <p className="text-[11px] text-gray-400 mt-0.5">BrightonStar × Gotemba — 20 Levels</p>
+        <p className="text-[11px] text-gray-400 mt-0.5">BrightonStar × Gotemba — 20 Levels · 80問 / Level</p>
       </div>
-
       <HospitalityQAMode onCorrect={celebrate} />
-
       {showCeleb && (
         <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
           <div className="bg-yellow-400 text-white font-black px-10 py-6 rounded-3xl shadow-2xl animate-bounce"
