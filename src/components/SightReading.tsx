@@ -2,10 +2,10 @@
 
 import { useState, useRef, useCallback } from 'react';
 
-// ─── 定数（MusicLearning と完全一致）──────────────────────────────
+// ─── 定数 ───────────────────────────────────────────────────────
 const LS         = 14;
 const L1         = 106;
-const TOP_LINE_Y = L1 - LS * 4;   // 50
+const TOP_LINE_Y = L1 - LS * 4;
 const NR         = 6.5;
 const NY         = 4.7;
 const STAFF_XS   = 40;
@@ -48,7 +48,7 @@ function getLedgers(noteKey: string, clef: Clef): number[] {
   return lines;
 }
 
-// ─── レベル設定 ───────────────────────────────────────────────────
+// ─── レベル設定 ──────────────────────────────────────────────────
 const LEVEL_CFG: Record<SRLevel, { clef: Clef; count: 4|8; pool: string[]; label: string }> = {
   1: { clef:'treble', count:4, pool:['E4','F4','G4','A4','B4','C5','D5','E5'],      label:'Lv1 ト音 4音 加線なし' },
   2: { clef:'treble', count:8, pool:['D4','E4','F4','G4','A4','B4','C5','D5','E5','F5','G5','C4','B3','A3'], label:'Lv2 ト音 8音 加線あり' },
@@ -59,39 +59,45 @@ const LEVEL_CFG: Record<SRLevel, { clef: Clef; count: 4|8; pool: string[]; label
 const NOTE_BTNS = ['C','D','E','F','G','A','B'] as const;
 const NOTE_JP: Record<string, string> = { C:'ド', D:'レ', E:'ミ', F:'ファ', G:'ソ', A:'ラ', B:'シ' };
 
-// ─── 音声 ────────────────────────────────────────────────────────
-const acRef: { current: AudioContext | null } = { current: null };
+// ─── Web Audio — モジュールレベルシングルトン ─────────────────────
+let _ac: AudioContext | null = null;
 
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
-  if (!acRef.current) {
+  if (!_ac || _ac.state === 'closed') {
     try {
       const AC = window.AudioContext ?? (window as WinAC).webkitAudioContext;
-      if (AC) acRef.current = new AC();
+      if (AC) _ac = new AC();
     } catch { /* ignore */ }
   }
-  return acRef.current;
+  return _ac;
 }
 
-function tone(ctx: AudioContext, freq: number, t: number, dur = 1.5): void {
+/** ピアノ風トーン: 5倍音 + 微デチューン + ADSR */
+function tone(ctx: AudioContext, freq: number, t: number, dur = 1.5, vol = 0.34): void {
   const master = ctx.createGain();
   master.connect(ctx.destination);
+
   master.gain.setValueAtTime(0, t);
-  master.gain.linearRampToValueAtTime(0.38, t + 0.006);
-  master.gain.exponentialRampToValueAtTime(0.17, t + 0.18);
-  master.gain.exponentialRampToValueAtTime(0.07, t + 0.80);
-  master.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  ([
-    [1, 1.00, 'triangle'],
-    [2, 0.50, 'triangle'],
-    [3, 0.20, 'sine'],
-    [4, 0.08, 'sine'],
-  ] as [number, number, OscillatorType][]).forEach(([mult, vol, type]) => {
+  master.gain.linearRampToValueAtTime(vol,         t + 0.007);
+  master.gain.exponentialRampToValueAtTime(vol * 0.50, t + 0.14);
+  master.gain.exponentialRampToValueAtTime(vol * 0.22, t + 0.65);
+  master.gain.exponentialRampToValueAtTime(0.0001,  t + dur);
+
+  const harmonics: [number, number, OscillatorType, number][] = [
+    [1,    1.00, 'triangle',  0   ],
+    [2,    0.42, 'triangle',  1.5 ],
+    [3,    0.16, 'sine',     -1.0 ],
+    [4,    0.06, 'sine',      2.0 ],
+    [5,    0.02, 'sine',     -1.5 ],
+  ];
+
+  harmonics.forEach(([mult, relVol, waveType, detuneC]) => {
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(master);
-    o.type = type; o.frequency.value = freq * mult;
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(vol * 0.01, t + dur / mult);
+    o.type = waveType; o.frequency.value = freq * mult; o.detune.value = detuneC;
+    g.gain.setValueAtTime(relVol, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(relVol * 0.004, 0.0001), t + dur / Math.sqrt(mult));
     o.start(t); o.stop(t + dur + 0.05);
   });
 }
@@ -101,7 +107,7 @@ function playKey(noteKey: string): void {
   const ctx = getCtx(); if (!ctx) return;
   try {
     const go = () => tone(ctx, f, ctx.currentTime);
-    if (ctx.state === 'suspended') { ctx.resume().then(go).catch(() => {}); } else { go(); }
+    ctx.state === 'suspended' ? ctx.resume().then(go).catch(() => {}) : go();
   } catch { /* ignore */ }
 }
 
@@ -110,29 +116,26 @@ function genPhrase(pool: string[], count: number): string[] {
   const phrase: string[] = [];
   let prev = '';
   for (let i = 0; i < count; i++) {
-    const cands = pool.filter(n => n !== prev) ;
+    const cands = pool.filter(n => n !== prev);
     const src   = cands.length > 0 ? cands : pool;
-    const n     = src[Math.floor(Math.random() * src.length)];
-    phrase.push(n);
-    prev = n;
+    phrase.push(src[Math.floor(Math.random() * src.length)]);
+    prev = phrase[phrase.length - 1];
   }
   return phrase;
 }
 
-// ─── PhraseStaff SVG ─────────────────────────────────────────────
+// ─── PhraseStaff SVG ────────────────────────────────────────────
 function PhraseStaff({ phrase, cursor, clef }: { phrase: string[]; cursor: number; clef: Clef }) {
   const yMap    = clef === 'treble' ? TY : BY;
   const staffYs = [L1, L1-LS, L1-LS*2, L1-LS*3, L1-LS*4];
-  const middleY = L1 - LS * 2;   // B4 (treble) / D3 (bass)
+  const middleY = L1 - LS * 2;
   const VW      = 520;
 
-  // X positions per note
   const n    = phrase.length;
   const gap  = n <= 4 ? 92 : 54;
   const x0   = n <= 4 ? 105 : 82;
   const noteXs = Array.from({ length: n }, (_, i) => x0 + i * gap);
 
-  // Dynamic viewBox Y
   const ys  = phrase.map(k => yMap[k] ?? L1);
   const PAD = 22;
   const vTop    = Math.min(Math.min(...ys) - PAD, TOP_LINE_Y - PAD);
@@ -144,73 +147,42 @@ function PhraseStaff({ phrase, cursor, clef }: { phrase: string[]; cursor: numbe
   const clefY        = clef === 'treble' ? L1 + 12 : L1 - LS * 1.5 + 4;
 
   return (
-    <svg
-      viewBox={`0 ${vTop} ${VW} ${vH}`}
-      className="w-full"
-      style={{ userSelect: 'none' }}
-      aria-hidden="true"
-    >
-      {/* 五線 */}
+    <svg viewBox={`0 ${vTop} ${VW} ${vH}`} className="w-full"
+      style={{ userSelect:'none' }} aria-hidden="true">
       {staffYs.map(y => (
         <line key={y} x1={STAFF_XS} x2={STAFF_XE} y1={y} y2={y} stroke="#374151" strokeWidth="1.2" />
       ))}
-
-      {/* 音部記号 */}
-      <text
-        x={clefX} y={clefY}
-        fontSize={clefFontSize}
-        fill="#374151"
-        fontFamily="'Segoe UI Symbol','Segoe UI Historic','Apple Symbols','FreeSerif','Times New Roman',serif"
-      >
+      <text x={clefX} y={clefY} fontSize={clefFontSize} fill="#374151"
+        fontFamily="'Segoe UI Symbol','Segoe UI Historic','Apple Symbols','FreeSerif','Times New Roman',serif">
         {clef === 'treble' ? '𝄞' : '𝄢'}
       </text>
 
-      {/* カーソル背景 */}
       {cursor < n && (
-        <rect
-          x={noteXs[cursor] - 20}
-          y={vTop}
-          width={40}
-          height={vH}
-          fill="#fed7aa"
-          opacity={0.45}
-          rx={6}
-        />
+        <rect x={noteXs[cursor]-20} y={vTop} width={40} height={vH}
+          fill="#fed7aa" opacity={0.45} rx={6} />
       )}
 
-      {/* 各音符 */}
       {phrase.map((noteKey, i) => {
-        const x       = noteXs[i];
-        const y       = yMap[noteKey] ?? L1;
-        const isDone  = i < cursor;
-        const isCur   = i === cursor;
-        const fill    = isDone ? '#16a34a' : isCur ? '#ea580c' : '#374151';
-        const stemUp  = y >= middleY;
-        const stemX   = stemUp ? x + NR - 0.5 : x - NR + 0.5;
-        const stemEnd = stemUp ? y - LS * 3.5  : y + LS * 3.5;
-        const ledgers = getLedgers(noteKey, clef);
-
+        const x      = noteXs[i];
+        const y      = yMap[noteKey] ?? L1;
+        const isDone = i < cursor;
+        const isCur  = i === cursor;
+        const fill   = isDone ? '#16a34a' : isCur ? '#ea580c' : '#374151';
+        const stemUp = y >= middleY;
+        const stemX  = stemUp ? x + NR - 0.5 : x - NR + 0.5;
+        const stemEnd= stemUp ? y - LS * 3.5  : y + LS * 3.5;
+        const ledgers= getLedgers(noteKey, clef);
         return (
           <g key={i}>
-            {/* 加線 */}
             {ledgers.map(ly => (
-              <line key={ly}
-                x1={x - NR * 2.6} x2={x + NR * 2.6}
-                y1={ly} y2={ly}
-                stroke={fill} strokeWidth="1.4"
-              />
+              <line key={ly} x1={x-NR*2.6} x2={x+NR*2.6} y1={ly} y2={ly}
+                stroke={fill} strokeWidth="1.4" />
             ))}
-            {/* 符幹 */}
             <line x1={stemX} y1={y} x2={stemX} y2={stemEnd} stroke={fill} strokeWidth="1.5" />
-            {/* 符頭 */}
-            <ellipse
-              cx={x} cy={y} rx={NR} ry={NY}
-              fill={fill}
-              transform={`rotate(-12,${x},${y})`}
-            />
-            {/* ✓ 完了マーク */}
+            <ellipse cx={x} cy={y} rx={NR} ry={NY} fill={fill}
+              transform={`rotate(-12,${x},${y})`} />
             {isDone && (
-              <text x={x} y={y - LS * 3 - 8} textAnchor="middle" fontSize={13} fill="#16a34a">✓</text>
+              <text x={x} y={y-LS*3-8} textAnchor="middle" fontSize={13} fill="#16a34a">✓</text>
             )}
           </g>
         );
@@ -234,51 +206,36 @@ export function SightReading() {
   const startPhrase = useCallback((lv: SRLevel) => {
     const c = LEVEL_CFG[lv];
     setPhrase(genPhrase(c.pool, c.count));
-    setCursor(0);
-    setClearAnim(false);
-    setShake(false);
-    setStarted(true);
+    setCursor(0); setClearAnim(false); setShake(false); setStarted(true);
   }, []);
 
   const handleLevel = (lv: SRLevel) => {
-    setLevel(lv);
-    setStarted(false);
-    setPhrase([]);
-    setCursor(0);
+    setLevel(lv); setStarted(false); setPhrase([]); setCursor(0);
     setStats({ correct: 0, total: 0, phrases: 0 });
-  };
-
-  const triggerShake = () => {
-    setShake(true);
-    setTimeout(() => setShake(false), 420);
   };
 
   const handleTap = (letter: string) => {
     if (!started || clearAnim || cursor >= phrase.length) return;
-
     const correctNote = phrase[cursor];
     const isCorrect   = correctNote[0] === letter;
 
     if (isCorrect) {
-      playKey(correctNote);
+      playKey(correctNote); // ✓ 正解音を即鳴らす
       const nextCursor = cursor + 1;
       setStats(s => ({ ...s, correct: s.correct + 1, total: s.total + 1 }));
       setCursor(nextCursor);
-
       if (nextCursor >= phrase.length) {
-        // フレーズクリア！
         setClearAnim(true);
         setStats(s => ({ ...s, phrases: s.phrases + 1 }));
-        setTimeout(() => {
-          startPhrase(level);
-        }, 1200);
+        setTimeout(() => startPhrase(level), 1200);
       }
     } else {
-      // 不正解：押したボタンのノートを鳴らす
+      // 不正解：押した音を鳴らしてシェイク（エラー音なし）
       const wrongKey = letter + (cfg.clef === 'treble' ? '4' : '3');
       playKey(wrongKey);
       setStats(s => ({ ...s, total: s.total + 1 }));
-      triggerShake();
+      setShake(true);
+      setTimeout(() => setShake(false), 420);
     }
   };
 
@@ -288,32 +245,28 @@ export function SightReading() {
     <div className="pb-32">
       <style>{`
         @keyframes sr-shake {
-          0%,100% { transform: translateX(0); }
-          20%,60%  { transform: translateX(-7px); }
-          40%,80%  { transform: translateX(7px); }
+          0%,100%{transform:translateX(0)}
+          20%,60%{transform:translateX(-7px)}
+          40%,80%{transform:translateX(7px)}
         }
-        .sr-shake { animation: sr-shake 0.42s ease; }
+        .sr-shake{animation:sr-shake 0.42s ease}
         @keyframes sr-clear {
-          0%   { opacity:0; transform:scale(0.7); }
-          40%  { opacity:1; transform:scale(1.08); }
-          80%  { opacity:1; transform:scale(1.0); }
-          100% { opacity:0; transform:scale(1.0); }
+          0%  {opacity:0;transform:scale(0.7)}
+          40% {opacity:1;transform:scale(1.08)}
+          80% {opacity:1;transform:scale(1.0)}
+          100%{opacity:0;transform:scale(1.0)}
         }
-        .sr-clear { animation: sr-clear 1.2s ease forwards; }
+        .sr-clear{animation:sr-clear 1.2s ease forwards}
       `}</style>
 
-      {/* ── レベル選択 ── */}
       <div className="grid grid-cols-4 gap-1.5 mb-4">
         {([1,2,3,4] as SRLevel[]).map(lv => (
-          <button
-            key={lv}
-            onClick={() => handleLevel(lv)}
+          <button key={lv} onClick={() => handleLevel(lv)}
             className={`py-2 rounded-xl text-xs font-bold border-2 transition-all ${
               level === lv
                 ? 'bg-purple-600 text-white border-purple-600'
                 : 'bg-gray-800 text-gray-300 border-gray-700'
-            }`}
-          >
+            }`}>
             <div>Lv{lv}</div>
             <div className="text-[10px] font-normal opacity-80">
               {lv <= 2 ? 'ト音' : 'ヘ音'} {LEVEL_CFG[lv].count}音
@@ -322,7 +275,6 @@ export function SightReading() {
         ))}
       </div>
 
-      {/* ── スコア ── */}
       {started && (
         <div className="flex gap-3 justify-center mb-3 text-sm text-gray-300">
           <span>フレーズ <strong className="text-yellow-400">{stats.phrases}</strong></span>
@@ -331,7 +283,6 @@ export function SightReading() {
         </div>
       )}
 
-      {/* ── 五線譜 ── */}
       {started && phrase.length > 0 ? (
         <div className="relative mb-4">
           <div className={shake ? 'sr-shake' : ''}>
@@ -339,8 +290,6 @@ export function SightReading() {
               <PhraseStaff phrase={phrase} cursor={cursor} clef={cfg.clef} />
             </div>
           </div>
-
-          {/* Clear アニメーション */}
           {clearAnim && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="sr-clear bg-green-500 text-white text-3xl font-black px-8 py-4 rounded-2xl shadow-2xl">
@@ -359,29 +308,22 @@ export function SightReading() {
         </div>
       )}
 
-      {/* ── スタート / 次のフレーズ ── */}
       {!started ? (
-        <button
-          onClick={() => startPhrase(level)}
-          className="w-full py-4 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-bold text-lg rounded-2xl mb-4 transition-colors"
-        >
+        <button onClick={() => startPhrase(level)}
+          className="w-full py-4 bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-bold text-lg rounded-2xl mb-4 transition-colors">
           スタート 🎵
         </button>
       ) : !clearAnim && cursor < phrase.length ? (
-        <button
-          onClick={() => startPhrase(level)}
-          className="w-full py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-xl mb-4 transition-colors"
-        >
+        <button onClick={() => startPhrase(level)}
+          className="w-full py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-xl mb-4 transition-colors">
           フレーズを変える
         </button>
       ) : null}
 
-      {/* ── 音名ボタン ── */}
       {started && (
         <div className="grid grid-cols-7 gap-1.5">
           {NOTE_BTNS.map(letter => (
-            <button
-              key={letter}
+            <button key={letter}
               onPointerDown={() => handleTap(letter)}
               disabled={clearAnim || cursor >= phrase.length}
               className={`py-3 rounded-xl font-bold text-sm transition-all select-none
@@ -389,8 +331,7 @@ export function SightReading() {
                   ? 'bg-gray-800 text-gray-600 opacity-40'
                   : 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-800 active:scale-95 text-white shadow-md'
                 }`}
-              style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'none' }}
-            >
+              style={{ WebkitTapHighlightColor:'transparent', touchAction:'none' }}>
               <div>{letter}</div>
               <div className="text-[9px] font-normal opacity-75">{NOTE_JP[letter]}</div>
             </button>
@@ -398,7 +339,6 @@ export function SightReading() {
         </div>
       )}
 
-      {/* ── ヒント ── */}
       {started && cursor < phrase.length && !clearAnim && (
         <p className="text-center text-gray-500 text-xs mt-3">
           カーソル（オレンジ）の音符の音名をタップ

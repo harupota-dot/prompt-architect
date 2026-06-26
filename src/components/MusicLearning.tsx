@@ -8,106 +8,109 @@ import { ChordReading }  from './ChordReading';
 // 型定義
 // ─────────────────────────────────────────────────────────────────
 type NoteName  = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
-type ChordName = 'C' | 'Dm' | 'Em' | 'F' | 'G' | 'Am';
 type Clef      = 'treble' | 'bass';
 type LernMode  = 'kiso' | 'note' | 'advanced' | 'chord' | 'sightread' | 'chordread';
 type ClefOpt   = 'treble' | 'bass' | 'mix';
-type KisoDir   = 'ja-en' | 'en-ja';   // ← 基礎モード出題方向
+type KisoDir   = 'ja-en' | 'en-ja';
 type Verdict   = 'correct' | 'wrong' | null;
+type ChordLevel = 1 | 2 | 3 | 4;
 
 // ─────────────────────────────────────────────────────────────────
-// 【修正①】周波数テーブル — A4=440Hz / 十二平均律の厳密な値
-//   式: 440 × 2^((MIDI番号 - 69) / 12)
-//   各値はピアノ鍵盤の正確なピッチと完全に一致します。
+// 周波数テーブル
 // ─────────────────────────────────────────────────────────────────
 function mf(midi: number): number { return 440 * Math.pow(2, (midi - 69) / 12); }
 
 const FREQ: Record<string, number> = {
-  // ヘ音記号域（MIDI 36〜59）
-  C2: mf(36),  // 65.406 Hz
-  D2: mf(38),  // 73.416
-  E2: mf(40),  // 82.407
-  F2: mf(41),  // 87.307
-  G2: mf(43),  // 98.000
-  A2: mf(45),  // 110.000
-  B2: mf(47),  // 123.471
-  C3: mf(48),  // 130.813
-  D3: mf(50),  // 146.832
-  E3: mf(52),  // 164.814
-  F3: mf(53),  // 174.614
-  G3: mf(55),  // 196.000
-  A3: mf(57),  // 220.000
-  B3: mf(59),  // 246.942
-  // 中央オクターブ（MIDI 60〜71）
-  C4: mf(60),  // 261.626
-  D4: mf(62),  // 293.665
-  E4: mf(64),  // 329.628
-  F4: mf(65),  // 349.228
-  G4: mf(67),  // 391.995
-  A4: mf(69),  // 440.000
-  B4: mf(71),  // 493.883
-  // ト音記号域（MIDI 72〜84）
-  C5: mf(72),  // 523.251
-  D5: mf(74),  // 587.330
-  E5: mf(76),  // 659.255
-  F5: mf(77),  // 698.456
-  G5: mf(79),  // 783.991
-  A5: mf(81),  // 880.000
-  B5: mf(83),  // 987.767
-  C6: mf(84),  // 1046.502
+  C2:mf(36), D2:mf(38), E2:mf(40), F2:mf(41), G2:mf(43), A2:mf(45), B2:mf(47),
+  C3:mf(48), D3:mf(50), E3:mf(52), F3:mf(53), G3:mf(55), A3:mf(57), B3:mf(59),
+  C4:mf(60), D4:mf(62), E4:mf(64), F4:mf(65), G4:mf(67), A4:mf(69), B4:mf(71),
+  C5:mf(72), D5:mf(74), E5:mf(76), F5:mf(77), G5:mf(79), A5:mf(81), B5:mf(83),
+  C6:mf(84),
 };
 
-const CHORD_NOTES: Record<ChordName, string[]> = {
-  C:  ['C4','E4','G4'],
-  Dm: ['D4','F4','A4'],
-  Em: ['E4','G4','B4'],
-  F:  ['F4','A4','C5'],
-  G:  ['G4','B4','D5'],
-  Am: ['A4','C5','E5'],
+// ─────────────────────────────────────────────────────────────────
+// コードデータ — 4レベル全種定義
+// ─────────────────────────────────────────────────────────────────
+const CHORD_NOTES: Record<string, string[]> = {
+  // Level 1: 基礎三和音
+  C:     ['C4','E4','G4'],
+  Dm:    ['D4','F4','A4'],
+  Em:    ['E4','G4','B4'],
+  F:     ['F4','A4','C5'],
+  G:     ['G4','B4','D5'],
+  Am:    ['A4','C5','E5'],
+  // Level 2: セブンス
+  Cmaj7: ['C4','E4','G4','B4'],
+  G7:    ['G4','B4','D5','F5'],
+  Am7:   ['A4','C5','E5','G5'],
+  Dm7:   ['D4','F4','A4','C5'],
+  Fmaj7: ['F4','A4','C5','E5'],
+  Em7:   ['E4','G4','B4','D5'],
+  // Level 3: sus / dim / 特殊
+  Csus4: ['C4','F4','G4'],
+  Gsus4: ['G4','C5','D5'],
+  Asus4: ['A4','D5','E5'],
+  Gsus2: ['G4','A4','D5'],
+  Dsus2: ['D4','E4','A4'],
+  Bdim:  ['B4','D5','F5'],
+  Bm7b5: ['B4','D5','F5','A5'],
+  // Level 4: 転回形（スラッシュコード）
+  'C/E':  ['E4','G4','C5'],
+  'G/B':  ['B4','D5','G5'],
+  'F/A':  ['A4','C5','F5'],
+  'Am/C': ['C5','E5','A5'],
+  'Dm/F': ['F4','A4','D5'],
+  'Em/G': ['G4','B4','E5'],
 };
+
+const CHORD_LEVELS: string[][] = [
+  ['C','Dm','Em','F','G','Am'],
+  ['Cmaj7','G7','Am7','Dm7','Fmaj7','Em7'],
+  ['Csus4','Gsus4','Asus4','Bdim','Bm7b5','Gsus2'],
+  ['C/E','G/B','F/A','Am/C','Dm/F','Em/G'],
+];
+
+const CHORD_LEVEL_LABELS = [
+  { title:'基礎三和音', sub:'Triads' },
+  { title:'セブンス',  sub:'7th' },
+  { title:'sus・dim',  sub:'Special' },
+  { title:'転回形',    sub:'Inversions' },
+];
 
 // ─────────────────────────────────────────────────────────────────
 // SVG 五線譜 定数
 // ─────────────────────────────────────────────────────────────────
 const LS         = 14;
-const L1         = 106;          // 第1線（最下線）の Y 座標
-const TOP_LINE_Y = L1 - LS * 4; // 50 — 第5線（最上線）
+const L1         = 106;
+const TOP_LINE_Y = L1 - LS * 4;
 const NR         = 6.5;
 const NY         = 4.7;
 const NOTE_X     = 175;
 
-// ト音記号：音名→Y座標（E3〜C6）
 const TY: Record<string, number> = {
-  E3: L1 + LS*3.5, F3: L1 + LS*3,   G3: L1 + LS*2.5,
-  A3: L1 + LS*2,   B3: L1 + LS*1.5, C4: L1 + LS,
-  D4: L1 + LS/2,   E4: L1,          F4: L1 - LS/2,
-  G4: L1 - LS,     A4: L1 - LS*1.5, B4: L1 - LS*2,
-  C5: L1 - LS*2.5, D5: L1 - LS*3,   E5: L1 - LS*3.5,
-  F5: L1 - LS*4,   G5: L1 - LS*4.5, A5: L1 - LS*5,
-  B5: L1 - LS*5.5, C6: L1 - LS*6,
+  E3:L1+LS*3.5, F3:L1+LS*3,   G3:L1+LS*2.5,
+  A3:L1+LS*2,   B3:L1+LS*1.5, C4:L1+LS,
+  D4:L1+LS/2,   E4:L1,        F4:L1-LS/2,
+  G4:L1-LS,     A4:L1-LS*1.5, B4:L1-LS*2,
+  C5:L1-LS*2.5, D5:L1-LS*3,   E5:L1-LS*3.5,
+  F5:L1-LS*4,   G5:L1-LS*4.5, A5:L1-LS*5,
+  B5:L1-LS*5.5, C6:L1-LS*6,
 };
-
-// ヘ音記号：音名→Y座標（C2〜E4）
 const BY: Record<string, number> = {
-  C2: L1 + LS*2,   D2: L1 + LS*1.5, E2: L1 + LS,
-  F2: L1 + LS/2,   G2: L1,          A2: L1 - LS/2,
-  B2: L1 - LS,     C3: L1 - LS*1.5, D3: L1 - LS*2,
-  E3: L1 - LS*2.5, F3: L1 - LS*3,   G3: L1 - LS*3.5,
-  A3: L1 - LS*4,   B3: L1 - LS*4.5, C4: L1 - LS*5,
-  D4: L1 - LS*5.5, E4: L1 - LS*6,
+  C2:L1+LS*2,   D2:L1+LS*1.5, E2:L1+LS,
+  F2:L1+LS/2,   G2:L1,        A2:L1-LS/2,
+  B2:L1-LS,     C3:L1-LS*1.5, D3:L1-LS*2,
+  E3:L1-LS*2.5, F3:L1-LS*3,   G3:L1-LS*3.5,
+  A3:L1-LS*4,   B3:L1-LS*4.5, C4:L1-LS*5,
+  D4:L1-LS*5.5, E4:L1-LS*6,
 };
 
-// 加線計算（系統的アルゴリズム）
 function getLedgers(noteKey: string, clef: Clef): number[] {
-  const yMap = clef === 'treble' ? TY : BY;
-  const y = yMap[noteKey];
+  const y = (clef === 'treble' ? TY : BY)[noteKey];
   if (y === undefined) return [];
   const lines: number[] = [];
-  if (y > L1) {
-    for (let ly = L1 + LS; ly <= y; ly += LS) lines.push(ly);
-  } else if (y < TOP_LINE_Y) {
-    for (let ly = TOP_LINE_Y - LS; ly >= y; ly -= LS) lines.push(ly);
-  }
+  if (y > L1) { for (let ly = L1+LS; ly <= y; ly += LS) lines.push(ly); }
+  else if (y < TOP_LINE_Y) { for (let ly = TOP_LINE_Y-LS; ly >= y; ly -= LS) lines.push(ly); }
   return lines;
 }
 
@@ -125,8 +128,7 @@ const TREBLE_ADV: NQ[] = mk(
 const BASS_ADV:   NQ[] = mk(
   ['C2','D2','E2','F2','G2','A2','B2', 'D4','E4'], 'bass');
 
-const CHORD_LIST: ChordName[] = ['C','Dm','Em','F','G','Am'];
-const NOTE_BTNS:  NoteName[]  = ['C','D','E','F','G','A','B'];
+const NOTE_BTNS: NoteName[] = ['C','D','E','F','G','A','B'];
 const NOTE_JP: Record<NoteName, string> = {
   C:'ド', D:'レ', E:'ミ', F:'ファ', G:'ソ', A:'ラ', B:'シ',
 };
@@ -141,97 +143,111 @@ function pickKiso(prev?: NoteName): NoteName {
   const arr = KISO_LIST.filter(n => n !== prev);
   return arr[Math.floor(Math.random() * arr.length)];
 }
-function pickChord(prev?: ChordName): ChordName {
-  const arr = CHORD_LIST.filter(c => c !== prev);
-  return arr[Math.floor(Math.random() * arr.length)];
+function pickChordFrom(pool: string[], prev?: string): string {
+  const arr = pool.filter(c => c !== prev);
+  const src = arr.length > 0 ? arr : pool;
+  return src[Math.floor(Math.random() * src.length)];
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 【修正②③】Web Audio エンジン — ピッチ完全修正 + 音色改善
-//
-//   旧コード: o2.frequency.value = freq * 2.003
-//     → 0.15% sharp なので beat frequency（うなり）が生じ音が "ズレて" 聴こえた
-//
-//   新コード: 純正倍音（1f / 2f / 3f / 4f）を sine/triangle でミックス
-//     → 正確なピッチ + ピアノに近いアタック感の音色
+// Web Audio — モジュールレベルシングルトン
 // ─────────────────────────────────────────────────────────────────
 type WinAC = typeof window & { webkitAudioContext?: typeof AudioContext };
+let _ac: AudioContext | null = null;
 
-function makeAC(): AudioContext | null {
+function getAC(): AudioContext | null {
   if (typeof window === 'undefined') return null;
-  try {
-    const AC = window.AudioContext ?? (window as WinAC).webkitAudioContext;
-    return AC ? new AC() : null;
-  } catch { return null; }
+  if (!_ac || _ac.state === 'closed') {
+    try {
+      const AC = window.AudioContext ?? (window as WinAC).webkitAudioContext;
+      _ac = AC ? new AC() : null;
+    } catch { return null; }
+  }
+  return _ac;
 }
 
-/** 単一周波数の発音（ピアノ風 ADSR エンベロープ） */
+/**
+ * ピアノ風トーン: 5倍音 + 微デチューン + ADSR エンベロープ
+ * dest を指定することでコンプレッサー経由の出力に対応
+ */
 function tone(
   ctx: AudioContext,
   freq: number,
   t: number,
   dur = 1.6,
-  masterVol = 0.38,
+  vol = 0.34,
+  dest: AudioNode = ctx.destination,
 ): void {
-  // 倍音構成: [倍率, 相対音量, 波形]
-  // 1f:triangle 100%, 2f:triangle 50%, 3f:sine 20%, 4f:sine 8%
-  const harmonics: [number, number, OscillatorType][] = [
-    [1, 1.00, 'triangle'],
-    [2, 0.50, 'triangle'],
-    [3, 0.20, 'sine'],
-    [4, 0.08, 'sine'],
+  const master = ctx.createGain();
+  master.connect(dest);
+
+  // ピアノ ADSR
+  master.gain.setValueAtTime(0, t);
+  master.gain.linearRampToValueAtTime(vol,         t + 0.007);   // アタック 7ms
+  master.gain.exponentialRampToValueAtTime(vol * 0.50, t + 0.14); // ディケイ
+  master.gain.exponentialRampToValueAtTime(vol * 0.22, t + 0.65); // サスティン
+  master.gain.exponentialRampToValueAtTime(0.0001,  t + dur);    // リリース
+
+  // 倍音: [倍率, 相対音量, 波形, デチューン(セント)]
+  const harmonics: [number, number, OscillatorType, number][] = [
+    [1,    1.00, 'triangle',  0   ],  // 基音
+    [2,    0.42, 'triangle',  1.5 ],  // 2倍音: +1.5セント（温かみ）
+    [3,    0.16, 'sine',     -1.0 ],  // 3倍音
+    [4,    0.06, 'sine',      2.0 ],  // 4倍音
+    [5,    0.02, 'sine',     -1.5 ],  // 5倍音（鍵盤の明るさ）
   ];
 
-  // マスターゲイン（全倍音の合算音量を一括制御）
-  const master = ctx.createGain();
-  master.connect(ctx.destination);
-  // ピアノ風 ADSR: 素早いアタック → 素早いディケイ → サスティン → リリース
-  master.gain.setValueAtTime(0, t);
-  master.gain.linearRampToValueAtTime(masterVol,       t + 0.006); // Attack  6ms
-  master.gain.exponentialRampToValueAtTime(masterVol * 0.45, t + 0.18);  // Decay
-  master.gain.exponentialRampToValueAtTime(masterVol * 0.20, t + 0.80);  // Sustain
-  master.gain.exponentialRampToValueAtTime(0.0001,     t + dur);         // Release
-
-  harmonics.forEach(([mult, relVol, waveType]) => {
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.connect(g);
-    g.connect(master);
-    o.type = waveType;
-    o.frequency.value = freq * mult;  // ← 純正倍音（2.003 ではなく 2.000 等）
-    // 倍音ごとに減衰速度を変える（高次倍音は早く消える）
+  harmonics.forEach(([mult, relVol, waveType, detuneC]) => {
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    osc.connect(g); g.connect(master);
+    osc.type          = waveType;
+    osc.frequency.value = freq * mult;
+    osc.detune.value  = detuneC;
     g.gain.setValueAtTime(relVol, t);
-    g.gain.exponentialRampToValueAtTime(relVol * 0.01, t + dur * (1 / mult));
-    o.start(t);
-    o.stop(t + dur + 0.05);
+    g.gain.exponentialRampToValueAtTime(
+      Math.max(relVol * 0.004, 0.0001),
+      t + dur / Math.sqrt(mult),
+    );
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
   });
 }
 
 function playNoteAudio(noteKey: string): void {
-  const f = FREQ[noteKey];
-  if (!f) return;
-  const ctx = makeAC();
-  if (!ctx) return;
+  const f = FREQ[noteKey]; if (!f) return;
+  const ctx = getAC(); if (!ctx) return;
   try {
     const go = () => tone(ctx, f, ctx.currentTime);
-    if (ctx.state === 'suspended') { ctx.resume().then(go).catch(() => {}); } else { go(); }
+    ctx.state === 'suspended' ? ctx.resume().then(go).catch(() => {}) : go();
   } catch { /* ignore */ }
 }
 
-function playChordAudio(chord: ChordName): void {
-  const ctx = makeAC();
-  if (!ctx) return;
+function playChordAudio(chord: string): void {
+  const notes = CHORD_NOTES[chord]; if (!notes) return;
+  const ctx = getAC(); if (!ctx) return;
   try {
-    const go = () => CHORD_NOTES[chord].forEach(n => {
-      const f = FREQ[n];
-      if (f) tone(ctx, f, ctx.currentTime, 2.0, 0.28);
-    });
-    if (ctx.state === 'suspended') { ctx.resume().then(go).catch(() => {}); } else { go(); }
+    const go = () => {
+      // コンプレッサーで音割れ防止（和音再生時）
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -14;
+      comp.knee.value      = 6;
+      comp.ratio.value     = 5;
+      comp.attack.value    = 0.003;
+      comp.release.value   = 0.15;
+      comp.connect(ctx.destination);
+      const n = notes.length;
+      notes.forEach(k => {
+        const f = FREQ[k]; if (!f) return;
+        tone(ctx, f, ctx.currentTime, 2.0, 0.28 / Math.sqrt(n), comp);
+      });
+    };
+    ctx.state === 'suspended' ? ctx.resume().then(go).catch(() => {}) : go();
   } catch { /* ignore */ }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// NoteStaff — SVG 五線譜描画（動的 viewBox で加線域も完全対応）
+// NoteStaff — SVG 五線譜描画
 // ─────────────────────────────────────────────────────────────────
 function NoteStaff({ notes, clef }: { notes: string[]; clef: Clef }) {
   const yMap    = clef === 'treble' ? TY : BY;
@@ -250,35 +266,27 @@ function NoteStaff({ notes, clef }: { notes: string[]; clef: Clef }) {
   const stemStart = stemUp ? bottomY : topY;
   const stemEnd   = stemUp ? topY - LS * 3.5 : bottomY + LS * 3.5;
 
-  const PAD  = 22;
+  const PAD     = 22;
   const vTop    = Math.min(topY    - PAD, TOP_LINE_Y - PAD);
   const vBottom = Math.max(bottomY + PAD, L1         + PAD);
   const vH      = vBottom - vTop;
 
   return (
-    <svg
-      viewBox={`0 ${vTop} 280 ${vH}`}
-      className="w-full"
-      style={{ userSelect: 'none' }}
-      aria-hidden="true"
-    >
+    <svg viewBox={`0 ${vTop} 280 ${vH}`} className="w-full"
+      style={{ userSelect:'none' }} aria-hidden="true">
       {staffYs.map(y => (
-        <line key={y} x1={40} x2={266} y1={y} y2={y}
-          stroke="#374151" strokeWidth="1.2" />
+        <line key={y} x1={40} x2={266} y1={y} y2={y} stroke="#374151" strokeWidth="1.2" />
       ))}
       <text
         x={clef === 'treble' ? 13 : 18}
-        y={clef === 'treble' ? L1 + 12 : L1 - LS*1.5 + 4}
+        y={clef === 'treble' ? L1+12 : L1-LS*1.5+4}
         fontSize={clef === 'treble' ? 72 : 46}
         fill="#374151"
         fontFamily="'Segoe UI Symbol','Segoe UI Historic','Apple Symbols','FreeSerif','Times New Roman',serif"
-      >
-        {clef === 'treble' ? '𝄞' : '𝄢'}
-      </text>
+      >{clef === 'treble' ? '𝄞' : '𝄢'}</text>
       {[...ledgerSet].map(y => (
         <line key={`l${y}`}
-          x1={NOTE_X - NR * 2.6} x2={NOTE_X + NR * 2.6}
-          y1={y} y2={y}
+          x1={NOTE_X-NR*2.6} x2={NOTE_X+NR*2.6} y1={y} y2={y}
           stroke="#374151" strokeWidth="1.4" />
       ))}
       {notes.length > 0 && (
@@ -286,14 +294,10 @@ function NoteStaff({ notes, clef }: { notes: string[]; clef: Clef }) {
           stroke="#1f2937" strokeWidth="1.5" />
       )}
       {notes.map(n => {
-        const y = yMap[n];
-        if (y === undefined) return null;
+        const y = yMap[n]; if (y === undefined) return null;
         return (
-          <ellipse key={n}
-            cx={NOTE_X} cy={y} rx={NR} ry={NY}
-            fill="#1f2937"
-            transform={`rotate(-12,${NOTE_X},${y})`}
-          />
+          <ellipse key={n} cx={NOTE_X} cy={y} rx={NR} ry={NY}
+            fill="#1f2937" transform={`rotate(-12,${NOTE_X},${y})`} />
         );
       })}
     </svg>
@@ -304,29 +308,30 @@ function NoteStaff({ notes, clef }: { notes: string[]; clef: Clef }) {
 // MusicLearning — メインコンポーネント
 // ─────────────────────────────────────────────────────────────────
 const MODE_TABS: { id: LernMode; label: string; sub: string }[] = [
-  { id: 'kiso',     label: '🎹 基礎',   sub: 'ドレミ・音名' },
-  { id: 'note',     label: '🎵 標準',   sub: '五線譜' },
-  { id: 'advanced', label: '🌟 発展',   sub: '加線' },
-  { id: 'chord',    label: '🎼 コード', sub: '和音' },
-  { id: 'sightread', label: '👁️ スラスラ',   sub: 'Sight-Read' },
-  { id: 'chordread', label: '🎹 コード読み', sub: 'Chords' },
+  { id:'kiso',      label:'🎹 基礎',    sub:'ドレミ・音名' },
+  { id:'note',      label:'🎵 標準',    sub:'五線譜' },
+  { id:'advanced',  label:'🌟 発展',    sub:'加線' },
+  { id:'chord',     label:'🎼 コード',  sub:'和音' },
+  { id:'sightread', label:'👁️ スラスラ',   sub:'Sight-Read' },
+  { id:'chordread', label:'🎹 コード読み', sub:'Chords' },
 ];
 
 export function MusicLearning() {
-  const [mode,     setMode]     = useState<LernMode>('kiso');
-  const [kisoDir,  setKisoDir]  = useState<KisoDir>('ja-en');
-  const [clefOpt,  setClefOpt]  = useState<ClefOpt>('treble');
-  const [question, setQuestion] = useState<NQ | null>(null);
-  const [kisoQ,    setKisoQ]    = useState<NoteName | null>(null);
-  const [chord,    setChord]    = useState<ChordName | null>(null);
-  const [verdict,  setVerdict]  = useState<Verdict>(null);
-  const [locked,   setLocked]   = useState(false);
-  const [correct,  setCorrect]  = useState(0);
-  const [total,    setTotal]    = useState(0);
+  const [mode,       setMode]       = useState<LernMode>('kiso');
+  const [kisoDir,    setKisoDir]    = useState<KisoDir>('ja-en');
+  const [clefOpt,    setClefOpt]    = useState<ClefOpt>('treble');
+  const [question,   setQuestion]   = useState<NQ | null>(null);
+  const [kisoQ,      setKisoQ]      = useState<NoteName | null>(null);
+  const [chord,      setChord]      = useState<string | null>(null);
+  const [chordLevel, setChordLevel] = useState<ChordLevel>(1);
+  const [verdict,    setVerdict]    = useState<Verdict>(null);
+  const [locked,     setLocked]     = useState(false);
+  const [correct,    setCorrect]    = useState(0);
+  const [total,      setTotal]      = useState(0);
 
   const prevNoteRef  = useRef<string | undefined>(undefined);
   const prevKisoRef  = useRef<NoteName | undefined>(undefined);
-  const prevChordRef = useRef<ChordName | undefined>(undefined);
+  const prevChordRef = useRef<string | undefined>(undefined);
 
   const getPool = useCallback((): NQ[] => {
     if (mode === 'note') {
@@ -341,39 +346,41 @@ export function MusicLearning() {
 
   const newQuestion = useCallback(() => {
     if (mode === 'sightread' || mode === 'chordread') return;
-    setVerdict(null);
-    setLocked(false);
+    setVerdict(null); setLocked(false);
 
     if (mode === 'kiso') {
       const n = pickKiso(prevKisoRef.current);
       prevKisoRef.current = n;
       setKisoQ(n); setQuestion(null); setChord(null);
       setTimeout(() => playNoteAudio(`${n}4`), 180);
-
     } else if (mode === 'chord') {
-      const c = pickChord(prevChordRef.current);
+      const pool = CHORD_LEVELS[chordLevel - 1];
+      const c = pickChordFrom(pool, prevChordRef.current);
       prevChordRef.current = c;
       setChord(c); setQuestion(null); setKisoQ(null);
       setTimeout(() => playChordAudio(c), 180);
-
     } else {
       const q = pickNQ(getPool(), prevNoteRef.current);
       prevNoteRef.current = q.note;
       setQuestion(q); setKisoQ(null); setChord(null);
       setTimeout(() => playNoteAudio(q.note), 180);
     }
-  }, [mode, getPool]);
+  }, [mode, chordLevel, getPool]);
 
   useEffect(() => { newQuestion(); }, [newQuestion]);
 
-  // ── 単音・基礎 回答 ───────────────────────────────────────────
+  // chordLevel 変更時にリセット
+  const handleChordLevel = (lv: ChordLevel) => {
+    prevChordRef.current = undefined;
+    setChordLevel(lv);
+    setCorrect(0); setTotal(0);
+  };
+
   const handleNoteAnswer = useCallback((name: NoteName) => {
     const target = mode === 'kiso' ? kisoQ : question?.name;
     if (!target) return;
-
-    playNoteAudio(`${name}4`); // 押したボタンの音を正確なピッチで鳴らす
+    playNoteAudio(`${name}4`); // タップ即座に発音（鍵盤として機能）
     const ok = name === target;
-
     if (!locked) {
       setTotal(t => t + 1);
       if (ok) {
@@ -389,12 +396,10 @@ export function MusicLearning() {
     }
   }, [mode, kisoQ, question, locked, newQuestion]);
 
-  // ── 和音 回答 ─────────────────────────────────────────────────
-  const handleChordAnswer = useCallback((c: ChordName) => {
+  const handleChordAnswer = useCallback((c: string) => {
     if (!chord) return;
-    playChordAudio(c);
+    playChordAudio(c); // タップ即座に和音発音
     const ok = c === chord;
-
     if (!locked) {
       setTotal(t => t + 1);
       if (ok) {
@@ -416,10 +421,10 @@ export function MusicLearning() {
     if (mode === 'chord' && chord)                            playChordAudio(chord);
   };
 
-  const staffNotes = (mode === 'note' || mode === 'advanced') && question
+  const staffNotes  = (mode === 'note' || mode === 'advanced') && question
     ? [question.note]
     : mode === 'chord' && chord
-    ? CHORD_NOTES[chord]
+    ? (CHORD_NOTES[chord] ?? [])
     : [];
   const staffClef   = mode === 'chord' ? 'treble' : (question?.clef ?? 'treble');
   const accuracy    = total > 0 ? Math.round((correct / total) * 100) : 0;
@@ -429,14 +434,10 @@ export function MusicLearning() {
   const changeMode = (m: LernMode) => { setMode(m); setCorrect(0); setTotal(0); };
   const changeClef = (c: ClefOpt)  => { setClefOpt(c); setCorrect(0); setTotal(0); };
 
-  // 基礎モード：出題テキストとボタンラベルを方向で切り替え
-  const kisoDisplayText  = kisoQ
-    ? (kisoDir === 'ja-en' ? NOTE_JP[kisoQ] : kisoQ)
-    : '…';
-  const kisoDisplaySub   = kisoDir === 'ja-en'
+  const kisoDisplayText = kisoQ ? (kisoDir === 'ja-en' ? NOTE_JP[kisoQ] : kisoQ) : '…';
+  const kisoDisplaySub  = kisoDir === 'ja-en'
     ? 'このカタカナのアルファベット名は？'
     : 'この音名をカタカナで選んでください';
-  // ボタンは常に NoteName で答えるが、ラベルだけ変える
   const kisoBtnLabel = (name: NoteName) =>
     kisoDir === 'ja-en' ? name : NOTE_JP[name];
 
@@ -449,8 +450,8 @@ export function MusicLearning() {
           <button key={id} onClick={() => changeMode(id)}
             className={`py-2 px-0 rounded-xl text-center transition-all ${
               mode === id
-                ? id === 'sightread'  ? 'bg-purple-600 text-white shadow-md'
-                  : id === 'chordread'  ? 'bg-teal-600 text-white shadow-md'
+                ? id === 'sightread' ? 'bg-purple-600 text-white shadow-md'
+                  : id === 'chordread' ? 'bg-teal-600 text-white shadow-md'
                   : 'bg-indigo-600 text-white shadow-md'
                 : 'text-gray-500 hover:text-gray-700'
             }`}>
@@ -462,46 +463,55 @@ export function MusicLearning() {
         ))}
       </div>
 
-      {/* ── スラスラ読みモード ── */}
       {mode === 'sightread' && <SightReading />}
-
-      {/* ── コード読みモード ── */}
       {mode === 'chordread' && <ChordReading />}
 
-      {/* ── 以下は sightread / chordread 以外のモードでのみ表示 ── */}
       {mode !== 'sightread' && mode !== 'chordread' && <>
 
-      {/* ── 基礎モード：出題方向トグル ── */}
+      {/* ── 基礎モード：出題方向 ── */}
       {mode === 'kiso' && (
         <div className="flex gap-1.5">
           <button onClick={() => { setKisoDir('ja-en'); setCorrect(0); setTotal(0); }}
             className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-              kisoDir === 'ja-en'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              kisoDir === 'ja-en' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}>
             ド→C（カタカナ→英語）
           </button>
           <button onClick={() => { setKisoDir('en-ja'); setCorrect(0); setTotal(0); }}
             className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-              kisoDir === 'en-ja'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              kisoDir === 'en-ja' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}>
             C→ド（英語→カタカナ）
           </button>
         </div>
       )}
 
-      {/* ── 音部記号選択（標準・発展モード時のみ） ── */}
+      {/* ── コードモード：レベル選択 ── */}
+      {mode === 'chord' && (
+        <div className="grid grid-cols-4 gap-1">
+          {([1,2,3,4] as ChordLevel[]).map(lv => (
+            <button key={lv} onClick={() => handleChordLevel(lv)}
+              className={`py-2 rounded-xl text-center border-2 transition-all ${
+                chordLevel === lv
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
+              }`}>
+              <div className="text-[10px] font-black leading-tight">Lv{lv}</div>
+              <div className={`text-[8px] leading-none mt-0.5 ${chordLevel === lv ? 'text-white/70' : 'text-gray-400'}`}>
+                {CHORD_LEVEL_LABELS[lv-1].sub}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── 音部記号選択（標準・発展モード） ── */}
       {showClef && (
         <div className="flex gap-1.5">
-          {(['treble', 'bass', 'mix'] as ClefOpt[]).map(c => (
+          {(['treble','bass','mix'] as ClefOpt[]).map(c => (
             <button key={c} onClick={() => changeClef(c)}
               className={`flex-1 py-1.5 rounded-xl text-[10px] font-bold transition-all ${
-                clefOpt === c
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                clefOpt === c ? 'bg-red-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}>
               {c === 'treble' ? '𝄞 ト音記号' : c === 'bass' ? '𝄢 ヘ音記号' : '🔀 ミックス'}
             </button>
@@ -517,9 +527,7 @@ export function MusicLearning() {
             <p className="text-xs text-gray-400 font-medium">{kisoDisplaySub}</p>
             <span className={`font-black text-indigo-700 leading-none select-none ${
               kisoDir === 'ja-en' ? 'text-7xl' : 'text-8xl tracking-widest'
-            }`}>
-              {kisoDisplayText}
-            </span>
+            }`}>{kisoDisplayText}</span>
           </div>
           {verdict && (
             <div className={`absolute inset-0 flex items-center justify-end pr-8 pointer-events-none ${
@@ -546,7 +554,7 @@ export function MusicLearning() {
         </div>
       )}
 
-      {/* ── 再生 / ロック中メッセージ ── */}
+      {/* ── 再生 ── */}
       <div className="flex items-center gap-3 min-h-[32px]">
         <button onClick={replay}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-all">
@@ -561,11 +569,8 @@ export function MusicLearning() {
 
       {/* ── 回答ボタン ── */}
       {isNoteMode ? (
-        /* 基礎・標準・発展 */
         <div className={`grid gap-1.5 ${
-          mode === 'kiso' && kisoDir === 'en-ja'
-            ? 'grid-cols-4'   // カタカナは少し広め（ファ/ソが長い）
-            : 'grid-cols-7'
+          mode === 'kiso' && kisoDir === 'en-ja' ? 'grid-cols-4' : 'grid-cols-7'
         }`}>
           {NOTE_BTNS.map(name => {
             const target   = mode === 'kiso' ? kisoQ : question?.name;
@@ -583,7 +588,6 @@ export function MusicLearning() {
                   : 'bg-white border border-gray-200 text-gray-700 hover:bg-indigo-50 hover:border-indigo-300 shadow-sm'
                 }`}>
                 <span className="block leading-tight">{kisoBtnLabel(name)}</span>
-                {/* 英語ボタン時はカタカナをサブラベルとして表示（標準・発展モード） */}
                 {mode !== 'kiso' && (
                   <span className="block text-[8px] font-medium opacity-50 leading-none mt-0.5">
                     {NOTE_JP[name]}
@@ -594,16 +598,16 @@ export function MusicLearning() {
           })}
         </div>
       ) : (
-        /* コード */
+        /* コード回答ボタン — レベル別プール */
         <div className="grid grid-cols-3 gap-2">
-          {CHORD_LIST.map(c => {
+          {CHORD_LEVELS[chordLevel - 1].map(c => {
             const isAnswer = chord === c;
             const showHint = verdict === 'wrong'   && isAnswer;
             const showWin  = verdict === 'correct' && isAnswer;
             return (
               <button key={c} onClick={() => handleChordAnswer(c)}
                 disabled={verdict === 'correct'}
-                className={`py-3 rounded-xl font-black text-base transition-all active:scale-95 ${
+                className={`py-3 rounded-xl font-black text-sm transition-all active:scale-95 ${
                   showHint ? 'bg-emerald-100 text-emerald-700 ring-2 ring-emerald-400'
                   : showWin  ? 'bg-emerald-500 text-white shadow-md'
                   : 'bg-white border border-gray-200 text-gray-700 hover:bg-purple-50 hover:border-purple-300 shadow-sm'
@@ -628,8 +632,7 @@ export function MusicLearning() {
         </button>
       </div>
 
-      </> /* end mode !== 'rhythm' */}
-
+      </>}
     </div>
   );
 }

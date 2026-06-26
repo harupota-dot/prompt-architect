@@ -2,15 +2,15 @@
 
 import { useState, useCallback } from 'react';
 
-// ─── 定数（MusicLearning と完全一致）──────────────────────────────
+// ─── 定数 ─────────────────────────────────────────────────────────
 const LS         = 14;
 const L1         = 106;
-const TOP_LINE_Y = L1 - LS * 4;  // 50
+const TOP_LINE_Y = L1 - LS * 4;
 const NR         = 6.5;
 const NY         = 4.7;
 
 type WinAC  = typeof window & { webkitAudioContext?: typeof AudioContext };
-type CRLevel = 1 | 2 | 3;
+type CRLevel = 1 | 2 | 3 | 4;
 type Verdict = 'correct' | 'wrong' | null;
 
 // ─── 音名→Y座標（ト音記号）────────────────────────────────────────
@@ -18,66 +18,105 @@ const TY: Record<string, number> = {
   C4:L1+LS,     D4:L1+LS/2,   E4:L1,        F4:L1-LS/2,
   G4:L1-LS,     A4:L1-LS*1.5, B4:L1-LS*2,   C5:L1-LS*2.5,
   D5:L1-LS*3,   E5:L1-LS*3.5, F5:L1-LS*4,   G5:L1-LS*4.5,
+  A5:L1-LS*5,
 };
 
 // ─── コード定義 ───────────────────────────────────────────────────
 const CHORD_NOTES: Record<string, string[]> = {
+  // Lv1: 主要三和音
   C:    ['C4','E4','G4'],
-  Dm:   ['D4','F4','A4'],
-  Em:   ['E4','G4','B4'],
   F:    ['F4','A4','C5'],
   G:    ['G4','B4','D5'],
+  // Lv2: ダイアトニック7コード（セブンス）
+  Dm:   ['D4','F4','A4'],
+  Em:   ['E4','G4','B4'],
   Am:   ['A4','C5','E5'],
   Bdim: ['B4','D5','F5'],
+  Cmaj7:['C4','E4','G4','B4'],
+  G7:   ['G4','B4','D5','F5'],
+  Am7:  ['A4','C5','E5','G5'],
+  Dm7:  ['D4','F4','A4','C5'],
+  Fmaj7:['F4','A4','C5','E5'],
+  Em7:  ['E4','G4','B4','D5'],
+  // Lv3: sus・dim
+  Csus4:['C4','F4','G4'],
+  Gsus4:['G4','C5','D5'],
+  Asus4:['A4','D5','E5'],
+  Gsus2:['G4','A4','D5'],
+  Bm7b5:['B4','D5','F5','A5'],
+  // Lv4: 転回形
+  'C/E': ['E4','G4','C5'],
+  'G/B': ['B4','D5','G5'],
+  'F/A': ['A4','C5','F5'],
+  'Am/C':['C5','E5','A5'],
+  'Dm/F':['F4','A4','D5'],
+  'Em/G':['G4','B4','E5'],
 };
+
 const CHORD_JP: Record<string, string> = {
-  C:'ドミソ', Dm:'レファラ', Em:'ミソシ', F:'ファラド', G:'ソシレ', Am:'ラドミ', Bdim:'シレファ',
+  C:'ドミソ', F:'ファラド', G:'ソシレ',
+  Dm:'レファラ', Em:'ミソシ', Am:'ラドミ', Bdim:'シレファ',
+  Cmaj7:'ドミソシ', G7:'ソシレファ', Am7:'ラドミソ',
+  Dm7:'レファラド', Fmaj7:'ファラドミ', Em7:'ミソシレ',
+  Csus4:'ドファソ', Gsus4:'ソドレ', Asus4:'ラレミ',
+  Gsus2:'ソラレ', Bm7b5:'シレファラ',
+  'C/E':'ミソド', 'G/B':'シレソ', 'F/A':'ラドファ',
+  'Am/C':'ドミラ', 'Dm/F':'ファラレ', 'Em/G':'ソシミ',
 };
 
 const LEVEL_POOL: Record<CRLevel, string[]> = {
   1: ['C','F','G'],
-  2: ['C','Dm','Em','F','G','Am','Bdim'],
-  3: ['C','Dm','Em','F','G','Am','Bdim'],
+  2: ['Cmaj7','G7','Am7','Dm7','Fmaj7','Em7'],
+  3: ['Csus4','Gsus4','Asus4','Gsus2','Bm7b5'],
+  4: ['C/E','G/B','F/A','Am/C','Dm/F','Em/G'],
 };
 
 // ─── 周波数テーブル ───────────────────────────────────────────────
 function mf(midi: number): number { return 440 * Math.pow(2, (midi - 69) / 12); }
 const FREQ: Record<string, number> = {
   C4:mf(60), D4:mf(62), E4:mf(64), F4:mf(65), G4:mf(67), A4:mf(69), B4:mf(71),
-  C5:mf(72), D5:mf(74), E5:mf(76), F5:mf(77), G5:mf(79),
+  C5:mf(72), D5:mf(74), E5:mf(76), F5:mf(77), G5:mf(79), A5:mf(81),
 };
 
-// ─── 音声エンジン ────────────────────────────────────────────────
-const acRef: { current: AudioContext | null } = { current: null };
+// ─── 音声エンジン — モジュールレベルシングルトン ─────────────────
+let _ac: AudioContext | null = null;
 
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
-  if (!acRef.current) {
+  if (!_ac || _ac.state === 'closed') {
     try {
       const AC = window.AudioContext ?? (window as WinAC).webkitAudioContext;
-      if (AC) acRef.current = new AC();
+      if (AC) _ac = new AC();
     } catch { /* ignore */ }
   }
-  return acRef.current;
+  return _ac;
 }
 
-function tone(ctx: AudioContext, freq: number, t: number, dur = 1.8, vol = 0.28): void {
+/** ピアノ風トーン: 5倍音 + 微デチューン + ADSR。destを指定するとコンプレッサー経由にできる */
+function tone(ctx: AudioContext, freq: number, t: number, dur = 1.8, vol = 0.30, dest: AudioNode = ctx.destination): void {
   const master = ctx.createGain();
-  master.connect(ctx.destination);
+  master.connect(dest);
+
   master.gain.setValueAtTime(0, t);
-  master.gain.linearRampToValueAtTime(vol,       t + 0.006);
-  master.gain.exponentialRampToValueAtTime(vol * 0.45, t + 0.18);
-  master.gain.exponentialRampToValueAtTime(vol * 0.18, t + 0.90);
-  master.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  ([
-    [1, 1.00, 'triangle'], [2, 0.50, 'triangle'],
-    [3, 0.20, 'sine'],     [4, 0.08, 'sine'],
-  ] as [number, number, OscillatorType][]).forEach(([mult, relVol, type]) => {
+  master.gain.linearRampToValueAtTime(vol,         t + 0.007);
+  master.gain.exponentialRampToValueAtTime(vol * 0.50, t + 0.14);
+  master.gain.exponentialRampToValueAtTime(vol * 0.22, t + 0.65);
+  master.gain.exponentialRampToValueAtTime(0.0001,  t + dur);
+
+  const harmonics: [number, number, OscillatorType, number][] = [
+    [1, 1.00, 'triangle',  0   ],
+    [2, 0.42, 'triangle',  1.5 ],
+    [3, 0.16, 'sine',     -1.0 ],
+    [4, 0.06, 'sine',      2.0 ],
+    [5, 0.02, 'sine',     -1.5 ],
+  ];
+
+  harmonics.forEach(([mult, relVol, waveType, detuneC]) => {
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.connect(g); g.connect(master);
-    o.type = type; o.frequency.value = freq * mult;
+    o.type = waveType; o.frequency.value = freq * mult; o.detune.value = detuneC;
     g.gain.setValueAtTime(relVol, t);
-    g.gain.exponentialRampToValueAtTime(relVol * 0.01, t + dur / mult);
+    g.gain.exponentialRampToValueAtTime(Math.max(relVol * 0.004, 0.0001), t + dur / Math.sqrt(mult));
     o.start(t); o.stop(t + dur + 0.05);
   });
 }
@@ -86,8 +125,14 @@ function playChord(chordName: string): void {
   const notes = CHORD_NOTES[chordName]; if (!notes) return;
   const ctx = getCtx(); if (!ctx) return;
   try {
-    const go = () => notes.forEach(n => { const f = FREQ[n]; if (f) tone(ctx, f, ctx.currentTime); });
-    if (ctx.state === 'suspended') { ctx.resume().then(go).catch(() => {}); } else { go(); }
+    const go = () => {
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.ratio.value = 5;
+      comp.connect(ctx.destination);
+      const n = notes.length;
+      notes.forEach(k => { const f = FREQ[k]; if (f) tone(ctx, f, ctx.currentTime, 2.0, 0.28 / Math.sqrt(n), comp); });
+    };
+    ctx.state === 'suspended' ? ctx.resume().then(go).catch(() => {}) : go();
   } catch { /* ignore */ }
 }
 
@@ -100,13 +145,11 @@ function getLedgers(noteKey: string): number[] {
   return lines;
 }
 
-// 音符の X オフセット計算（隣接する 2 度の音程は符頭をずらす）
 function xOffsets(notes: string[], stemUp: boolean): number[] {
   const ys  = notes.map(n => TY[n] ?? L1);
   const off = new Array(notes.length).fill(0);
   for (let i = 0; i < ys.length - 1; i++) {
     if (Math.abs(ys[i] - ys[i + 1]) === LS / 2) {
-      // 符幹が上向き → 高音（低 Y）を右へ; 下向き → 低音（高 Y）を右へ
       stemUp ? (off[i + 1] = NR * 2) : (off[i] = NR * 2);
     }
   }
@@ -114,11 +157,9 @@ function xOffsets(notes: string[], stemUp: boolean): number[] {
 }
 
 // ─── 単一コード SVG ──────────────────────────────────────────────
-function ChordStaff({
-  chordName, verdict, cx = 175,
-}: { chordName: string; verdict?: Verdict; cx?: number }) {
-  const notes = CHORD_NOTES[chordName] ?? [];
-  const ys    = notes.map(n => TY[n] ?? L1);
+function ChordStaff({ chordName, verdict, cx = 175 }: { chordName: string; verdict?: Verdict; cx?: number }) {
+  const notes   = CHORD_NOTES[chordName] ?? [];
+  const ys      = notes.map(n => TY[n] ?? L1);
   const staffYs = [L1, L1-LS, L1-LS*2, L1-LS*3, L1-LS*4];
   const middleY = L1 - LS * 2;
 
@@ -130,7 +171,6 @@ function ChordStaff({
 
   const ledgerSet = new Set<number>();
   notes.forEach(n => getLedgers(n).forEach(y => ledgerSet.add(y)));
-
   const off = xOffsets(notes, stemUp);
 
   const PAD     = 22;
@@ -142,46 +182,27 @@ function ChordStaff({
 
   return (
     <svg viewBox={`0 ${vTop} 280 ${vH}`} className="w-full" aria-hidden="true">
-      {/* 五線 */}
       {staffYs.map(y => (
         <line key={y} x1={40} x2={240} y1={y} y2={y} stroke="#374151" strokeWidth="1.2" />
       ))}
-      {/* 音部記号 */}
-      <text
-        x={13} y={L1 + 12}
-        fontSize={72} fill="#374151"
-        fontFamily="'Segoe UI Symbol','Segoe UI Historic','Apple Symbols','FreeSerif','Times New Roman',serif"
-      >𝄞</text>
-      {/* 加線 */}
+      <text x={13} y={L1 + 12} fontSize={72} fill="#374151"
+        fontFamily="'Segoe UI Symbol','Segoe UI Historic','Apple Symbols','FreeSerif','Times New Roman',serif">𝄞</text>
       {[...ledgerSet].map(y => (
-        <line key={y}
-          x1={cx - NR * 2.6} x2={cx + NR * 2.6}
-          y1={y} y2={y} stroke="#1f2937" strokeWidth="1.4"
-        />
+        <line key={y} x1={cx - NR * 2.6} x2={cx + NR * 2.6} y1={y} y2={y} stroke="#1f2937" strokeWidth="1.4" />
       ))}
-      {/* 符幹 */}
       {notes.length > 0 && (
-        <line x1={stemX} y1={stemUp ? bottomY : topY} x2={stemX} y2={stemEnd}
-          stroke="#1f2937" strokeWidth="1.5" />
+        <line x1={stemX} y1={stemUp ? bottomY : topY} x2={stemX} y2={stemEnd} stroke="#1f2937" strokeWidth="1.5" />
       )}
-      {/* 符頭 */}
       {notes.map((n, i) => {
-        const y  = TY[n] ?? L1;
+        const y = TY[n] ?? L1;
         const dx = off[i];
         return (
-          <ellipse key={n}
-            cx={cx + dx} cy={y} rx={NR} ry={NY}
-            fill="#1f2937"
-            transform={`rotate(-12,${cx + dx},${y})`}
-          />
+          <ellipse key={n} cx={cx + dx} cy={y} rx={NR} ry={NY}
+            fill="#1f2937" transform={`rotate(-12,${cx + dx},${y})`} />
         );
       })}
-      {/* ○ / ✕ */}
       {verdictColor && (
-        <text
-          x={cx} y={vTop + 18}
-          textAnchor="middle" fontSize={26} fill={verdictColor} fontWeight="bold"
-        >
+        <text x={cx} y={vTop + 18} textAnchor="middle" fontSize={26} fill={verdictColor} fontWeight="bold">
           {verdict === 'correct' ? '○' : '✕'}
         </text>
       )}
@@ -189,7 +210,7 @@ function ChordStaff({
   );
 }
 
-// ─── コード進行 SVG（Level 3）────────────────────────────────────
+// ─── コード進行 SVG（Level 3・4）────────────────────────────────
 const PROG_XS = [110, 205, 300, 395];
 
 function ProgressionStaff({ prog, cursor }: { prog: string[]; cursor: number }) {
@@ -204,16 +225,11 @@ function ProgressionStaff({ prog, cursor }: { prog: string[]; cursor: number }) 
 
   return (
     <svg viewBox={`0 ${vTop} 520 ${vH}`} className="w-full" aria-hidden="true">
-      {/* 五線 */}
       {staffYs.map(y => (
         <line key={y} x1={40} x2={490} y1={y} y2={y} stroke="#374151" strokeWidth="1.2" />
       ))}
-      {/* 音部記号 */}
-      <text
-        x={5} y={L1 + 12}
-        fontSize={72} fill="#374151"
-        fontFamily="'Segoe UI Symbol','Segoe UI Historic','Apple Symbols','FreeSerif','Times New Roman',serif"
-      >𝄞</text>
+      <text x={5} y={L1 + 12} fontSize={72} fill="#374151"
+        fontFamily="'Segoe UI Symbol','Segoe UI Historic','Apple Symbols','FreeSerif','Times New Roman',serif">𝄞</text>
 
       {prog.map((chordName, ci) => {
         const notes   = CHORD_NOTES[chordName] ?? [];
@@ -233,36 +249,24 @@ function ProgressionStaff({ prog, cursor }: { prog: string[]; cursor: number }) 
 
         return (
           <g key={ci}>
-            {/* カーソル背景 */}
             {isCur && (
               <rect x={cx - 22} y={vTop} width={44} height={vH}
                 fill="#fed7aa" opacity={0.45} rx={6} />
             )}
-            {/* コードネームラベル */}
             <text x={cx} y={vTop + 14} textAnchor="middle" fontSize={11} fontWeight="bold"
               fill={isDone ? '#16a34a' : isCur ? '#ea580c' : '#6b7280'}>
               {isDone ? '✓' : chordName}
             </text>
-            {/* 加線 */}
             {[...ledgers].map(y => (
-              <line key={y}
-                x1={cx - NR * 2.6} x2={cx + NR * 2.6}
-                y1={y} y2={y} stroke={fill} strokeWidth="1.4"
-              />
+              <line key={y} x1={cx - NR * 2.6} x2={cx + NR * 2.6} y1={y} y2={y} stroke={fill} strokeWidth="1.4" />
             ))}
-            {/* 符幹 */}
-            <line x1={stemX} y1={stemUp ? bottomY : topY} x2={stemX} y2={stemEnd}
-              stroke={fill} strokeWidth="1.5" />
-            {/* 符頭 */}
+            <line x1={stemX} y1={stemUp ? bottomY : topY} x2={stemX} y2={stemEnd} stroke={fill} strokeWidth="1.5" />
             {notes.map((n, i) => {
               const y = TY[n] ?? L1;
               const dx = off[i];
               return (
-                <ellipse key={n}
-                  cx={cx + dx} cy={y} rx={NR} ry={NY}
-                  fill={fill}
-                  transform={`rotate(-12,${cx + dx},${y})`}
-                />
+                <ellipse key={n} cx={cx + dx} cy={y} rx={NR} ry={NY}
+                  fill={fill} transform={`rotate(-12,${cx + dx},${y})`} />
               );
             })}
           </g>
@@ -279,8 +283,7 @@ function genProg(pool: string[]): string[] {
   for (let i = 0; i < 4; i++) {
     const cands = pool.filter(c => c !== prev);
     const c = cands[Math.floor(Math.random() * cands.length)];
-    result.push(c);
-    prev = c;
+    result.push(c); prev = c;
   }
   return result;
 }
@@ -291,6 +294,14 @@ function pickFrom(pool: string[], prev: string): string {
   return src[Math.floor(Math.random() * src.length)];
 }
 
+// ─── レベル設定 ──────────────────────────────────────────────────
+const LEVEL_LABEL: Record<CRLevel, { title: string; sub: string }> = {
+  1: { title: '主要三和音', sub: 'Triads' },
+  2: { title: 'セブンス',  sub: '7th Chords' },
+  3: { title: 'sus・dim',  sub: 'Special' },
+  4: { title: '転回形',    sub: 'Inversions' },
+};
+
 // ─── メインコンポーネント ────────────────────────────────────────
 export function ChordReading() {
   const [level,      setLevel]      = useState<CRLevel>(1);
@@ -299,27 +310,25 @@ export function ChordReading() {
   const [locked,     setLocked]     = useState(false);
   const [stats,      setStats]      = useState({ correct: 0, total: 0 });
 
-  // Level 3 progression
+  // Level 3・4 progression
   const [prog,       setProg]       = useState<string[]>([]);
   const [cursor,     setCursor]     = useState(0);
   const [shake,      setShake]      = useState(false);
   const [clearAnim,  setClearAnim]  = useState(false);
   const [progActive, setProgActive] = useState(false);
 
-  const pool = LEVEL_POOL[level];
+  const pool   = LEVEL_POOL[level];
+  const isProgMode = level === 3 || level === 4;
 
   // ── Level 1 / 2 ──────────────────────────────────────────────
   const nextQuestion = useCallback((prevQ = '') => {
     setQuestion(pickFrom(LEVEL_POOL[level] as string[], prevQ));
-    setVerdict(null);
-    setLocked(false);
+    setVerdict(null); setLocked(false);
   }, [level]);
 
   const startQuiz = () => {
     const q = pickFrom(LEVEL_POOL[level] as string[], '');
-    setQuestion(q);
-    setVerdict(null);
-    setLocked(false);
+    setQuestion(q); setVerdict(null); setLocked(false);
     setStats({ correct: 0, total: 0 });
   };
 
@@ -340,14 +349,11 @@ export function ChordReading() {
 
   const unlock = () => { if (locked) { setLocked(false); setVerdict(null); } };
 
-  // ── Level 3 ──────────────────────────────────────────────────
+  // ── Level 3 / 4 ──────────────────────────────────────────────
   const startProg = () => {
-    setProg(genProg(pool));
-    setCursor(0);
-    setClearAnim(false);
-    setShake(false);
-    setProgActive(true);
-    setStats({ correct: 0, total: 0 });
+    setProg(genProg(pool)); setCursor(0);
+    setClearAnim(false); setShake(false);
+    setProgActive(true); setStats({ correct: 0, total: 0 });
   };
 
   const handleProgAnswer = (chosen: string) => {
@@ -360,34 +366,23 @@ export function ChordReading() {
       setCursor(next);
       if (next >= prog.length) {
         setClearAnim(true);
-        setTimeout(() => {
-          setProg(genProg(pool));
-          setCursor(0);
-          setClearAnim(false);
-        }, 1300);
+        setTimeout(() => { setProg(genProg(pool)); setCursor(0); setClearAnim(false); }, 1300);
       }
     } else {
       playChord(chosen);
       setStats(s => ({ ...s, total: s.total + 1 }));
-      setShake(true);
-      setTimeout(() => setShake(false), 420);
+      setShake(true); setTimeout(() => setShake(false), 420);
     }
   };
 
   const changeLevel = (lv: CRLevel) => {
-    setLevel(lv);
-    setQuestion('');
-    setVerdict(null);
-    setLocked(false);
-    setProg([]);
-    setProgActive(false);
-    setCursor(0);
+    setLevel(lv); setQuestion(''); setVerdict(null); setLocked(false);
+    setProg([]); setProgActive(false); setCursor(0);
     setStats({ correct: 0, total: 0 });
   };
 
-  const acc = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+  const acc  = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
   const btns = pool;
-  const isL3 = level === 3;
 
   return (
     <div className="pb-32">
@@ -408,8 +403,8 @@ export function ChordReading() {
       `}</style>
 
       {/* ── レベル選択 ── */}
-      <div className="grid grid-cols-3 gap-1.5 mb-4">
-        {([1, 2, 3] as CRLevel[]).map(lv => (
+      <div className="grid grid-cols-4 gap-1.5 mb-4">
+        {([1, 2, 3, 4] as CRLevel[]).map(lv => (
           <button key={lv} onClick={() => changeLevel(lv)}
             className={`py-2 rounded-xl text-xs font-bold border-2 transition-all ${
               level === lv
@@ -417,9 +412,7 @@ export function ChordReading() {
                 : 'bg-gray-800 text-gray-300 border-gray-700'
             }`}>
             <div>Lv{lv}</div>
-            <div className="text-[10px] font-normal opacity-80">
-              {lv === 1 ? '主要三和音' : lv === 2 ? 'ダイアトニック' : 'コード進行'}
-            </div>
+            <div className="text-[10px] font-normal opacity-80">{LEVEL_LABEL[lv].title}</div>
           </button>
         ))}
       </div>
@@ -429,14 +422,14 @@ export function ChordReading() {
         <div className="flex gap-3 justify-center mb-3 text-sm text-gray-300">
           <span>正解率 <strong className="text-green-400">{acc}%</strong></span>
           <span className="text-gray-500">{stats.correct}/{stats.total}</span>
-          {isL3 && progActive && (
+          {isProgMode && progActive && (
             <span>進行 <strong className="text-yellow-400">{cursor}/4</strong></span>
           )}
         </div>
       )}
 
       {/* ── 五線譜エリア ── */}
-      {isL3 ? (
+      {isProgMode ? (
         progActive && prog.length > 0 ? (
           <div className="relative mb-4">
             <div className={shake ? 'cr-shake' : ''}>
@@ -455,16 +448,17 @@ export function ChordReading() {
         ) : (
           <div className="bg-gray-800 rounded-2xl p-6 text-center mb-4">
             <div className="text-5xl mb-3">🎼</div>
-            <div className="text-gray-300 text-sm">コード進行スラスラ読み</div>
-            <div className="text-gray-500 text-xs mt-1">4つのコードを連続で当てよう</div>
+            <div className="text-gray-300 text-sm">
+              {level === 3 ? 'sus・dim コード進行' : '転回形コード進行'}
+            </div>
+            <div className="text-gray-500 text-xs mt-1">
+              {LEVEL_LABEL[level].sub} — 4コードを連続で当てよう
+            </div>
           </div>
         )
       ) : question ? (
         <div className="relative mb-4">
-          <div
-            className="bg-white rounded-2xl px-2 py-2 shadow-lg cursor-pointer"
-            onClick={unlock}
-          >
+          <div className="bg-white rounded-2xl px-2 py-2 shadow-lg cursor-pointer" onClick={unlock}>
             <ChordStaff chordName={question} verdict={verdict} />
           </div>
           {locked && (
@@ -477,40 +471,35 @@ export function ChordReading() {
         <div className="bg-gray-800 rounded-2xl p-6 text-center mb-4">
           <div className="text-5xl mb-3">🎼</div>
           <div className="text-gray-300 text-sm">
-            {level === 1 ? '主要三和音（C・F・G）' : 'ダイアトニックコード 7種類'}
+            {LEVEL_LABEL[level].title}（{LEVEL_LABEL[level].sub}）
           </div>
           <div className="text-gray-500 text-xs mt-1">コードネームを当てよう</div>
         </div>
       )}
 
       {/* ── スタートボタン ── */}
-      {isL3 ? (
-        <button
-          onClick={startProg}
-          className="w-full py-4 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold text-lg rounded-2xl mb-4 transition-colors"
-        >
+      {isProgMode ? (
+        <button onClick={startProg}
+          className="w-full py-4 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold text-lg rounded-2xl mb-4 transition-colors">
           {progActive ? '新しい進行' : 'スタート 🎵'}
         </button>
       ) : !question ? (
-        <button
-          onClick={startQuiz}
-          className="w-full py-4 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold text-lg rounded-2xl mb-4 transition-colors"
-        >
+        <button onClick={startQuiz}
+          className="w-full py-4 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white font-bold text-lg rounded-2xl mb-4 transition-colors">
           スタート 🎵
         </button>
       ) : null}
 
       {/* ── 解答ボタン ── */}
-      {(question || (isL3 && progActive)) && (
-        <div className={`grid gap-2 ${btns.length <= 3 ? 'grid-cols-3' : 'grid-cols-4'}`}>
+      {(question || (isProgMode && progActive)) && (
+        <div className={`grid gap-2 ${btns.length <= 3 ? 'grid-cols-3' : btns.length <= 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
           {btns.map(name => {
             const isCorrectVerdict = verdict === 'correct' && name === question;
             const isWrongVerdict   = verdict === 'wrong'   && locked;
             return (
-              <button
-                key={name}
-                onPointerDown={() => isL3 ? handleProgAnswer(name) : handleAnswer(name)}
-                disabled={isL3 ? (clearAnim || cursor >= prog.length) : false}
+              <button key={name}
+                onPointerDown={() => isProgMode ? handleProgAnswer(name) : handleAnswer(name)}
+                disabled={isProgMode ? (clearAnim || cursor >= prog.length) : false}
                 className={`py-3 rounded-xl font-bold text-sm transition-all select-none ${
                   isCorrectVerdict
                     ? 'bg-green-600 text-white scale-105 shadow-lg'
@@ -518,10 +507,9 @@ export function ChordReading() {
                       ? 'bg-gray-800 text-gray-500 opacity-60'
                       : 'bg-teal-700 hover:bg-teal-600 active:bg-teal-800 active:scale-95 text-white shadow-md'
                 }`}
-                style={{ WebkitTapHighlightColor: 'transparent', touchAction: 'none' }}
-              >
+                style={{ WebkitTapHighlightColor:'transparent', touchAction:'none' }}>
                 <div className="text-base">{name}</div>
-                <div className="text-[9px] font-normal opacity-75">{CHORD_JP[name]}</div>
+                <div className="text-[9px] font-normal opacity-75">{CHORD_JP[name] ?? ''}</div>
               </button>
             );
           })}
@@ -529,9 +517,9 @@ export function ChordReading() {
       )}
 
       {/* ヒント */}
-      {(question || (isL3 && progActive && cursor < prog.length)) && !clearAnim && (
+      {(question || (isProgMode && progActive && cursor < prog.length)) && !clearAnim && (
         <p className="text-center text-gray-500 text-xs mt-3">
-          {isL3 ? 'オレンジのコードのコードネームをタップ' : '五線譜のコードのコードネームを選ぼう'}
+          {isProgMode ? 'オレンジのコードのコードネームをタップ' : '五線譜のコードのコードネームを選ぼう'}
         </p>
       )}
     </div>
