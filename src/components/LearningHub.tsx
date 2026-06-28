@@ -3,18 +3,18 @@
 import { useState } from 'react';
 import { MusicLearning  } from './MusicLearning';
 import { IPALearning    } from './IPALearning';
-import { BabyImmersion  } from './BabyImmersion';
+import { DailyPractice  } from './DailyPractice';
 import { ToeicRoad      } from './ToeicRoad';
 import { WeeklyTest     } from './WeeklyTest';
 
-type Subject = 'music' | 'ipa' | 'immersion' | 'toeic' | 'weekly';
+type Subject = 'music' | 'ipa' | 'practice' | 'toeic' | 'weekly';
 
 const SUBJECTS: { id: Subject; icon: string; label: string; sub: string; color: string }[] = [
-  { id: 'music',     icon: '🎵', label: '音符・コード',   sub: '五線譜の読み方',      color: 'bg-indigo-600' },
-  { id: 'ipa',       icon: '🗣️', label: '発音記号 IPA', sub: '洋楽発音特訓',        color: 'bg-violet-600' },
-  { id: 'immersion', icon: '🌱', label: 'Immersion',    sub: 'English Only',       color: 'bg-blue-600'   },
-  { id: 'toeic',     icon: '📝', label: 'TOEIC Road',   sub: '900点への道',         color: 'bg-rose-600'   },
-  { id: 'weekly',    icon: '📋', label: 'Weekly Test',  sub: '毎週月曜',            color: 'bg-slate-700'  },
+  { id: 'music',    icon: '🎵', label: '音符・コード',  sub: '五線譜の読み方',  color: 'bg-indigo-600' },
+  { id: 'ipa',      icon: '🗣️', label: '発音記号 IPA', sub: '洋楽発音特訓',    color: 'bg-violet-600' },
+  { id: 'practice', icon: '💬', label: 'Practice',    sub: '日常英会話',       color: 'bg-blue-600'   },
+  { id: 'toeic',    icon: '📝', label: 'TOEIC Road',  sub: '900点への道',      color: 'bg-rose-600'   },
+  { id: 'weekly',   icon: '📋', label: 'Weekly Test', sub: '毎週月曜',         color: 'bg-slate-700'  },
 ];
 
 export function LearningHub() {
@@ -44,11 +44,11 @@ export function LearningHub() {
 
       {/* ── コンテンツ ── */}
       <div className="pt-4">
-        {subject === 'music'     && <MusicLearning />}
-        {subject === 'ipa'       && <IPALearning />}
-        {subject === 'immersion' && <BabyImmersion />}
-        {subject === 'toeic'     && <ToeicRoad />}
-        {subject === 'weekly'    && <WeeklyTest />}
+        {subject === 'music'    && <MusicLearning />}
+        {subject === 'ipa'      && <IPALearning />}
+        {subject === 'practice' && <DailyPractice />}
+        {subject === 'toeic'    && <ToeicRoad />}
+        {subject === 'weekly'   && <WeeklyTest />}
       </div>
     </>
   );
