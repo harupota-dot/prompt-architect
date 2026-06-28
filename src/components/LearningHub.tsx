@@ -6,8 +6,9 @@ import { IPALearning    } from './IPALearning';
 import { DailyPractice  } from './DailyPractice';
 import { ToeicRoad      } from './ToeicRoad';
 import { WeeklyTest     } from './WeeklyTest';
+import { HealthDashboard} from './HealthDashboard';
 
-type Subject = 'music' | 'ipa' | 'practice' | 'toeic' | 'weekly';
+type Subject = 'music' | 'ipa' | 'practice' | 'toeic' | 'weekly' | 'health';
 
 const SUBJECTS: { id: Subject; icon: string; label: string; sub: string; color: string }[] = [
   { id: 'music',    icon: '🎵', label: '音符・コード',  sub: '五線譜の読み方',  color: 'bg-indigo-600' },
@@ -15,6 +16,7 @@ const SUBJECTS: { id: Subject; icon: string; label: string; sub: string; color: 
   { id: 'practice', icon: '💬', label: 'Practice',    sub: '日常英会話',       color: 'bg-blue-600'   },
   { id: 'toeic',    icon: '📝', label: 'TOEIC Road',  sub: '900点への道',      color: 'bg-rose-600'   },
   { id: 'weekly',   icon: '📋', label: 'Weekly Test', sub: '毎週月曜',         color: 'bg-slate-700'  },
+  { id: 'health',   icon: '💪', label: 'Health',      sub: '健康管理',         color: 'bg-emerald-600'},
 ];
 
 export function LearningHub() {
@@ -49,6 +51,7 @@ export function LearningHub() {
         {subject === 'practice' && <DailyPractice />}
         {subject === 'toeic'    && <ToeicRoad />}
         {subject === 'weekly'   && <WeeklyTest />}
+        {subject === 'health'   && <HealthDashboard />}
       </div>
     </>
   );
