@@ -6,7 +6,6 @@ import { DashboardHeader }     from '@/components/DashboardHeader';
 import { WeatherWidget }       from '@/components/WeatherWidget';
 import { MusicFactWidget }     from '@/components/MusicFactWidget';
 import { NewsWidget }          from '@/components/NewsWidget';
-import { DailyQuoteSection }   from '@/components/DailyQuoteSection';
 import { TimerWidget }         from '@/components/TimerWidget';
 import { CalendarView }        from '@/components/CalendarView';
 import { CameraScheduleInput } from '@/components/CameraScheduleInput';
@@ -221,7 +220,6 @@ export default function Home() {
         <WeatherWidget />
         <NewsWidget />
         <MusicFactWidget />
-        <DailyQuoteSection />
 
       </main>
     </div>
