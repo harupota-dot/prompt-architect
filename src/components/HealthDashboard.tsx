@@ -26,7 +26,7 @@ interface WeeklyMetric {
   boneMass: number;
   bmr: number;
 }
-interface MealEntry { label: string; kcal: number; }
+interface MealEntry { label: string; kcal: number; food?: string; grams?: number; }
 interface DailyLog  { date: string; meals: MealEntry[]; }
 
 // ─── localStorage keys ────────────────────────────────────────────
@@ -67,6 +67,52 @@ function fmtDate(iso: string) {
   const d = new Date(iso + 'T00:00:00');
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
+
+// ─── 食材データベース（五十音順） ──────────────────────────────────
+interface FoodItem { name: string; baseGrams: number; baseKcal: number; }
+const FOOD_DB: FoodItem[] = [
+  { name: 'アイスクリーム（濃厚/アイス規格）',   baseGrams: 100, baseKcal: 212 },
+  { name: 'アイスクリーム（中間/ラクトアイス）', baseGrams: 100, baseKcal: 224 },
+  { name: 'アイスクリーム（氷/氷菓）',           baseGrams: 100, baseKcal: 100 },
+  { name: 'おにぎり（白飯）',                    baseGrams: 100, baseKcal: 156 },
+  { name: 'カニカマ',                            baseGrams:  75, baseKcal:  67 },
+  { name: 'キャベツ',                            baseGrams:  50, baseKcal:  11 },
+  { name: 'きゅうり',                            baseGrams: 100, baseKcal:  14 },
+  { name: 'さくらんぼ',                          baseGrams:  50, baseKcal:  30 },
+  { name: 'さつまいも',                          baseGrams: 100, baseKcal: 132 },
+  { name: 'さば',                                baseGrams: 100, baseKcal: 246 },
+  { name: '鮭',                                  baseGrams: 100, baseKcal: 133 },
+  { name: 'スイカ',                              baseGrams: 150, baseKcal:  55 },
+  { name: 'スープ（コーンスープ）',              baseGrams: 150, baseKcal:  65 },
+  { name: 'スープ（コンソメスープ）',            baseGrams: 150, baseKcal:  15 },
+  { name: 'スープ（ポタージュ）',                baseGrams: 150, baseKcal:  70 },
+  { name: '卵',                                  baseGrams:  60, baseKcal:  91 },
+  { name: 'たら',                                baseGrams: 100, baseKcal:  77 },
+  { name: 'ちくわ',                              baseGrams:  30, baseKcal:  36 },
+  { name: 'ツナ缶',                              baseGrams:  70, baseKcal:  50 },
+  { name: '豆腐',                                baseGrams: 150, baseKcal: 108 },
+  { name: '豆乳',                                baseGrams: 200, baseKcal:  92 },
+  { name: '豆乳コーヒー',                        baseGrams: 200, baseKcal: 120 },
+  { name: '鶏むね肉',                            baseGrams: 100, baseKcal: 108 },
+  { name: '鶏もも肉',                            baseGrams: 100, baseKcal: 116 },
+  { name: 'ドレッシング（ごま）',                baseGrams:  15, baseKcal:  60 },
+  { name: 'ドレッシング（シーザー）',            baseGrams:  15, baseKcal:  70 },
+  { name: 'ドレッシング（和風）',                baseGrams:  15, baseKcal:  10 },
+  { name: 'ナス',                                baseGrams: 100, baseKcal:  22 },
+  { name: '納豆',                                baseGrams:  50, baseKcal: 100 },
+  { name: 'パイナップル',                        baseGrams: 100, baseKcal:  53 },
+  { name: 'バナナ',                              baseGrams: 100, baseKcal:  86 },
+  { name: 'ぶどう',                              baseGrams: 100, baseKcal:  59 },
+  { name: 'プロセスチーズ',                      baseGrams:  20, baseKcal:  68 },
+  { name: 'ベビーチーズ',                        baseGrams:  15, baseKcal:  50 },
+  { name: 'みそ汁',                              baseGrams: 150, baseKcal:  40 },
+  { name: '麦飯',                                baseGrams: 150, baseKcal: 230 },
+  { name: 'もやし',                              baseGrams: 100, baseKcal:  14 },
+  { name: '焼きのり',                            baseGrams:   3, baseKcal:   6 },
+  { name: 'ヨーグルト（無糖）',                  baseGrams: 100, baseKcal:  62 },
+  { name: 'りんご',                              baseGrams: 150, baseKcal:  85 },
+  { name: 'レタス',                              baseGrams:  50, baseKcal:   6 },
+];
 
 // ─── Sub-tab type ─────────────────────────────────────────────────
 type Tab = 'goals' | 'today' | 'metrics' | 'trends' | 'advice';
@@ -178,44 +224,98 @@ function GoalsTab({ profile, onSave }: { profile: Profile; onSave: (p: Profile) 
 // ═══════════════════════════════════════════════════════════════════
 const MEAL_LABELS = ['朝食', '昼食', '夕食', '間食', 'ドリンク'];
 
+const LABEL_COLOR: Record<string, string> = {
+  '朝食':   'bg-amber-100 text-amber-700',
+  '昼食':   'bg-sky-100 text-sky-700',
+  '夕食':   'bg-indigo-100 text-indigo-700',
+  '間食':   'bg-rose-100 text-rose-700',
+  'ドリンク':'bg-emerald-100 text-emerald-700',
+};
+
 function TodayTab({ profile }: { profile: Profile }) {
   const targetKcal = calcTargetKcal(profile).target;
   const today = todayStr();
 
   const [logs, setLogs] = useState<DailyLog[]>(() => load<DailyLog[]>(LS_DAILY, []));
-  const [label, setLabel] = useState(MEAL_LABELS[0]);
-  const [kcalInput, setKcalInput] = useState('');
 
-  const todayLog = logs.find(l => l.date === today) ?? { date: today, meals: [] };
-  const totalKcal = todayLog.meals.reduce((s, m) => s + m.kcal, 0);
-  const remaining = targetKcal - totalKcal;
-  const pct = Math.min(100, Math.round(totalKcal / targetKcal * 100));
+  // Form state
+  const [timing,    setTiming]    = useState(MEAL_LABELS[0]);
+  const [foodIdx,   setFoodIdx]   = useState<number>(-1);   // -1 = 未選択
+  const [grams,     setGrams]     = useState('');
+  const [search,    setSearch]    = useState('');
+  const [showDrop,  setShowDrop]  = useState(false);
+
+  const todayLog   = logs.find(l => l.date === today) ?? { date: today, meals: [] };
+  const totalKcal  = todayLog.meals.reduce((s, m) => s + m.kcal, 0);
+  const remaining  = targetKcal - totalKcal;
+  const pct        = Math.min(100, Math.round(totalKcal / targetKcal * 100));
+  const barColor   = pct >= 100 ? 'bg-red-500' : pct >= 85 ? 'bg-amber-500' : 'bg-emerald-500';
+
+  // Selected food
+  const food = foodIdx >= 0 ? FOOD_DB[foodIdx] : null;
+
+  // Auto-calc kcal from grams
+  const calcKcal = (): number => {
+    if (!food || !grams) return 0;
+    const g = parseFloat(grams);
+    if (!g || g <= 0) return 0;
+    return Math.round((g / food.baseGrams) * food.baseKcal);
+  };
+  const computedKcal = calcKcal();
+
+  // Food select handler
+  const selectFood = (idx: number) => {
+    setFoodIdx(idx);
+    setGrams(String(FOOD_DB[idx].baseGrams));
+    setSearch(FOOD_DB[idx].name);
+    setShowDrop(false);
+  };
+
+  // Filtered list for search
+  const filtered = search.trim() === '' || (food && search === food.name)
+    ? FOOD_DB.map((f, i) => ({ f, i }))
+    : FOOD_DB.map((f, i) => ({ f, i })).filter(({ f }) =>
+        f.name.toLowerCase().includes(search.toLowerCase()));
 
   const addMeal = () => {
-    const k = parseInt(kcalInput);
-    if (!k || k <= 0) return;
-    const newMeal: MealEntry = { label, kcal: k };
+    if (!food || computedKcal <= 0) return;
+    const newMeal: MealEntry = {
+      label: timing,
+      kcal:  computedKcal,
+      food:  food.name,
+      grams: parseFloat(grams),
+    };
     const updated = logs.filter(l => l.date !== today);
     const newLog: DailyLog = { date: today, meals: [...todayLog.meals, newMeal] };
     const next = [newLog, ...updated];
     setLogs(next);
     save(LS_DAILY, next);
-    setKcalInput('');
+    // reset form
+    setFoodIdx(-1); setGrams(''); setSearch('');
   };
 
   const removeMeal = (i: number) => {
     const newMeals = todayLog.meals.filter((_, idx) => idx !== i);
     const updated  = logs.filter(l => l.date !== today);
-    const next     = [{ date: today, meals: newMeals }, ...updated];
+    const next = [{ date: today, meals: newMeals }, ...updated];
     setLogs(next);
     save(LS_DAILY, next);
   };
 
-  const barColor = pct >= 100 ? 'bg-red-500' : pct >= 85 ? 'bg-amber-500' : 'bg-emerald-500';
+  // Group meals by timing for display
+  const grouped = MEAL_LABELS.map(lbl => ({
+    lbl,
+    meals: todayLog.meals
+      .map((m, i) => ({ m, i }))
+      .filter(({ m }) => m.label === lbl),
+  })).filter(g => g.meals.length > 0);
+
+  const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white';
 
   return (
     <div className="space-y-4">
-      {/* Big progress ring */}
+
+      {/* ── Progress card ── */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-black text-gray-500">今日の摂取カロリー</p>
@@ -232,12 +332,14 @@ function TodayTab({ profile }: { profile: Profile }) {
         <div className="flex justify-between text-xs font-bold">
           <span className="text-gray-500">{pct}% 消費</span>
           <span className={remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}>
-            {remaining >= 0 ? `残り ${remaining.toLocaleString()} kcal` : `超過 ${Math.abs(remaining).toLocaleString()} kcal`}
+            {remaining >= 0
+              ? `残り ${remaining.toLocaleString()} kcal`
+              : `超過 ${Math.abs(remaining).toLocaleString()} kcal`}
           </span>
         </div>
       </div>
 
-      {/* Macro hint */}
+      {/* ── Macro hint ── */}
       <div className="grid grid-cols-3 gap-2">
         {[
           { label: '🥩 タンパク質', gram: Math.round(targetKcal * 0.30 / 4), unit: 'g' },
@@ -246,42 +348,132 @@ function TodayTab({ profile }: { profile: Profile }) {
         ].map(m => (
           <div key={m.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
             <p className="text-[10px] text-gray-500">{m.label}</p>
-            <p className="text-lg font-black text-gray-800">{m.gram}<span className="text-xs font-normal">{m.unit}</span></p>
+            <p className="text-lg font-black text-gray-800">
+              {m.gram}<span className="text-xs font-normal">{m.unit}</span>
+            </p>
           </div>
         ))}
       </div>
 
-      {/* Add meal */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4">
-        <p className="text-xs font-black text-gray-500 mb-3">食事を追加</p>
-        <div className="flex gap-2 mb-3">
-          <select value={label} onChange={e => setLabel(e.target.value)}
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400">
-            {MEAL_LABELS.map(l => <option key={l}>{l}</option>)}
-          </select>
-          <input type="number" placeholder="kcal" value={kcalInput}
-            onChange={e => setKcalInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addMeal()}
-            className="w-24 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 text-right" />
-          <button onClick={addMeal}
-            className="bg-indigo-600 text-white rounded-xl px-4 font-black text-sm active:scale-95 transition-transform">
-            +
-          </button>
-        </div>
-        {todayLog.meals.length === 0 ? (
-          <p className="text-xs text-gray-300 text-center py-3">まだ記録がありません</p>
-        ) : (
-          <div className="space-y-1.5">
-            {todayLog.meals.map((m, i) => (
-              <div key={i} className="flex items-center justify-between text-sm px-1">
-                <span className="text-gray-600 font-bold">{m.label}</span>
-                <span className="text-gray-500">{m.kcal} kcal</span>
-                <button onClick={() => removeMeal(i)} className="text-gray-300 text-lg leading-none active:text-red-400">×</button>
-              </div>
+      {/* ── Add meal form ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+        <p className="text-xs font-black text-gray-500">食事を追加</p>
+
+        {/* 1. Timing */}
+        <div>
+          <label className="text-[11px] font-bold text-gray-400 mb-1 block">① タイミング</label>
+          <div className="flex gap-1.5 flex-wrap">
+            {MEAL_LABELS.map(l => (
+              <button key={l} onClick={() => setTiming(l)}
+                className={`px-3 py-1.5 rounded-full text-xs font-black border-2 transition-all ${
+                  timing === l
+                    ? `${LABEL_COLOR[l]} border-current`
+                    : 'bg-gray-50 text-gray-400 border-gray-100'
+                }`}>
+                {l}
+              </button>
             ))}
           </div>
-        )}
+        </div>
+
+        {/* 2. Food search */}
+        <div className="relative">
+          <label className="text-[11px] font-bold text-gray-400 mb-1 block">② 食材（五十音順）</label>
+          <input
+            type="text"
+            value={search}
+            placeholder="食材名を入力して絞り込み…"
+            className={inputCls}
+            onChange={e => { setSearch(e.target.value); setShowDrop(true); setFoodIdx(-1); setGrams(''); }}
+            onFocus={() => setShowDrop(true)}
+          />
+          {showDrop && (
+            <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">該当なし</p>
+              ) : filtered.map(({ f, i }) => (
+                <button key={i}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
+                  onMouseDown={e => { e.preventDefault(); selectFood(i); }}>
+                  <span className="font-medium text-gray-800">{f.name}</span>
+                  <span className="text-xs text-gray-400 flex-shrink-0">{f.baseGrams}g / {f.baseKcal}kcal</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 3. Grams + 4. Kcal display */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[11px] font-bold text-gray-400 mb-1 block">③ グラム数 (g)</label>
+            <input
+              type="number"
+              value={grams}
+              placeholder={food ? String(food.baseGrams) : '—'}
+              disabled={!food}
+              onChange={e => setGrams(e.target.value)}
+              className={`${inputCls} text-right disabled:bg-gray-50 disabled:text-gray-300`}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold text-gray-400 mb-1 block">④ カロリー (kcal)</label>
+            <div className={`${inputCls} text-right font-black cursor-default select-none ${
+              computedKcal > 0 ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'bg-gray-50 text-gray-300'
+            }`}>
+              {computedKcal > 0 ? computedKcal : '—'}
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Add button */}
+        <button
+          onClick={addMeal}
+          disabled={!food || computedKcal <= 0}
+          className="w-full py-3 rounded-2xl font-black text-sm bg-indigo-600 text-white disabled:bg-gray-100 disabled:text-gray-300 active:scale-[0.98] transition-all">
+          追加する
+        </button>
       </div>
+
+      {/* ── Meal log grouped by timing ── */}
+      {grouped.length === 0 ? (
+        <p className="text-xs text-gray-300 text-center py-4">まだ記録がありません</p>
+      ) : (
+        <div className="space-y-2">
+          {grouped.map(({ lbl, meals }) => {
+            const groupTotal = meals.reduce((s, { m }) => s + m.kcal, 0);
+            return (
+              <div key={lbl} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <div className={`px-4 py-2 flex items-center justify-between ${LABEL_COLOR[lbl]}`}>
+                  <span className="text-xs font-black">{lbl}</span>
+                  <span className="text-xs font-bold">{groupTotal} kcal</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {meals.map(({ m, i }) => (
+                    <div key={i} className="flex items-center gap-2 px-4 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-800 truncate">
+                          {m.food ?? m.label}
+                        </p>
+                        {m.grams != null && (
+                          <p className="text-[10px] text-gray-400">{m.grams}g</p>
+                        )}
+                      </div>
+                      <span className="text-sm font-black text-gray-600 flex-shrink-0">
+                        {m.kcal} kcal
+                      </span>
+                      <button onClick={() => removeMeal(i)}
+                        className="text-gray-300 text-xl leading-none active:text-red-400 flex-shrink-0">
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
