@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { addTask, today as todayStr } from '@/lib/shared-store';
 import { DashboardHeader }     from '@/components/DashboardHeader';
-import { WeatherWidget }       from '@/components/WeatherWidget';
 import { MusicFactWidget }     from '@/components/MusicFactWidget';
 import { NewsWidget }          from '@/components/NewsWidget';
 import { TimerWidget }         from '@/components/TimerWidget';
@@ -273,7 +272,6 @@ export default function Home() {
             ダッシュボードウィジェット群
         ════════════════════════════════════════ */}
         <DashboardHeader />
-        <WeatherWidget />
         <NewsWidget />
         <MusicFactWidget />
 
