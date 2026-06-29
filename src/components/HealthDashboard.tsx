@@ -32,9 +32,13 @@ interface DailyLog  { date: string; meals: MealEntry[]; }
 interface ExerciseLog {
   date: string;
   steps: number;
+  intervalWalkMins: number;
   workoutDone: boolean;
   pushupsDone: boolean;
   crunchesDone: boolean;
+  bonusBurpees: boolean;
+  bonusMountain: boolean;
+  bonusPlank: boolean;
 }
 
 // ─── localStorage keys ────────────────────────────────────────────
@@ -298,7 +302,9 @@ function TodayTab({ profile }: { profile: Profile }) {
   // ── Exercise state ──
   const [exLogs, setExLogs] = useState<ExerciseLog[]>(() => load<ExerciseLog[]>(LS_EXERCISE, []));
   const todayEx: ExerciseLog = exLogs.find(e => e.date === today) ?? {
-    date: today, steps: 0, workoutDone: false, pushupsDone: false, crunchesDone: false,
+    date: today, steps: 0, intervalWalkMins: 0,
+    workoutDone: false, pushupsDone: false, crunchesDone: false,
+    bonusBurpees: false, bonusMountain: false, bonusPlank: false,
   };
 
   const updateEx = (patch: Partial<ExerciseLog>) => {
@@ -312,12 +318,17 @@ function TodayTab({ profile }: { profile: Profile }) {
   const todayLog  = logs.find(l => l.date === today) ?? { date: today, meals: [] };
   const foodKcal  = todayLog.meals.reduce((s, m) => s + m.kcal, 0);
 
-  const weight    = profile.currentWeight || 60;
-  const stepsKcal = Math.round(todayEx.steps * weight * 0.0005);
-  const exKcal    =
-    (todayEx.workoutDone  ? workout.kcal : 0) +
-    (todayEx.pushupsDone  ? 30           : 0) +
-    (todayEx.crunchesDone ? 20           : 0);
+  const weight         = profile.currentWeight || 60;
+  const stepsKcal      = Math.round(todayEx.steps * weight * 0.0005);
+  const intervalKcal   = Math.round((todayEx.intervalWalkMins || 0) * weight * 0.08);
+  const exKcal         =
+    (todayEx.workoutDone   ? workout.kcal : 0) +
+    (todayEx.pushupsDone   ? 30           : 0) +
+    (todayEx.crunchesDone  ? 20           : 0) +
+    (todayEx.bonusBurpees  ? 80           : 0) +
+    (todayEx.bonusMountain ? 60           : 0) +
+    (todayEx.bonusPlank    ? 40           : 0) +
+    intervalKcal;
 
   const remaining = targetKcal + stepsKcal + exKcal - foodKcal;
   const success   = remaining >= 0;
@@ -425,9 +436,15 @@ function TodayTab({ profile }: { profile: Profile }) {
             <span className="opacity-80">🚶 歩数消費 ({todayEx.steps.toLocaleString()}歩)</span>
             <span className="font-black">+{stepsKcal} kcal</span>
           </div>
+          {intervalKcal > 0 && (
+            <div className="flex justify-between">
+              <span className="opacity-80">🏃 インターバル速歩 ({todayEx.intervalWalkMins}分)</span>
+              <span className="font-black">+{intervalKcal} kcal</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="opacity-80">💪 運動消費</span>
-            <span className="font-black">+{exKcal} kcal</span>
+            <span className="font-black">+{exKcal - intervalKcal} kcal</span>
           </div>
           <div className="flex justify-between border-t border-white/20 pt-1.5">
             <span className="opacity-80">🍽️ 食事摂取</span>
@@ -473,6 +490,32 @@ function TodayTab({ profile }: { profile: Profile }) {
         )}
       </div>
 
+      {/* ══ インターバル速歩 ══ */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🏃</span>
+          <div className="flex-1">
+            <p className="text-sm font-black text-gray-800">インターバル速歩</p>
+            <p className="text-[10px] text-gray-400">通常歩行の約1.5〜2倍消費（分数 × 体重 × 0.08）</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={todayEx.intervalWalkMins || ''}
+              placeholder="0"
+              onChange={e => updateEx({ intervalWalkMins: Math.max(0, parseInt(e.target.value) || 0) })}
+              className="w-20 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:border-emerald-400"
+            />
+            <span className="text-xs text-gray-400 font-bold w-6">分</span>
+          </div>
+        </div>
+        {intervalKcal > 0 && (
+          <p className="text-xs text-emerald-600 font-black mt-2 text-right">
+            消費 {intervalKcal} kcal
+          </p>
+        )}
+      </div>
+
       {/* ══ 今日のワークアウト ══ */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 px-1">
@@ -507,6 +550,30 @@ function TodayTab({ profile }: { profile: Profile }) {
           desc={CRUNCH_DESC} kcalBurn={20} done={todayEx.crunchesDone}
           onToggle={() => updateEx({ crunchesDone: !todayEx.crunchesDone })}
         />
+      </div>
+
+      {/* ══ ボーナスワークアウト ══ */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">⚡</span>
+          <p className="text-sm font-black text-gray-800">今日はもっとできる！</p>
+          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">ボーナス</span>
+        </div>
+        <p className="text-[10px] text-gray-400">余裕があるときに追加。完了するとカロリーに加算されます。</p>
+        {([
+          { key: 'bonusBurpees'  as const, icon: '🤸', name: 'ステップバック・バーピー', sets: '3セット × 10回', kcal: 80,
+            desc: '立った状態から手をついてプランク→足を戻して立ち上がる。有酸素と筋トレを同時に刺激。' },
+          { key: 'bonusMountain' as const, icon: '🏔️', name: 'マウンテンクライマー',   sets: '3セット × 30秒', kcal: 60,
+            desc: 'プランク姿勢から交互に膝を引き付ける。体幹・有酸素・下半身を同時強化。' },
+          { key: 'bonusPlank'    as const, icon: '🧱', name: 'プランク（追加セット）', sets: '2セット × 60秒', kcal: 40,
+            desc: '肩・腹・臀部を一直線に保ち追加キープ。体幹の持久力を底上げする。' },
+        ] as const).map(({ key, icon, name, sets, kcal, desc }) => (
+          <WorkoutCard key={key}
+            icon={icon} title={name} sets={sets} desc={desc}
+            kcalBurn={kcal} done={todayEx[key]}
+            onToggle={() => updateEx({ [key]: !todayEx[key] })}
+          />
+        ))}
       </div>
 
       {/* ══ マクロ目安 ══ */}

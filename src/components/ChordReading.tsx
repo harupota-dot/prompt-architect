@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 // ─── 定数 ─────────────────────────────────────────────────────────
 const LS         = 14;
@@ -116,6 +116,8 @@ const FREQ: Record<string, number> = {
 
 // ─── 音声エンジン ─────────────────────────────────────────────────
 let _ac: AudioContext | null = null;
+const _activeOscs: Set<OscillatorNode> = new Set();
+
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!_ac || _ac.state === 'closed') {
@@ -125,6 +127,12 @@ function getCtx(): AudioContext | null {
     } catch { /* ignore */ }
   }
   return _ac;
+}
+
+export function stopAllChordAudio(): void {
+  _activeOscs.forEach(o => { try { o.stop(); o.disconnect(); } catch { /* already stopped */ } });
+  _activeOscs.clear();
+  if (_ac && _ac.state !== 'closed') _ac.suspend().catch(() => {});
 }
 
 function tone(ctx: AudioContext, freq: number, t: number, dur = 1.8, vol = 0.30, dest: AudioNode = ctx.destination): void {
@@ -144,6 +152,8 @@ function tone(ctx: AudioContext, freq: number, t: number, dur = 1.8, vol = 0.30,
     o.type = waveType; o.frequency.value = freq * mult; o.detune.value = detuneC;
     g.gain.setValueAtTime(relVol, t);
     g.gain.exponentialRampToValueAtTime(Math.max(relVol * 0.004, 0.0001), t + dur / Math.sqrt(mult));
+    _activeOscs.add(o);
+    o.onended = () => _activeOscs.delete(o);
     o.start(t); o.stop(t + dur + 0.05);
   });
 }
@@ -397,6 +407,8 @@ export function ChordReading() {
   const [clearAnim,   setClearAnim]   = useState(false);
   const [progActive,  setProgActive]  = useState(false);
   const [voicingMap,  setVoicingMap]  = useState<Record<number,string[]>>({});
+
+  useEffect(() => () => stopAllChordAudio(), []);
 
   const pool       = LEVEL_POOL[level];
   const isProgMode = level === 3 || level === 4;

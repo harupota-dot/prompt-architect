@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 // ─── 定数 ───────────────────────────────────────────────────────
 const LS         = 14;
@@ -61,6 +61,7 @@ const NOTE_JP: Record<string, string> = { C:'ド', D:'レ', E:'ミ', F:'ファ',
 
 // ─── Web Audio — モジュールレベルシングルトン ─────────────────────
 let _ac: AudioContext | null = null;
+const _activeOscs: Set<OscillatorNode> = new Set();
 
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -71,6 +72,12 @@ function getCtx(): AudioContext | null {
     } catch { /* ignore */ }
   }
   return _ac;
+}
+
+export function stopAllSightReadingAudio(): void {
+  _activeOscs.forEach(o => { try { o.stop(); o.disconnect(); } catch { /* already stopped */ } });
+  _activeOscs.clear();
+  if (_ac && _ac.state !== 'closed') _ac.suspend().catch(() => {});
 }
 
 /** ピアノ風トーン: 5倍音 + 微デチューン + ADSR */
@@ -98,6 +105,8 @@ function tone(ctx: AudioContext, freq: number, t: number, dur = 1.5, vol = 0.34)
     o.type = waveType; o.frequency.value = freq * mult; o.detune.value = detuneC;
     g.gain.setValueAtTime(relVol, t);
     g.gain.exponentialRampToValueAtTime(Math.max(relVol * 0.004, 0.0001), t + dur / Math.sqrt(mult));
+    _activeOscs.add(o);
+    o.onended = () => _activeOscs.delete(o);
     o.start(t); o.stop(t + dur + 0.05);
   });
 }
@@ -200,6 +209,8 @@ export function SightReading() {
   const [clearAnim, setClearAnim] = useState(false);
   const [started,   setStarted]   = useState(false);
   const [stats,     setStats]     = useState({ correct: 0, total: 0, phrases: 0 });
+
+  useEffect(() => () => stopAllSightReadingAudio(), []);
 
   const cfg = LEVEL_CFG[level];
 
