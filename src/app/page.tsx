@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { addTask, today as todayStr } from '@/lib/shared-store';
 import { DashboardHeader }     from '@/components/DashboardHeader';
 import { WeatherWidget }       from '@/components/WeatherWidget';
@@ -89,6 +90,49 @@ export default function Home() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 pt-6 pb-40 space-y-5">
+
+        {/* ════════════════════════════════════════
+            🚀 メインメニュー（3カード）
+        ════════════════════════════════════════ */}
+        <section>
+          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">メニュー</p>
+          <div className="grid grid-cols-1 gap-3">
+
+            <Link href="/learn" className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center flex-shrink-0">
+                <span className="text-3xl">🎓</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-lg font-black text-white leading-tight">Learning</p>
+                <p className="text-xs text-white/70 mt-0.5">音楽・発音・英会話 · TOEICロード</p>
+              </div>
+              <span className="text-white/50 text-xl">›</span>
+            </Link>
+
+            <Link href="/test" className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center flex-shrink-0">
+                <span className="text-3xl">📝</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-lg font-black text-white leading-tight">TOEIC Weekly Test</p>
+                <p className="text-xs text-white/70 mt-0.5">毎週月曜 30問 · 8秒制限 · スコア判定</p>
+              </div>
+              <span className="text-white/50 text-xl">›</span>
+            </Link>
+
+            <Link href="/health" className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center flex-shrink-0">
+                <span className="text-3xl">🏃‍♂️</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-lg font-black text-white leading-tight">Health & Fitness</p>
+                <p className="text-xs text-white/70 mt-0.5">体重・カロリー管理 · グラフ · アドバイス</p>
+              </div>
+              <span className="text-white/50 text-xl">›</span>
+            </Link>
+
+          </div>
+        </section>
 
         {/* ════════════════════════════════════════
             ⏱ スパルタタイマー（Web Worker + 無音オーディオ）
