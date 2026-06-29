@@ -104,7 +104,7 @@ export default function Home() {
           <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">メニュー</p>
           <div className="grid grid-cols-1 gap-3">
 
-            <Link href="/learn" className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
+            <Link href="/learn" onClick={e => e.stopPropagation()} className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-600 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
               <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center flex-shrink-0">
                 <span className="text-3xl">🎓</span>
               </div>
@@ -115,7 +115,7 @@ export default function Home() {
               <span className="text-white/50 text-xl">›</span>
             </Link>
 
-            <Link href="/test" className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
+            <Link href="/test" onClick={e => e.stopPropagation()} className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-700 to-slate-900 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
               <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center flex-shrink-0">
                 <span className="text-3xl">📝</span>
               </div>
@@ -126,7 +126,7 @@ export default function Home() {
               <span className="text-white/50 text-xl">›</span>
             </Link>
 
-            <Link href="/health" className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
+            <Link href="/health" onClick={e => e.stopPropagation()} className="group relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 p-5 flex items-center gap-4 shadow-lg active:scale-[0.98] transition-transform">
               <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center flex-shrink-0">
                 <span className="text-3xl">🏃‍♂️</span>
               </div>

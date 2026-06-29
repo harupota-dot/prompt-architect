@@ -150,10 +150,11 @@ function pickChordFrom(pool: string[], prev?: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Web Audio — モジュールレベルシングルトン
+// Web Audio — モジュールレベルシングルトン（遅延生成）
 // ─────────────────────────────────────────────────────────────────
 type WinAC = typeof window & { webkitAudioContext?: typeof AudioContext };
 let _ac: AudioContext | null = null;
+const _activeOscs: Set<OscillatorNode> = new Set();
 
 function getAC(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -164,6 +165,13 @@ function getAC(): AudioContext | null {
     } catch { return null; }
   }
   return _ac;
+}
+
+/** コンポーネントアンマウント時にすべての音を即停止 */
+function stopAllMusicAudio(): void {
+  _activeOscs.forEach(o => { try { o.stop(); o.disconnect(); } catch { /* already stopped */ } });
+  _activeOscs.clear();
+  if (_ac && _ac.state !== 'closed') _ac.suspend().catch(() => {});
 }
 
 /**
@@ -209,6 +217,8 @@ function tone(
       Math.max(relVol * 0.004, 0.0001),
       t + dur / Math.sqrt(mult),
     );
+    _activeOscs.add(osc);
+    osc.onended = () => _activeOscs.delete(osc);
     osc.start(t);
     osc.stop(t + dur + 0.05);
   });
@@ -352,21 +362,22 @@ export function MusicLearning() {
       const n = pickKiso(prevKisoRef.current);
       prevKisoRef.current = n;
       setKisoQ(n); setQuestion(null); setChord(null);
-      setTimeout(() => playNoteAudio(`${n}4`), 180);
     } else if (mode === 'chord') {
       const pool = CHORD_LEVELS[chordLevel - 1];
       const c = pickChordFrom(pool, prevChordRef.current);
       prevChordRef.current = c;
       setChord(c); setQuestion(null); setKisoQ(null);
-      setTimeout(() => playChordAudio(c), 180);
     } else {
       const q = pickNQ(getPool(), prevNoteRef.current);
       prevNoteRef.current = q.note;
       setQuestion(q); setKisoQ(null); setChord(null);
-      setTimeout(() => playNoteAudio(q.note), 180);
     }
   }, [mode, chordLevel, getPool]);
 
+  // アンマウント時に全音源を停止・AudioContextをsuspend
+  useEffect(() => () => stopAllMusicAudio(), []);
+
+  // 問題切替（音の自動再生なし — ユーザーの明示タップ時のみ鳴らす）
   useEffect(() => { newQuestion(); }, [newQuestion]);
 
   // chordLevel 変更時にリセット
