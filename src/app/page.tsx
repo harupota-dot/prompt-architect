@@ -11,6 +11,7 @@ import { TimerWidget }         from '@/components/TimerWidget';
 import { CalendarView }        from '@/components/CalendarView';
 import { CameraScheduleInput } from '@/components/CameraScheduleInput';
 import { GoalsList }           from '@/components/GoalsList';
+import { DailyQuote }         from '@/components/DailyQuote';
 
 export default function Home() {
 
@@ -90,6 +91,11 @@ export default function Home() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 pt-6 pb-40 space-y-5">
+
+        {/* ════════════════════════════════════════
+            ✨ Daily Quote
+        ════════════════════════════════════════ */}
+        <DailyQuote />
 
         {/* ════════════════════════════════════════
             🚀 メインメニュー（3カード）

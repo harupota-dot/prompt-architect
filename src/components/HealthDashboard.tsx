@@ -5,6 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import { BreathingTimer } from './BreathingTimer';
 
 // ─── Types ────────────────────────────────────────────────────────
 interface Profile {
@@ -33,6 +34,7 @@ interface ExerciseLog {
   date: string;
   steps: number;
   intervalWalkMins: number;
+  breathingMins: number;
   workoutDone: boolean;
   pushupsDone: boolean;
   crunchesDone: boolean;
@@ -302,7 +304,7 @@ function TodayTab({ profile }: { profile: Profile }) {
   // ── Exercise state ──
   const [exLogs, setExLogs] = useState<ExerciseLog[]>(() => load<ExerciseLog[]>(LS_EXERCISE, []));
   const todayEx: ExerciseLog = exLogs.find(e => e.date === today) ?? {
-    date: today, steps: 0, intervalWalkMins: 0,
+    date: today, steps: 0, intervalWalkMins: 0, breathingMins: 0,
     workoutDone: false, pushupsDone: false, crunchesDone: false,
     bonusBurpees: false, bonusMountain: false, bonusPlank: false,
   };
@@ -321,6 +323,7 @@ function TodayTab({ profile }: { profile: Profile }) {
   const weight         = profile.currentWeight || 60;
   const stepsKcal      = Math.round(todayEx.steps * weight * 0.0005);
   const intervalKcal   = Math.round((todayEx.intervalWalkMins || 0) * weight * 0.08);
+  const breathingKcal  = (todayEx.breathingMins || 0) * 3;
   const exKcal         =
     (todayEx.workoutDone   ? workout.kcal : 0) +
     (todayEx.pushupsDone   ? 30           : 0) +
@@ -328,7 +331,7 @@ function TodayTab({ profile }: { profile: Profile }) {
     (todayEx.bonusBurpees  ? 80           : 0) +
     (todayEx.bonusMountain ? 60           : 0) +
     (todayEx.bonusPlank    ? 40           : 0) +
-    intervalKcal;
+    intervalKcal + breathingKcal;
 
   const remaining = targetKcal + stepsKcal + exKcal - foodKcal;
   const success   = remaining >= 0;
@@ -442,9 +445,15 @@ function TodayTab({ profile }: { profile: Profile }) {
               <span className="font-black">+{intervalKcal} kcal</span>
             </div>
           )}
+          {breathingKcal > 0 && (
+            <div className="flex justify-between">
+              <span className="opacity-80">🌬️ 腹式呼吸 ({todayEx.breathingMins}分)</span>
+              <span className="font-black">+{breathingKcal} kcal</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="opacity-80">💪 運動消費</span>
-            <span className="font-black">+{exKcal - intervalKcal} kcal</span>
+            <span className="font-black">+{exKcal - intervalKcal - breathingKcal} kcal</span>
           </div>
           <div className="flex justify-between border-t border-white/20 pt-1.5">
             <span className="opacity-80">🍽️ 食事摂取</span>
@@ -573,6 +582,36 @@ function TodayTab({ profile }: { profile: Profile }) {
             kcalBurn={kcal} done={todayEx[key]}
             onToggle={() => updateEx({ [key]: !todayEx[key] })}
           />
+        ))}
+      </div>
+
+      {/* ══ 腹式呼吸タイマー ══ */}
+      <BreathingTimer onMinutesChange={mins => updateEx({ breathingMins: mins })} />
+
+      {/* ══ Motivation Music ══ */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-lg">🎵</span>
+          <p className="text-sm font-black text-gray-800">Motivation Music</p>
+          <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">YouTube</span>
+        </div>
+        {[
+          { title: 'Say So', artist: 'Doja Cat', emoji: '🌸', query: 'Doja Cat Say So Official Music Video', color: 'from-pink-500 to-rose-500' },
+          { title: 'Seven', artist: 'Jung Kook ft. Latto', emoji: '7️⃣', query: 'Jung Kook Seven Official MV', color: 'from-violet-500 to-purple-600' },
+          { title: 'Always Be My Baby', artist: 'Mariah Carey', emoji: '💕', query: 'Mariah Carey Always Be My Baby Official Video', color: 'from-sky-400 to-blue-500' },
+        ].map(({ title, artist, emoji, query, color }) => (
+          <a key={title}
+            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`}
+            target="_blank" rel="noopener noreferrer"
+            className={`flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r ${color} text-white active:scale-[0.98] transition-all shadow-sm`}
+          >
+            <span className="text-xl">{emoji}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black leading-tight">{title}</p>
+              <p className="text-[10px] opacity-80">{artist}</p>
+            </div>
+            <span className="text-white/60 text-lg">▶</span>
+          </a>
         ))}
       </div>
 
