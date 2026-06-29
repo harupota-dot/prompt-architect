@@ -29,10 +29,20 @@ interface WeeklyMetric {
 interface MealEntry { label: string; kcal: number; food?: string; grams?: number; }
 interface DailyLog  { date: string; meals: MealEntry[]; }
 
+interface ExerciseLog {
+  date: string;
+  steps: number;
+  workoutDone: boolean;
+  pushupsDone: boolean;
+  crunchesDone: boolean;
+}
+
 // ─── localStorage keys ────────────────────────────────────────────
-const LS_PROF    = 'health-profile-v1';
-const LS_METRICS = 'health-metrics-v1';
-const LS_DAILY   = 'health-daily-v1';
+const LS_PROF     = 'health-profile-v1';
+const LS_METRICS  = 'health-metrics-v1';
+const LS_DAILY    = 'health-daily-v1';
+const LS_EXERCISE = 'health-exercise-v1';
+const LS_START    = 'health-start-date-v1';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -66,6 +76,44 @@ function save<T>(key: string, val: T) {
 function fmtDate(iso: string) {
   const d = new Date(iso + 'T00:00:00');
   return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+// ─── 曜日別ワークアウト ───────────────────────────────────────────
+interface WorkoutDef { name: string; desc: string; kcal: number; sets: string; }
+const DAILY_WORKOUT: Record<number, WorkoutDef> = {
+  0: { name: 'アクティブレスト',   kcal: 30,
+       sets: '全身を10分ストレッチ',
+       desc: '筋肉を伸ばし血流を促進。各部位20〜30秒キープ、反動をつけずゆっくり伸ばす。' },
+  1: { name: 'スロースクワット',   kcal: 80,
+       sets: '3セット × 12回',
+       desc: '背筋を伸ばし、膝が爪先より前に出ないように腰を落とす。4秒かけて下ろし2秒で戻す。' },
+  2: { name: 'プランク',           kcal: 50,
+       sets: '3セット × 30〜60秒',
+       desc: '肘を肩の真下に置き、頭〜踵を一直線に保つ。腰が落ちないよう腹に力を入れ続ける。' },
+  3: { name: 'ヒップリフト',       kcal: 60,
+       sets: '3セット × 15回',
+       desc: '仰向けで膝を立て、お尻をゆっくり持ち上げ2秒キープ。背中が反らないよう腹筋で支える。' },
+  4: { name: 'バードドッグ',       kcal: 50,
+       sets: '左右各3セット × 10回',
+       desc: '四つ這いで対角の手足を同時に伸ばし3秒キープ。体が傾かないよう体幹を意識する。' },
+  5: { name: 'リバースランジ',     kcal: 80,
+       sets: '左右各3セット × 10回',
+       desc: '片足を後ろに引いて膝を床ギリギリまで下ろす。前足の膝は90°、体は垂直を保つ。' },
+  6: { name: 'ロシアンツイスト',   kcal: 60,
+       sets: '3セット × 20回（左右各10）',
+       desc: '膝を軽く曲げ上体を30°後ろに倒す。両手を合わせ左右交互にひねり、腹斜筋を意識する。' },
+};
+
+const PUSHUP_DESC = '肩幅より少し広めに手をつき、体を頭〜踵まで一直線に保つ。胸が床に触れる寸前まで下ろし、ゆっくり押し戻す。';
+const CRUNCH_DESC = '仰向けで膝を立て、反動を使わずおへそを覗き込むように息を吐きながら上体を丸める。腰は床に付けたまま。';
+
+function getWeeksSinceStart(): number {
+  try {
+    const s = localStorage.getItem(LS_START);
+    if (!s) { localStorage.setItem(LS_START, new Date().toISOString().slice(0, 10)); return 0; }
+    const days = Math.floor((Date.now() - new Date(s).getTime()) / 86400000);
+    return Math.floor(days / 7);
+  } catch { return 0; }
 }
 
 // ─── 食材データベース（五十音順） ──────────────────────────────────
@@ -223,123 +271,245 @@ function GoalsTab({ profile, onSave }: { profile: Profile; onSave: (p: Profile) 
 // Daily tracker tab
 // ═══════════════════════════════════════════════════════════════════
 const MEAL_LABELS = ['朝食', '昼食', '夕食', '間食', 'ドリンク'];
-
 const LABEL_COLOR: Record<string, string> = {
-  '朝食':   'bg-amber-100 text-amber-700',
-  '昼食':   'bg-sky-100 text-sky-700',
-  '夕食':   'bg-indigo-100 text-indigo-700',
-  '間食':   'bg-rose-100 text-rose-700',
+  '朝食':    'bg-amber-100 text-amber-700',
+  '昼食':    'bg-sky-100 text-sky-700',
+  '夕食':    'bg-indigo-100 text-indigo-700',
+  '間食':    'bg-rose-100 text-rose-700',
   'ドリンク':'bg-emerald-100 text-emerald-700',
 };
 
 function TodayTab({ profile }: { profile: Profile }) {
   const targetKcal = calcTargetKcal(profile).target;
-  const today = todayStr();
+  const today      = todayStr();
+  const weekday    = new Date().getDay();
+  const workout    = DAILY_WORKOUT[weekday];
+  const weeks      = getWeeksSinceStart();
+  const repsTarget = 10 + weeks * 2;
 
+  // ── Food log state ──
   const [logs, setLogs] = useState<DailyLog[]>(() => load<DailyLog[]>(LS_DAILY, []));
+  const [timing,   setTiming]   = useState(MEAL_LABELS[0]);
+  const [foodIdx,  setFoodIdx]  = useState<number>(-1);
+  const [grams,    setGrams]    = useState('');
+  const [search,   setSearch]   = useState('');
+  const [showDrop, setShowDrop] = useState(false);
 
-  // Form state
-  const [timing,    setTiming]    = useState(MEAL_LABELS[0]);
-  const [foodIdx,   setFoodIdx]   = useState<number>(-1);   // -1 = 未選択
-  const [grams,     setGrams]     = useState('');
-  const [search,    setSearch]    = useState('');
-  const [showDrop,  setShowDrop]  = useState(false);
+  // ── Exercise state ──
+  const [exLogs, setExLogs] = useState<ExerciseLog[]>(() => load<ExerciseLog[]>(LS_EXERCISE, []));
+  const todayEx: ExerciseLog = exLogs.find(e => e.date === today) ?? {
+    date: today, steps: 0, workoutDone: false, pushupsDone: false, crunchesDone: false,
+  };
 
-  const todayLog   = logs.find(l => l.date === today) ?? { date: today, meals: [] };
-  const totalKcal  = todayLog.meals.reduce((s, m) => s + m.kcal, 0);
-  const remaining  = targetKcal - totalKcal;
-  const pct        = Math.min(100, Math.round(totalKcal / targetKcal * 100));
-  const barColor   = pct >= 100 ? 'bg-red-500' : pct >= 85 ? 'bg-amber-500' : 'bg-emerald-500';
+  const updateEx = (patch: Partial<ExerciseLog>) => {
+    const updated = exLogs.filter(e => e.date !== today);
+    const next    = [{ ...todayEx, ...patch }, ...updated];
+    setExLogs(next);
+    save(LS_EXERCISE, next);
+  };
 
-  // Selected food
+  // ── Calorie maths ──
+  const todayLog  = logs.find(l => l.date === today) ?? { date: today, meals: [] };
+  const foodKcal  = todayLog.meals.reduce((s, m) => s + m.kcal, 0);
+
+  const weight    = profile.currentWeight || 60;
+  const stepsKcal = Math.round(todayEx.steps * weight * 0.0005);
+  const exKcal    =
+    (todayEx.workoutDone  ? workout.kcal : 0) +
+    (todayEx.pushupsDone  ? 30           : 0) +
+    (todayEx.crunchesDone ? 20           : 0);
+
+  const remaining = targetKcal + stepsKcal + exKcal - foodKcal;
+  const success   = remaining >= 0;
+
+  // Progress bar (food vs target+burn)
+  const effectiveTarget = targetKcal + stepsKcal + exKcal;
+  const pct = Math.min(100, Math.round(foodKcal / Math.max(1, effectiveTarget) * 100));
+  const barColor = pct >= 100 ? 'bg-red-500' : pct >= 85 ? 'bg-amber-500' : 'bg-emerald-500';
+
+  // ── Food form helpers ──
   const food = foodIdx >= 0 ? FOOD_DB[foodIdx] : null;
-
-  // Auto-calc kcal from grams
-  const calcKcal = (): number => {
+  const computedKcal = (() => {
     if (!food || !grams) return 0;
     const g = parseFloat(grams);
-    if (!g || g <= 0) return 0;
-    return Math.round((g / food.baseGrams) * food.baseKcal);
-  };
-  const computedKcal = calcKcal();
-
-  // Food select handler
+    return g > 0 ? Math.round((g / food.baseGrams) * food.baseKcal) : 0;
+  })();
   const selectFood = (idx: number) => {
-    setFoodIdx(idx);
-    setGrams(String(FOOD_DB[idx].baseGrams));
-    setSearch(FOOD_DB[idx].name);
-    setShowDrop(false);
+    setFoodIdx(idx); setGrams(String(FOOD_DB[idx].baseGrams));
+    setSearch(FOOD_DB[idx].name); setShowDrop(false);
   };
-
-  // Filtered list for search
-  const filtered = search.trim() === '' || (food && search === food.name)
+  const filtered = (search.trim() === '' || (food && search === food.name))
     ? FOOD_DB.map((f, i) => ({ f, i }))
     : FOOD_DB.map((f, i) => ({ f, i })).filter(({ f }) =>
-        f.name.toLowerCase().includes(search.toLowerCase()));
+        f.name.includes(search));
 
   const addMeal = () => {
     if (!food || computedKcal <= 0) return;
-    const newMeal: MealEntry = {
-      label: timing,
-      kcal:  computedKcal,
-      food:  food.name,
-      grams: parseFloat(grams),
-    };
+    const newMeal: MealEntry = { label: timing, kcal: computedKcal, food: food.name, grams: parseFloat(grams) };
     const updated = logs.filter(l => l.date !== today);
-    const newLog: DailyLog = { date: today, meals: [...todayLog.meals, newMeal] };
-    const next = [newLog, ...updated];
-    setLogs(next);
-    save(LS_DAILY, next);
-    // reset form
+    const next = [{ date: today, meals: [...todayLog.meals, newMeal] }, ...updated];
+    setLogs(next); save(LS_DAILY, next);
     setFoodIdx(-1); setGrams(''); setSearch('');
   };
-
   const removeMeal = (i: number) => {
-    const newMeals = todayLog.meals.filter((_, idx) => idx !== i);
-    const updated  = logs.filter(l => l.date !== today);
-    const next = [{ date: today, meals: newMeals }, ...updated];
-    setLogs(next);
-    save(LS_DAILY, next);
+    const next = [{ date: today, meals: todayLog.meals.filter((_, idx) => idx !== i) },
+                  ...logs.filter(l => l.date !== today)];
+    setLogs(next); save(LS_DAILY, next);
   };
-
-  // Group meals by timing for display
   const grouped = MEAL_LABELS.map(lbl => ({
-    lbl,
-    meals: todayLog.meals
-      .map((m, i) => ({ m, i }))
-      .filter(({ m }) => m.label === lbl),
+    lbl, meals: todayLog.meals.map((m, i) => ({ m, i })).filter(({ m }) => m.label === lbl),
   })).filter(g => g.meals.length > 0);
 
   const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white';
 
+  // ── Workout card helper ──
+  const WorkoutCard = ({
+    icon, title, subtitle, desc, sets, kcalBurn, done, onToggle,
+  }: {
+    icon: string; title: string; subtitle?: string; desc: string;
+    sets: string; kcalBurn: number; done: boolean; onToggle: () => void;
+  }) => (
+    <div className={`rounded-2xl border-2 p-4 transition-all ${done ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100 bg-white'}`}>
+      <div className="flex items-start gap-3">
+        <button onClick={onToggle}
+          className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-sm border-2 transition-all mt-0.5 ${
+            done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 text-transparent'
+          }`}>
+          ✓
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-base">{icon}</span>
+            <p className={`text-sm font-black ${done ? 'text-emerald-700' : 'text-gray-800'}`}>{title}</p>
+            {subtitle && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">{subtitle}</span>}
+            <span className="text-[10px] text-gray-400 ml-auto">−{kcalBurn} kcal</span>
+          </div>
+          <p className="text-[10px] text-indigo-600 font-bold mt-1">{sets}</p>
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{desc}</p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
 
-      {/* ── Progress card ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+      {/* ══ カロリー収支サマリー ══ */}
+      <div className={`rounded-2xl p-5 text-white ${success
+        ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+        : 'bg-gradient-to-br from-rose-500 to-red-600'}`}>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-black text-gray-500">今日の摂取カロリー</p>
-          <p className="text-xs text-gray-400">{new Date().toLocaleDateString('ja-JP')}</p>
-        </div>
-        <div className="text-center mb-3">
-          <p className="text-4xl font-black text-gray-900">{totalKcal.toLocaleString()}</p>
-          <p className="text-xs text-gray-400">/ 目標 {targetKcal.toLocaleString()} kcal</p>
-        </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-2">
-          <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-            style={{ width: `${pct}%` }} />
-        </div>
-        <div className="flex justify-between text-xs font-bold">
-          <span className="text-gray-500">{pct}% 消費</span>
-          <span className={remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}>
-            {remaining >= 0
-              ? `残り ${remaining.toLocaleString()} kcal`
-              : `超過 ${Math.abs(remaining).toLocaleString()} kcal`}
+          <p className="text-xs font-bold opacity-80">{new Date().toLocaleDateString('ja-JP')}</p>
+          <span className={`text-xs font-black px-2.5 py-1 rounded-full ${
+            success ? 'bg-white/20' : 'bg-white/20'
+          }`}>
+            {success ? '✅ Success！' : '⚠️ Over...'}
           </span>
+        </div>
+
+        {/* Big remaining */}
+        <div className="text-center mb-4">
+          <p className="text-5xl font-black">{Math.abs(remaining).toLocaleString()}</p>
+          <p className="text-sm opacity-80">
+            {success ? 'kcal まだ食べられる' : 'kcal オーバー'}
+          </p>
+        </div>
+
+        {/* Equation breakdown */}
+        <div className="bg-white/15 rounded-xl p-3 space-y-1.5 text-sm">
+          <div className="flex justify-between">
+            <span className="opacity-80">目標摂取</span>
+            <span className="font-black">+{targetKcal.toLocaleString()} kcal</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="opacity-80">🚶 歩数消費 ({todayEx.steps.toLocaleString()}歩)</span>
+            <span className="font-black">+{stepsKcal} kcal</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="opacity-80">💪 運動消費</span>
+            <span className="font-black">+{exKcal} kcal</span>
+          </div>
+          <div className="flex justify-between border-t border-white/20 pt-1.5">
+            <span className="opacity-80">🍽️ 食事摂取</span>
+            <span className="font-black">−{foodKcal.toLocaleString()} kcal</span>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="mt-3">
+          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+              style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-[10px] opacity-70 mt-1 text-right">
+            {success ? '素晴らしいペースです！このまま続けよう 🎯' : '明日調整しましょう。運動でリカバリーも◎'}
+          </p>
         </div>
       </div>
 
-      {/* ── Macro hint ── */}
+      {/* ══ 歩数入力 ══ */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🚶</span>
+          <div className="flex-1">
+            <p className="text-sm font-black text-gray-800">今日の歩数</p>
+            <p className="text-[10px] text-gray-400">消費 = 歩数 × 体重({weight}kg) × 0.0005</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={todayEx.steps || ''}
+              placeholder="0"
+              onChange={e => updateEx({ steps: Math.max(0, parseInt(e.target.value) || 0) })}
+              className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:border-indigo-400"
+            />
+            <span className="text-xs text-gray-400 font-bold w-6">歩</span>
+          </div>
+        </div>
+        {stepsKcal > 0 && (
+          <p className="text-xs text-emerald-600 font-black mt-2 text-right">
+            消費 {stepsKcal} kcal
+          </p>
+        )}
+      </div>
+
+      {/* ══ 今日のワークアウト ══ */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 px-1">
+          <p className="text-xs font-black text-gray-500">今日のワークアウト</p>
+          <span className="text-[10px] text-gray-400">
+            {['日','月','火','水','木','金','土'][weekday]}曜日
+          </span>
+          {exKcal > 0 && (
+            <span className="ml-auto text-xs font-black text-emerald-600">合計 −{exKcal} kcal</span>
+          )}
+        </div>
+
+        {/* 日替わり */}
+        <WorkoutCard
+          icon="🏋️" title={workout.name} sets={workout.sets} desc={workout.desc}
+          kcalBurn={workout.kcal} done={todayEx.workoutDone}
+          onToggle={() => updateEx({ workoutDone: !todayEx.workoutDone })}
+        />
+
+        {/* 腕立て（毎日固定） */}
+        <WorkoutCard
+          icon="💪" title="腕立て伏せ" subtitle={`目標 ${repsTarget}回 × 3セット`}
+          sets={`${repsTarget}回 × 3セット（${weeks}週目・漸進的負荷）`}
+          desc={PUSHUP_DESC} kcalBurn={30} done={todayEx.pushupsDone}
+          onToggle={() => updateEx({ pushupsDone: !todayEx.pushupsDone })}
+        />
+
+        {/* 腹筋（毎日固定） */}
+        <WorkoutCard
+          icon="🔥" title="腹筋（クランチ）" subtitle={`目標 ${repsTarget}回 × 3セット`}
+          sets={`${repsTarget}回 × 3セット（${weeks}週目・漸進的負荷）`}
+          desc={CRUNCH_DESC} kcalBurn={20} done={todayEx.crunchesDone}
+          onToggle={() => updateEx({ crunchesDone: !todayEx.crunchesDone })}
+        />
+      </div>
+
+      {/* ══ マクロ目安 ══ */}
       <div className="grid grid-cols-3 gap-2">
         {[
           { label: '🥩 タンパク質', gram: Math.round(targetKcal * 0.30 / 4), unit: 'g' },
@@ -348,132 +518,101 @@ function TodayTab({ profile }: { profile: Profile }) {
         ].map(m => (
           <div key={m.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
             <p className="text-[10px] text-gray-500">{m.label}</p>
-            <p className="text-lg font-black text-gray-800">
-              {m.gram}<span className="text-xs font-normal">{m.unit}</span>
-            </p>
+            <p className="text-lg font-black text-gray-800">{m.gram}<span className="text-xs font-normal">{m.unit}</span></p>
           </div>
         ))}
       </div>
 
-      {/* ── Add meal form ── */}
+      {/* ══ 食事追加フォーム ══ */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
         <p className="text-xs font-black text-gray-500">食事を追加</p>
 
-        {/* 1. Timing */}
         <div>
           <label className="text-[11px] font-bold text-gray-400 mb-1 block">① タイミング</label>
           <div className="flex gap-1.5 flex-wrap">
             {MEAL_LABELS.map(l => (
               <button key={l} onClick={() => setTiming(l)}
                 className={`px-3 py-1.5 rounded-full text-xs font-black border-2 transition-all ${
-                  timing === l
-                    ? `${LABEL_COLOR[l]} border-current`
-                    : 'bg-gray-50 text-gray-400 border-gray-100'
-                }`}>
-                {l}
-              </button>
+                  timing === l ? `${LABEL_COLOR[l]} border-current` : 'bg-gray-50 text-gray-400 border-gray-100'
+                }`}>{l}</button>
             ))}
           </div>
         </div>
 
-        {/* 2. Food search */}
         <div className="relative">
           <label className="text-[11px] font-bold text-gray-400 mb-1 block">② 食材（五十音順）</label>
-          <input
-            type="text"
-            value={search}
-            placeholder="食材名を入力して絞り込み…"
-            className={inputCls}
+          <input type="text" value={search} placeholder="食材名を入力して絞り込み…" className={inputCls}
             onChange={e => { setSearch(e.target.value); setShowDrop(true); setFoodIdx(-1); setGrams(''); }}
-            onFocus={() => setShowDrop(true)}
-          />
+            onFocus={() => setShowDrop(true)} />
           {showDrop && (
             <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto">
-              {filtered.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-3">該当なし</p>
-              ) : filtered.map(({ f, i }) => (
-                <button key={i}
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
-                  onMouseDown={e => { e.preventDefault(); selectFood(i); }}>
-                  <span className="font-medium text-gray-800">{f.name}</span>
-                  <span className="text-xs text-gray-400 flex-shrink-0">{f.baseGrams}g / {f.baseKcal}kcal</span>
-                </button>
-              ))}
+              {filtered.length === 0
+                ? <p className="text-xs text-gray-400 text-center py-3">該当なし</p>
+                : filtered.map(({ f, i }) => (
+                  <button key={i}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
+                    onMouseDown={e => { e.preventDefault(); selectFood(i); }}>
+                    <span className="font-medium text-gray-800">{f.name}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{f.baseGrams}g/{f.baseKcal}kcal</span>
+                  </button>
+                ))}
             </div>
           )}
         </div>
 
-        {/* 3. Grams + 4. Kcal display */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-[11px] font-bold text-gray-400 mb-1 block">③ グラム数 (g)</label>
-            <input
-              type="number"
-              value={grams}
-              placeholder={food ? String(food.baseGrams) : '—'}
-              disabled={!food}
-              onChange={e => setGrams(e.target.value)}
-              className={`${inputCls} text-right disabled:bg-gray-50 disabled:text-gray-300`}
-            />
+            <label className="text-[11px] font-bold text-gray-400 mb-1 block">③ グラム数</label>
+            <input type="number" value={grams} placeholder={food ? String(food.baseGrams) : '—'}
+              disabled={!food} onChange={e => setGrams(e.target.value)}
+              className={`${inputCls} text-right disabled:bg-gray-50 disabled:text-gray-300`} />
           </div>
           <div>
-            <label className="text-[11px] font-bold text-gray-400 mb-1 block">④ カロリー (kcal)</label>
-            <div className={`${inputCls} text-right font-black cursor-default select-none ${
+            <label className="text-[11px] font-bold text-gray-400 mb-1 block">④ カロリー</label>
+            <div className={`${inputCls} text-right font-black cursor-default ${
               computedKcal > 0 ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'bg-gray-50 text-gray-300'
-            }`}>
-              {computedKcal > 0 ? computedKcal : '—'}
-            </div>
+            }`}>{computedKcal > 0 ? computedKcal : '—'}</div>
           </div>
         </div>
 
-        {/* 5. Add button */}
-        <button
-          onClick={addMeal}
-          disabled={!food || computedKcal <= 0}
+        <button onClick={addMeal} disabled={!food || computedKcal <= 0}
           className="w-full py-3 rounded-2xl font-black text-sm bg-indigo-600 text-white disabled:bg-gray-100 disabled:text-gray-300 active:scale-[0.98] transition-all">
           追加する
         </button>
       </div>
 
-      {/* ── Meal log grouped by timing ── */}
-      {grouped.length === 0 ? (
-        <p className="text-xs text-gray-300 text-center py-4">まだ記録がありません</p>
-      ) : (
-        <div className="space-y-2">
-          {grouped.map(({ lbl, meals }) => {
-            const groupTotal = meals.reduce((s, { m }) => s + m.kcal, 0);
-            return (
-              <div key={lbl} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                <div className={`px-4 py-2 flex items-center justify-between ${LABEL_COLOR[lbl]}`}>
-                  <span className="text-xs font-black">{lbl}</span>
-                  <span className="text-xs font-bold">{groupTotal} kcal</span>
-                </div>
-                <div className="divide-y divide-gray-50">
-                  {meals.map(({ m, i }) => (
-                    <div key={i} className="flex items-center gap-2 px-4 py-2.5">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-800 truncate">
-                          {m.food ?? m.label}
-                        </p>
-                        {m.grams != null && (
-                          <p className="text-[10px] text-gray-400">{m.grams}g</p>
-                        )}
+      {/* ══ 食事ログ（タイミング別） ══ */}
+      {grouped.length === 0
+        ? <p className="text-xs text-gray-300 text-center py-4">まだ食事記録がありません</p>
+        : (
+          <div className="space-y-2">
+            {grouped.map(({ lbl, meals }) => {
+              const groupTotal = meals.reduce((s, { m }) => s + m.kcal, 0);
+              return (
+                <div key={lbl} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                  <div className={`px-4 py-2 flex items-center justify-between ${LABEL_COLOR[lbl]}`}>
+                    <span className="text-xs font-black">{lbl}</span>
+                    <span className="text-xs font-bold">{groupTotal} kcal</span>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {meals.map(({ m, i }) => (
+                      <div key={i} className="flex items-center gap-2 px-4 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-gray-800 truncate">{m.food ?? m.label}</p>
+                          {m.grams != null && <p className="text-[10px] text-gray-400">{m.grams}g</p>}
+                        </div>
+                        <span className="text-sm font-black text-gray-600 flex-shrink-0">{m.kcal} kcal</span>
+                        <button onClick={() => removeMeal(i)}
+                          className="text-gray-300 text-xl leading-none active:text-red-400 flex-shrink-0">×</button>
                       </div>
-                      <span className="text-sm font-black text-gray-600 flex-shrink-0">
-                        {m.kcal} kcal
-                      </span>
-                      <button onClick={() => removeMeal(i)}
-                        className="text-gray-300 text-xl leading-none active:text-red-400 flex-shrink-0">
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )
+      }
     </div>
   );
 }
