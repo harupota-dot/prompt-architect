@@ -8,18 +8,16 @@ function speak(text: string) {
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang = 'en-US';
-  utt.rate = 0.88;
+  utt.rate = 0.82;
   window.speechSynthesis.speak(utt);
 }
 
 // ─── Types ────────────────────────────────────────────────────────
 interface Item {
-  q: string;          // English question
-  qJa: string;        // Japanese
-  a: string;          // Correct answer
-  aJa: string;
-  w: [string, string]; // Wrong answers
-  wJa: [string, string];
+  phrase: string;           // English chunk
+  meaning: string;          // Correct Japanese meaning
+  pronunciationTip: string; // 音声変化の解説
+  w: [string, string];      // Wrong Japanese meanings
 }
 
 // ─── Shuffle ──────────────────────────────────────────────────────
@@ -32,143 +30,474 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// ─── Dataset (72 items) ───────────────────────────────────────────
+// ─── Dataset (70 チャンク) ─────────────────────────────────────────
 const DATA: Item[] = [
-  // Greetings & small talk
-  { q:"How's it going?", qJa:"調子はどう?", a:"Not bad, thanks!", aJa:"悪くないよ、ありがとう！", w:["I'm running late.","See you later."], wJa:["遅れてる。","またね。"] },
-  { q:"Long time no see!", qJa:"久しぶり！", a:"Yeah, it's been a while!", aJa:"そうだね、しばらくぶり！", w:["Nice to meet you.","Good luck."], wJa:["はじめまして。","頑張って。"] },
-  { q:"What are you up to?", qJa:"何してるの？", a:"Just hanging out.", aJa:"ぶらぶらしてるよ。", w:["I'm very tired.","The train is late."], wJa:["すごく疲れた。","電車が遅れてる。"] },
-  { q:"How was your weekend?", qJa:"週末どうだった？", a:"Pretty relaxing, actually.", aJa:"わりとのんびりしてたよ。", w:["I don't have a ticket.","What's the price?"], wJa:["チケットがない。","値段はいくら？"] },
-  { q:"You look tired.", qJa:"疲れてそうだね。", a:"Yeah, I didn't sleep well.", aJa:"うん、あんまり眠れなかった。", w:["I'll take this one.","Can I sit here?"], wJa:["これにします。","ここに座っていい？"] },
-  { q:"Any plans for today?", qJa:"今日は何か予定ある？", a:"Nothing much. Just chilling.", aJa:"特にない。のんびりするよ。", w:["The weather is great.","I need a receipt."], wJa:["天気いいね。","領収書ください。"] },
-  { q:"You seem happy today!", qJa:"今日は嬉しそうだね！", a:"I got great news this morning.", aJa:"今朝いい知らせがあったんだ。", w:["I'm allergic to cats.","Turn left at the corner."], wJa:["猫アレルギーです。","角を左に曲がって。"] },
-  { q:"What's new with you?", qJa:"最近どう？何かある？", a:"Not much. Same old, same old.", aJa:"特にないよ。いつも通りかな。", w:["It's on the third floor.","I'll call you later."], wJa:["3階にあります。","後で電話するね。"] },
+  // ══ フラッピング（母音間のtがラ行化） ══
+  {
+    phrase: "out of order",
+    meaning: "故障して・順番が違う",
+    pronunciationTip: "【フラッピング】 'out' の t が母音 u と o に挟まれるためラ行化し、「アウダ・オーダ」のように聞こえます。",
+    w: ["〜の代わりに", "ちょうどその時"],
+  },
+  {
+    phrase: "let it go",
+    meaning: "手放す・諦める",
+    pronunciationTip: "【フラッピング】 let の t が i と o に挟まれてラ行化し、「レリゴー」と一気に発音されます。",
+    w: ["〜に申し込む", "気づく"],
+  },
+  {
+    phrase: "put it on",
+    meaning: "着る・身につける",
+    pronunciationTip: "【リンキング＆フラッピング】 put の t が it の i と繋がり、さらにラ行化して「プリロン」のように聞こえます。",
+    w: ["延期する", "提出する"],
+  },
+  {
+    phrase: "get it done",
+    meaning: "やり遂げる・完了させる",
+    pronunciationTip: "【フラッピング】 get の t が it の i との間でラ行化し「ゲリダン」と聞こえます。ネイティブの会話では「ゲラダン」に近い音も出ます。",
+    w: ["手放す", "追いつく"],
+  },
+  {
+    phrase: "wait a minute",
+    meaning: "ちょっと待って",
+    pronunciationTip: "【フラッピング】 wait の t が a と繋がりラ行化し、「ウェイラミニッ(ト)」と聞こえます。minute 末尾の t はほぼ消えます。",
+    w: ["取り消す", "乗り遅れる"],
+  },
+  {
+    phrase: "a lot of time",
+    meaning: "たくさんの時間",
+    pronunciationTip: "【フラッピング＋リダクション】 lot の t がラ行化し、of は「ア」に縮まるため「アラダタイム」のように聞こえます。",
+    w: ["締め切り", "空き時間"],
+  },
+  {
+    phrase: "not at all",
+    meaning: "全然〜ない・どういたしまして",
+    pronunciationTip: "【フラッピング】 not の t と at の t がいずれも母音に挟まれてラ行化し、「ナラロール」のように連続して流れます。",
+    w: ["何と言っても", "全力で"],
+  },
+  {
+    phrase: "what a day",
+    meaning: "なんて日だ（驚き・疲労）",
+    pronunciationTip: "【フラッピング】 what の t が a と繋がりラ行化して「ワラデイ」と聞こえます。感嘆表現でよく使われます。",
+    w: ["今日の予定", "一日中"],
+  },
+  {
+    phrase: "write it down",
+    meaning: "書き留める",
+    pronunciationTip: "【フラッピング】 write の t が it の i と繋がりラ行化し「ライリダウン」と聞こえます。",
+    w: ["書き直す", "消去する"],
+  },
+  {
+    phrase: "better late than never",
+    meaning: "遅くてもやらないよりはまし",
+    pronunciationTip: "【フラッピング】 better の tt と late の t がいずれもラ行化し、「ベラレイダン・ネバー」のようにリズムよく聞こえます。",
+    w: ["急がば回れ", "時は金なり"],
+  },
 
-  // Cafe / restaurant
-  { q:"Are you ready to order?", qJa:"ご注文はお決まりですか？", a:"Yes, I'll have a latte, please.", aJa:"はい、ラテをください。", w:["I lost my wallet.","The bus is coming."], wJa:["財布をなくした。","バスが来てる。"] },
-  { q:"Is this seat taken?", qJa:"この席は空いてますか？", a:"No, go ahead!", aJa:"空いてますよ、どうぞ！", w:["I need to check out.","My flight is at noon."], wJa:["チェックアウトしたい。","フライトは正午です。"] },
-  { q:"How would you like your coffee?", qJa:"コーヒーはどうしますか？", a:"Black, please.", aJa:"ブラックでお願いします。", w:["I'm vegetarian.","Where's the nearest ATM?"], wJa:["ベジタリアンです。","最寄りのATMはどこ？"] },
-  { q:"Can I get you anything else?", qJa:"他に何かお持ちしますか？", a:"No thanks, just the bill.", aJa:"大丈夫です。お会計だけ。", w:["I missed the train.","Is it far from here?"], wJa:["電車乗り遅れた。","ここから遠いですか？"] },
-  { q:"Would you like to try our special?", qJa:"本日のおすすめはいかがですか？", a:"Sure, what is it?", aJa:"いいですよ、何ですか？", w:["I'll be right back.","It's getting late."], wJa:["すぐ戻ります。","遅くなってきた。"] },
-  { q:"Is this table okay?", qJa:"このテーブルでよろしいですか？", a:"Could we sit by the window?", aJa:"窓側に座れますか？", w:["I need to charge my phone.","What time does it open?"], wJa:["スマホ充電したい。","何時に開きますか？"] },
+  // ══ リンキング（子音が次の母音と繋がる） ══
+  {
+    phrase: "take a look at it",
+    meaning: "それを見る・確認する",
+    pronunciationTip: "【リンキング】 take の k と a、look の k と a、at の t と it がすべて繋がり「テイカルッカリッ(ト)」と一息で発音されます。",
+    w: ["それを取る", "それを聞く"],
+  },
+  {
+    phrase: "pick it up",
+    meaning: "拾い上げる・習得する",
+    pronunciationTip: "【リンキング】 pick の ck と it の i が繋がり「ピキラップ」のように聞こえます。",
+    w: ["送り届ける", "片付ける"],
+  },
+  {
+    phrase: "turn it off",
+    meaning: "（電源を）切る",
+    pronunciationTip: "【リンキング】 turn の n と it の i が繋がり「ターニット」→「ターニロフ」と続きます。",
+    w: ["つける", "下げる"],
+  },
+  {
+    phrase: "call it a day",
+    meaning: "その日の作業を終わりにする",
+    pronunciationTip: "【リンキング】 call の l と it の i が繋がり「コーリラデイ」と聞こえます。仕事終わりの定番フレーズです。",
+    w: ["一日休む", "予定を延ばす"],
+  },
+  {
+    phrase: "look it up",
+    meaning: "調べる（辞書・ネットで）",
+    pronunciationTip: "【リンキング】 look の k と it の i が繋がり「ルキラップ」のように発音されます。",
+    w: ["見上げる", "確認する"],
+  },
+  {
+    phrase: "hand it in",
+    meaning: "提出する",
+    pronunciationTip: "【リンキング】 hand の d と it の i、it の t と in の i が繋がり「ハンディティン」のように流れます。",
+    w: ["持ち帰る", "引き渡す"],
+  },
+  {
+    phrase: "think about it",
+    meaning: "それについて考える",
+    pronunciationTip: "【リンキング＋フラッピング】 about の t が it の i と繋がりラ行化し「シンカバウリッ(ト)」と一気に発音されます。",
+    w: ["忘れてしまう", "無視する"],
+  },
+  {
+    phrase: "work it out",
+    meaning: "解決する・うまく処理する",
+    pronunciationTip: "【リンキング】 work の k と it が繋がり「ワーキラウト」と聞こえます。",
+    w: ["諦める", "延期する"],
+  },
+  {
+    phrase: "figure it out",
+    meaning: "理解する・解き明かす",
+    pronunciationTip: "【フラッピング＋リンキング】 figure の r と it が繋がり、it の t もラ行化して「フィギャリラウト」のように流れます。",
+    w: ["描き出す", "やり遂げる"],
+  },
+  {
+    phrase: "make an effort",
+    meaning: "努力する",
+    pronunciationTip: "【リンキング】 make の k と an が繋がり「メイカン・エファト」のように一続きに聞こえます。",
+    w: ["影響を与える", "諦める"],
+  },
 
-  // Work / school
-  { q:"Did you finish the report?", qJa:"レポート終わった？", a:"Almost. Just a few more edits.", aJa:"もうすぐ。あと少し直すだけ。", w:["I like this color.","It's sold out."], wJa:["この色好き。","売り切れです。"] },
-  { q:"Have you met the new teammate?", qJa:"新しいチームメンバーと会った？", a:"Yeah, she seems really capable.", aJa:"うん、すごくできる人みたい。", w:["I need size medium.","The battery is dead."], wJa:["Mサイズが欲しい。","電池が切れた。"] },
-  { q:"The meeting got pushed back.", qJa:"会議が後ろにずれたよ。", a:"Oh good. I needed more time anyway.", aJa:"よかった。もう少し時間が欲しかったし。", w:["Can I try it on?","Where's the exit?"], wJa:["試着できますか？","出口はどこ？"] },
-  { q:"Are you coming to the team lunch?", qJa:"チームランチ来る？", a:"Absolutely! What time?", aJa:"もちろん！何時？", w:["It's too noisy here.","I left my umbrella."], wJa:["ここうるさすぎ。","傘忘れた。"] },
-  { q:"Can you cover for me tomorrow?", qJa:"明日代わってもらえる？", a:"Sure, what do I need to do?", aJa:"いいよ、何をすればいい？", w:["I need a map.","It's not my size."], wJa:["地図が欲しい。","サイズが合わない。"] },
-  { q:"I totally blanked in the meeting.", qJa:"会議で頭が真っ白になっちゃった。", a:"That happens. Don't worry about it.", aJa:"そういうこともあるよ。気にしないで。", w:["The signal is weak.","I need a doctor."], wJa:["電波が弱い。","医者が必要です。"] },
+  // ══ リダクション（機能語が短縮・弱化） ══
+  {
+    phrase: "kind of",
+    meaning: "ちょっと・〜のような",
+    pronunciationTip: "【リダクション】 of は強形「オヴ」ではなく「ア/ダ」に縮み「カインダ」と聞こえます。カジュアルな会話では 'kinda' と表記されることも。",
+    w: ["〜のおかげで", "〜の種類"],
+  },
+  {
+    phrase: "sort of",
+    meaning: "ある程度・まあ（曖昧な同意）",
+    pronunciationTip: "【リダクション】 of が「ダ/ア」に縮まり「ソーラ」のように聞こえます。'sorta' と書かれることも多いです。",
+    w: ["〜を整理する", "選別する"],
+  },
+  {
+    phrase: "going to",
+    meaning: "〜するつもり・〜する予定",
+    pronunciationTip: "【リダクション】 going to は会話では「ガナ (gonna)」に縮まります。ネイティブは 'I'm gonna call you.' のように発音します。",
+    w: ["〜し終えた", "〜だったはず"],
+  },
+  {
+    phrase: "want to",
+    meaning: "〜したい",
+    pronunciationTip: "【リダクション】 want to は「ウォナ (wanna)」に縮まります。'I wanna go.' のように話し言葉では頻繁に使われます。",
+    w: ["〜しなければ", "〜できる"],
+  },
+  {
+    phrase: "have to",
+    meaning: "〜しなければならない",
+    pronunciationTip: "【リダクション】 have to は「ハフタ」と発音されます。h が弱まり「アフタ」に近く聞こえることもあります。",
+    w: ["〜してもよい", "〜するつもり"],
+  },
+  {
+    phrase: "used to",
+    meaning: "かつては〜していた",
+    pronunciationTip: "【リダクション】 used to は「ユーストゥ → ユーストゥ」が速くなると「ユーストゥ」の d が消え「ユースタ」と聞こえます。",
+    w: ["〜に慣れている", "〜に使われる"],
+  },
+  {
+    phrase: "supposed to",
+    meaning: "〜することになっている・〜のはず",
+    pronunciationTip: "【リダクション】 supposed to は「サポーストゥ → サポーストゥ」が崩れ「サポーズタ」のように聞こえます。",
+    w: ["〜と推測される", "仮定する"],
+  },
+  {
+    phrase: "could have",
+    meaning: "〜できたはず（できなかった）",
+    pronunciationTip: "【リダクション】 could have は「クッダ (coulda)」と縮まります。'You coulda told me.' のように聞こえます。",
+    w: ["〜すべきだった", "〜したかもしれない"],
+  },
+  {
+    phrase: "should have",
+    meaning: "〜すべきだった（しなかった）",
+    pronunciationTip: "【リダクション】 should have は「シュッダ (shoulda)」に縮まります。後悔の表現として頻出です。",
+    w: ["〜できたはず", "〜してもよかった"],
+  },
+  {
+    phrase: "would have",
+    meaning: "〜したであろう（しなかった）",
+    pronunciationTip: "【リダクション】 would have は「ウッダ (woulda)」に縮まります。'I woulda helped you.' のように聞こえます。",
+    w: ["〜するだろう", "〜したはず"],
+  },
 
-  // Shopping
-  { q:"Can I help you find anything?", qJa:"何かお探しですか？", a:"I'm just browsing, thanks.", aJa:"見てるだけです。ありがとう。", w:["The train is delayed.","I have a reservation."], wJa:["電車が遅れてる。","予約があります。"] },
-  { q:"Do you have this in a smaller size?", qJa:"もう少し小さいサイズはありますか？", a:"Let me check in the back.", aJa:"在庫を確認してきます。", w:["It's raining outside.","I'm on my way."], wJa:["外は雨が降ってる。","今向かってるよ。"] },
-  { q:"Is this on sale?", qJa:"これはセール中ですか？", a:"Yes, it's 30% off today.", aJa:"はい、今日は30%引きです。", w:["I need a window seat.","I'm allergic to nuts."], wJa:["窓側の席が欲しい。","ナッツアレルギーです。"] },
-  { q:"Would you like a bag?", qJa:"袋はご利用ですか？", a:"Yes, please. Just one.", aJa:"はい、一枚でいいです。", w:["It's a 10-minute walk.","I'll call back later."], wJa:["徒歩10分です。","後でかけ直します。"] },
-  { q:"Are you paying by cash or card?", qJa:"現金ですか、カードですか？", a:"Card, please.", aJa:"カードでお願いします。", w:["Take the first left.","I need a refund."], wJa:["最初の角を左に。","返金してほしい。"] },
+  // ══ H脱落（代名詞の h が消える） ══
+  {
+    phrase: "give him a call",
+    meaning: "彼に電話する",
+    pronunciationTip: "【H脱落】 him の h は非強調位置では消え「give'im a call → ギビマコール」のように聞こえます。",
+    w: ["彼をやり過ごす", "彼に会いに行く"],
+  },
+  {
+    phrase: "tell her the truth",
+    meaning: "彼女に真実を告げる",
+    pronunciationTip: "【H脱落】 her の h が落ちて tell と繋がり「テラー・ザ・トゥルース」のように聞こえます。",
+    w: ["彼女に嘘をつく", "彼女に頼む"],
+  },
+  {
+    phrase: "ask him about it",
+    meaning: "それについて彼に聞く",
+    pronunciationTip: "【H脱落＋フラッピング】 him の h が消えて「アスキム」→ about it の t もラ行化し「アスキマバウリッ」と流れます。",
+    w: ["彼に許可を求める", "彼を試す"],
+  },
+  {
+    phrase: "help him out",
+    meaning: "彼を助け出す",
+    pronunciationTip: "【H脱落＋リンキング】 him の h が消えhelpと繋がり「ヘルピマウト」と聞こえます。",
+    w: ["彼を外に出す", "彼に反論する"],
+  },
 
-  // Directions
-  { q:"Excuse me, is there a convenience store near here?", qJa:"すみません、近くにコンビニはありますか？", a:"Yes, go straight and it's on your right.", aJa:"まっすぐ行くと右手にありますよ。", w:["I'll have the set menu.","The check, please."], wJa:["セットメニューにします。","お会計をお願いします。"] },
-  { q:"How do I get to the station?", qJa:"駅へはどう行けばいいですか？", a:"Take the second left, then it's straight ahead.", aJa:"2番目の角を左に曲がって、まっすぐです。", w:["I need a charger.","The bill, please."], wJa:["充電器が欲しい。","お会計お願いします。"] },
-  { q:"Is it walking distance?", qJa:"歩いて行けますか？", a:"It's about a 10-minute walk.", aJa:"歩いて約10分です。", w:["I'd like a table for two.","The food was great."], wJa:["2人席をお願いします。","食事がおいしかった。"] },
-  { q:"Can I walk there from here?", qJa:"ここから歩いて行けますか？", a:"It's a bit far. You'd better take a bus.", aJa:"少し遠いです。バスに乗った方がいいですよ。", w:["I need help.","Turn right here."], wJa:["助けてください。","ここを右に曲がって。"] },
+  // ══ T消去・弱化（語末や子音前の t が消える） ══
+  {
+    phrase: "next time",
+    meaning: "次回・今度",
+    pronunciationTip: "【T消去】 next の t は子音 t の前に来るため消え「ネクスタイム」と聞こえます。",
+    w: ["毎回", "今すぐ"],
+  },
+  {
+    phrase: "last night",
+    meaning: "昨夜",
+    pronunciationTip: "【T消去】 last の t は子音 n の前で消えほぼ「ラスナイト」になります。",
+    w: ["毎晩", "先週末"],
+  },
+  {
+    phrase: "just in case",
+    meaning: "念のために",
+    pronunciationTip: "【T消去＋リンキング】 just の t は消え in の i と繋がり「ジャスキンケイス」のように聞こえます。",
+    w: ["いずれにせよ", "場合によっては"],
+  },
+  {
+    phrase: "best friend",
+    meaning: "親友",
+    pronunciationTip: "【T消去】 best の t は子音 f の前で消え「ベスフレンド」と聞こえます。",
+    w: ["古い友人", "同僚"],
+  },
+  {
+    phrase: "first time",
+    meaning: "初めて",
+    pronunciationTip: "【T消去】 first の t は子音 t の前で消え「ファースタイム」のように発音されます。",
+    w: ["最後に", "次回"],
+  },
 
-  // Plans / invitations
-  { q:"Wanna grab lunch later?", qJa:"後でランチどう？", a:"Yeah, sounds great! Where?", aJa:"いいね！どこに行く？", w:["The line is long.","I'll do it tomorrow."], wJa:["列が長い。","明日やります。"] },
-  { q:"Are you free this weekend?", qJa:"今週末は空いてる？", a:"I think so. What did you have in mind?", aJa:"多分ね。何か考えてる？", w:["I need to cancel.","It's expensive."], wJa:["キャンセルしたい。","高いなぁ。"] },
-  { q:"Do you want to come?", qJa:"一緒に来る？", a:"I'd love to! What time?", aJa:"行きたい！何時？", w:["I'm full, thanks.","I'll pass this time."], wJa:["もうお腹いっぱい。","今回はパスします。"] },
-  { q:"Let's hang out sometime.", qJa:"今度遊ぼうよ。", a:"Definitely! Let me know when.", aJa:"絶対！予定が決まったら教えて。", w:["I disagree.","It's too crowded."], wJa:["反対です。","混みすぎてる。"] },
-  { q:"Can you make it on Friday?", qJa:"金曜日は来れる？", a:"Let me check my schedule.", aJa:"予定を確認してみるね。", w:["I'm not interested.","It's out of stock."], wJa:["興味ないです。","在庫切れです。"] },
+  // ══ アシミレーション（隣の音に同化・融合） ══
+  {
+    phrase: "don't you",
+    meaning: "〜じゃないですか？（確認）",
+    pronunciationTip: "【アシミレーション】 don't の t と you の y が融合し「ドンチュ (dontcha)」と聞こえます。",
+    w: ["〜してください", "〜するつもり？"],
+  },
+  {
+    phrase: "did you",
+    meaning: "〜しましたか？",
+    pronunciationTip: "【アシミレーション】 did の d と you の y が融合し「ディジュ (didja)」と聞こえます。",
+    w: ["〜できますか？", "〜でしたか？"],
+  },
+  {
+    phrase: "would you",
+    meaning: "〜していただけますか？（丁寧な依頼）",
+    pronunciationTip: "【アシミレーション】 would の d と you が融合し「ウッジュ (wouldja)」と聞こえます。",
+    w: ["〜してはどうですか？", "〜できますか？"],
+  },
+  {
+    phrase: "could you",
+    meaning: "〜してもらえますか？",
+    pronunciationTip: "【アシミレーション】 could の d と you が融合し「クッジュ (couldja)」と聞こえます。依頼表現の定番です。",
+    w: ["〜かもしれません", "〜できましたか？"],
+  },
+  {
+    phrase: "miss you",
+    meaning: "あなたに会いたい",
+    pronunciationTip: "【アシミレーション】 miss の s と you の y が融合して「ミシュ (mishyu)」のような音になります。",
+    w: ["あなたを知っている", "あなたを見た"],
+  },
 
-  // Feelings / reactions
-  { q:"That's so funny!", qJa:"それ面白すぎる！", a:"Right? I couldn't stop laughing!", aJa:"でしょ？笑いが止まらなかった！", w:["I need a moment.","Please be quiet."], wJa:["少し待って。","静かにしてください。"] },
-  { q:"I'm so nervous.", qJa:"すごく緊張してる。", a:"Just breathe. You'll do great.", aJa:"深呼吸して。うまくいくよ。", w:["Let me rephrase that.","I'll check it later."], wJa:["言い直しますね。","後で確認します。"] },
-  { q:"I'm absolutely exhausted.", qJa:"もうへとへとだよ。", a:"You should get some rest.", aJa:"少し休んだ方がいいよ。", w:["That's unexpected.","Keep the change."], wJa:["意外だな。","おつりはいいよ。"] },
-  { q:"That's such a relief!", qJa:"それはほっとした！", a:"I know, right? I was so worried.", aJa:"わかる。すごく心配してたんだよね。", w:["Can I borrow a pen?","Do you have Wi-Fi?"], wJa:["ペン貸して。","Wi-Fiはありますか？"] },
-  { q:"I can't believe that happened.", qJa:"信じられない、そんなことが。", a:"Me neither. It was shocking.", aJa:"私も。衝撃だったよね。", w:["Could you speak louder?","I'll take a rain check."], wJa:["もっと大きな声で。","また今度にします。"] },
-
-  // Compliments
-  { q:"You did a great job!", qJa:"よくやったね！", a:"Thanks, I really put in the effort.", aJa:"ありがとう、すごく頑張ったんだ。", w:["I need directions.","Do you have a menu?"], wJa:["道を教えてください。","メニューはありますか？"] },
-  { q:"I love your jacket!", qJa:"そのジャケット素敵！", a:"Thanks! I got it on sale.", aJa:"ありがとう！セールで買ったんだ。", w:["The taxi is here.","I need more time."], wJa:["タクシー来たよ。","もう少し時間が欲しい。"] },
-  { q:"Your English is really good!", qJa:"英語上手ですね！", a:"Thank you! I've been practicing a lot.", aJa:"ありがとうございます。たくさん練習してます。", w:["I can't find it.","What floor is it on?"], wJa:["見つからない。","何階にありますか？"] },
-
-  // Apologies / misunderstandings
-  { q:"Sorry, I'm late!", qJa:"ごめん、遅れた！", a:"No worries, I just got here too.", aJa:"大丈夫、私もさっき着いたとこ。", w:["I'll try again.","Do you accept cards?"], wJa:["もう一度やってみます。","カード使えますか？"] },
-  { q:"I think I misunderstood.", qJa:"勘違いしてたみたい。", a:"It's okay, let me explain again.", aJa:"大丈夫、もう一度説明するね。", w:["I'm in a hurry.","Can we split the bill?"], wJa:["急いでます。","割り勘にできますか？"] },
-  { q:"Could you say that again?", qJa:"もう一度言ってもらえますか？", a:"Of course! I said the meeting's moved.", aJa:"もちろん！会議の日程が変わったって言ったんだよ。", w:["I'll pay for it.","This is too spicy."], wJa:["払います。","これ辛すぎ。"] },
-  { q:"I think I got the wrong order.", qJa:"注文を間違えたみたいです。", a:"I'm so sorry, let me fix that for you.", aJa:"大変失礼しました、すぐに直しますね。", w:["I have jet lag.","Can I get a refill?"], wJa:["時差ぼけしてます。","お代わりもらえますか？"] },
-
-  // Requests & offers
-  { q:"Could you give me a hand?", qJa:"手伝ってもらえる？", a:"Sure! What do you need?", aJa:"もちろん！何が必要？", w:["It's my treat.","I'll skip dessert."], wJa:["おごるよ。","デザートはいらない。"] },
-  { q:"Do you mind if I open the window?", qJa:"窓を開けてもいいですか？", a:"Not at all, go ahead.", aJa:"全然いいよ、どうぞ。", w:["I'm getting sleepy.","Let's hurry."], wJa:["眠くなってきた。","急ごう。"] },
-  { q:"Let me know if you need anything.", qJa:"何か必要なことがあれば言ってね。", a:"Will do, thanks so much.", aJa:"わかった、ありがとう。", w:["What's the Wi-Fi password?","I'll get the next round."], wJa:["Wi-Fiのパスワードは？","次は私が買うよ。"] },
-  { q:"Can I borrow your charger?", qJa:"充電器貸して？", a:"Sure, here you go.", aJa:"いいよ、どうぞ。", w:["I need a bigger size.","It's non-refundable."], wJa:["大きいサイズが欲しい。","返金不可です。"] },
-  { q:"Want me to take a photo for you?", qJa:"写真を撮りましょうか？", a:"That would be great, thank you!", aJa:"ありがたいです、ありがとう！", w:["It's a dead end.","I'll come back later."], wJa:["行き止まりです。","後でまた来ます。"] },
-
-  // Phone / messaging
-  { q:"Can I call you back later?", qJa:"後でかけ直してもいいですか？", a:"Of course, take your time.", aJa:"もちろん、ゆっくりで大丈夫。", w:["I have a question.","The signal is bad."], wJa:["質問があります。","電波が悪い。"] },
-  { q:"Did you get my message?", qJa:"メッセージ届いた？", a:"Yes, just saw it. I'll reply now.", aJa:"うん、ちょうど見たところ。今返信するね。", w:["I'll pass.","Is service included?"], wJa:["パスします。","サービス料は含まれてますか？"] },
-  { q:"Sorry, I missed your call.", qJa:"ごめん、電話に出られなかった。", a:"No problem, I just wanted to confirm.", aJa:"大丈夫、確認したかっただけだから。", w:["I'm on a diet.","Do you have a loyalty card?"], wJa:["ダイエット中です。","会員カードはありますか？"] },
-
-  // Weather
-  { q:"Nice weather today, isn't it?", qJa:"今日いい天気だね。", a:"It really is. Perfect for a walk.", aJa:"本当に。散歩日和だよね。", w:["I need a medium.","Let me double-check."], wJa:["Mサイズをください。","確認してみます。"] },
-  { q:"Looks like it's going to rain.", qJa:"雨が降りそうだね。", a:"Yeah, I should've brought an umbrella.", aJa:"そうだね、傘を持ってくれば良かった。", w:["I'll have the same.","It's on the house."], wJa:["同じものをください。","サービスです。"] },
-  { q:"It's freezing today!", qJa:"今日は凍えそうに寒い！", a:"I know! I should've worn a warmer coat.", aJa:"だよね！もっと厚着すれば良かった。", w:["Can I sit here?","What's the damage?"], wJa:["ここ座っていい？","おいくらですか？"] },
-
-  // Wrapping up
-  { q:"I should get going.", qJa:"そろそろ行かなきゃ。", a:"Already? Well, it was great seeing you.", aJa:"もう？会えてよかったよ。", w:["I'll manage.","Can I exchange this?"], wJa:["なんとかなります。","交換できますか？"] },
-  { q:"Thanks for everything!", qJa:"いろいろありがとう！", a:"Anytime! Take care of yourself.", aJa:"いつでも！体に気をつけてね。", w:["I'll think about it.","Not for me, thanks."], wJa:["考えておきます。","私はいいです。"] },
-  { q:"It was really nice talking with you.", qJa:"話せて本当に楽しかったよ。", a:"Same here! We should do this more often.", aJa:"私もだよ！もっと話そうね。", w:["Check, please.","I'm a vegetarian."], wJa:["お会計ください。","ベジタリアンです。"] },
-  { q:"Keep in touch!", qJa:"また連絡してね！", a:"Definitely! I'll text you.", aJa:"もちろん！テキストするね。", w:["I'll manage on my own.","I need the remote."], wJa:["自分でなんとかします。","リモコン欲しい。"] },
+  // ══ TOEICビジネスチャンク ══
+  {
+    phrase: "in charge of",
+    meaning: "〜を担当して・〜の責任者で",
+    pronunciationTip: "【リダクション】 of が「ア」に縮まり「インチャーヂャ」と聞こえます。TOEICパート3・4で頻出です。",
+    w: ["〜に申し込む", "〜を代表して"],
+  },
+  {
+    phrase: "as soon as possible",
+    meaning: "できる限り早く（ASAP）",
+    pronunciationTip: "【リダクション】 as は「アズ → ア」に弱まり「ア・スーナズ・パッサブル」のように流れます。ビジネスメールでは ASAP と略されます。",
+    w: ["できる限り丁寧に", "できる限り正確に"],
+  },
+  {
+    phrase: "in advance",
+    meaning: "前もって・事前に",
+    pronunciationTip: "【リンキング】 in の n と advance の a が繋がり「イナドヴァンス」のように聞こえます。",
+    w: ["〜に加えて", "結果として"],
+  },
+  {
+    phrase: "on behalf of",
+    meaning: "〜を代表して・〜の代わりに",
+    pronunciationTip: "【リダクション】 of が「ア/ダ」に縮まり「オン・ビハーフア」と聞こえます。ビジネスメールの冒頭でよく使われます。",
+    w: ["〜の隣に", "〜に関して"],
+  },
+  {
+    phrase: "due to",
+    meaning: "〜が原因で・〜のせいで",
+    pronunciationTip: "【リダクション】 to が「タ/トゥ」に弱まり「デュートゥ → デュータ」と聞こえます。",
+    w: ["〜にもかかわらず", "〜の前に"],
+  },
+  {
+    phrase: "in spite of",
+    meaning: "〜にもかかわらず",
+    pronunciationTip: "【リダクション＋リンキング】 spite の t と of の o が繋がり、of は「ア」に縮まって「インスパイタ」と聞こえます。",
+    w: ["〜のおかげで", "〜の代わりに"],
+  },
+  {
+    phrase: "with regard to",
+    meaning: "〜に関して（ビジネスメール定番）",
+    pronunciationTip: "【リダクション】 regard は r と d で流れるように発音され、to は「タ」に縮まり「ウィズリガードタ」と聞こえます。",
+    w: ["〜を尊重して", "〜とともに"],
+  },
+  {
+    phrase: "prior to",
+    meaning: "〜の前に・〜に先立ち",
+    pronunciationTip: "【リンキング＋リダクション】 prior の r と to が繋がり「プライアータ」と聞こえます。フォーマルな書き言葉でも頻出です。",
+    w: ["〜の後に", "〜の代わりに"],
+  },
+  {
+    phrase: "result in",
+    meaning: "〜という結果になる",
+    pronunciationTip: "【リンキング】 result の t と in の i が繋がり「リザルティン」と聞こえます。",
+    w: ["〜から生じる", "〜を含む"],
+  },
+  {
+    phrase: "consist of",
+    meaning: "〜から構成される",
+    pronunciationTip: "【リダクション】 of が「ア」に縮まり「コンシストア」と聞こえます。",
+    w: ["〜に同意する", "〜を含む"],
+  },
+  {
+    phrase: "apply for",
+    meaning: "〜に申し込む・応募する",
+    pronunciationTip: "【リダクション】 for が「ファー → ファ」に弱まり「アプライファ」のように聞こえます。TOEICパート5・6で頻出の動詞句です。",
+    w: ["〜を取り消す", "〜を要求する"],
+  },
+  {
+    phrase: "look forward to",
+    meaning: "〜を楽しみにしている",
+    pronunciationTip: "【リダクション＋リンキング】 forward の d と to が繋がり「ルックフォーワートゥ → フォーワータ」と流れます。to の後に動名詞（-ing）が続きます。",
+    w: ["〜を振り返る", "〜に向かって進む"],
+  },
+  {
+    phrase: "make sure",
+    meaning: "確かめる・必ず〜する",
+    pronunciationTip: "【リンキング】 make の k と sure が繋がり「メイクシュア」と一息で発音されます。命令文 'Make sure you...' でよく使われます。",
+    w: ["見逃さない", "安心させる"],
+  },
+  {
+    phrase: "come up with",
+    meaning: "思いつく・〜を考え出す",
+    pronunciationTip: "【リンキング】 up の p と with が繋がり「カムアップウィズ」と流れます。アイデアを出す場面で必須の句動詞です。",
+    w: ["〜に追いつく", "〜を諦める"],
+  },
+  {
+    phrase: "keep in mind",
+    meaning: "覚えておく・肝に銘じる",
+    pronunciationTip: "【リンキング】 keep の p と in が繋がり「キーピン・マインド」と聞こえます。",
+    w: ["気にしない", "忘れてしまう"],
+  },
+  {
+    phrase: "carry out",
+    meaning: "実行する・遂行する",
+    pronunciationTip: "【フラッピング】 carry の r と out が繋がり、ry の y が母音化して「キャリーアウト → キャリャウト」のように速く流れます。",
+    w: ["中止する", "持ち帰る"],
+  },
+  {
+    phrase: "take part in",
+    meaning: "〜に参加する",
+    pronunciationTip: "【リンキング＋T消去】 take の k と part の t が連続し、part の t は in の前で「テイクパーリン」のように流れます。",
+    w: ["〜を分担する", "〜から離れる"],
+  },
+  {
+    phrase: "in terms of",
+    meaning: "〜に関しては・〜の点では",
+    pronunciationTip: "【リダクション】 of が「ア」に縮まり「インタームズア」のように聞こえます。比較や説明でよく使われます。",
+    w: ["〜のおかげで", "〜にもかかわらず"],
+  },
+  {
+    phrase: "get rid of",
+    meaning: "〜を取り除く・捨てる",
+    pronunciationTip: "【フラッピング＋リダクション】 get の t がラ行化し、of が「ア」に縮まって「ゲリダ」と流れます。",
+    w: ["〜を集める", "〜を保管する"],
+  },
+  {
+    phrase: "point out",
+    meaning: "指摘する・注意を向ける",
+    pronunciationTip: "【リンキング】 point の t と out の ou が繋がり「ポインタウト」のように聞こえます。",
+    w: ["指示する", "証明する"],
+  },
+  {
+    phrase: "cut down on",
+    meaning: "〜を減らす・削減する",
+    pronunciationTip: "【リンキング】 down の n と on が繋がり「カット・ダウノン」のように流れます。",
+    w: ["〜を増やす", "〜を廃止する"],
+  },
+  {
+    phrase: "a piece of cake",
+    meaning: "朝飯前・とても簡単なこと",
+    pronunciationTip: "【リンキング】 piece の s と of が繋がり「ア・ピーサ・ケイク」と流れます。of はここでも「ア」に縮まります。",
+    w: ["大変な仕事", "甘い話"],
+  },
+  {
+    phrase: "break a leg",
+    meaning: "頑張って！（舞台・試験前の励まし）",
+    pronunciationTip: "【リンキング】 break の k と a が繋がり「ブレイカレッグ」と発音されます。直訳の意味では使いません。",
+    w: ["気をつけて", "急いで"],
+  },
+  {
+    phrase: "under the weather",
+    meaning: "体調が優れない",
+    pronunciationTip: "【リダクション】 the が「ザ → ダ」に弱まり、under と繋がって「アンダダ・ウェザー」と聞こえます。",
+    w: ["雨の中で", "天気が悪い"],
+  },
+  {
+    phrase: "once in a while",
+    meaning: "時々・たまに",
+    pronunciationTip: "【リンキング＋フラッピング】 once の s と in が繋がり、in の n と a が繋がって「ワンシナワイル」のように流れます。",
+    w: ["いつも", "全く〜ない"],
+  },
+  {
+    phrase: "on the other hand",
+    meaning: "一方で・他方では",
+    pronunciationTip: "【リダクション】 the は「ダ」に縮まり「オンダ・アザーハンド」のように聞こえます。",
+    w: ["その結果", "最終的に"],
+  },
+  {
+    phrase: "make a difference",
+    meaning: "変化をもたらす・重要である",
+    pronunciationTip: "【リンキング＋フラッピング】 make の k と a が繋がり、difference の t がラ行化して「メイカ・ディファランス」のように流れます。",
+    w: ["違いを無視する", "問題を引き起こす"],
+  },
 ];
 
-// ─── Choice card ──────────────────────────────────────────────────
+// ─── ChoiceBtn ────────────────────────────────────────────────────
 function ChoiceBtn({
-  text, ja, isAnswer, selected, revealed, disabled, onSelect,
+  text, isAnswer, selected, revealed, disabled, onSelect,
 }: {
-  text: string; ja: string; isAnswer: boolean;
+  text: string; isAnswer: boolean;
   selected: boolean; revealed: boolean; disabled: boolean;
   onSelect: () => void;
 }) {
-  const [showJa, setShowJa] = useState(false);
-
-  // Reset ja display when question changes
-  useEffect(() => { setShowJa(false); }, [text]);
-
   let ring = 'border-gray-200 bg-white text-gray-800';
   if (revealed) {
-    if (isAnswer)       ring = 'border-emerald-400 bg-emerald-50 text-emerald-800';
-    else if (selected)  ring = 'border-red-300 bg-red-50 text-red-700';
-    else                ring = 'border-gray-100 bg-gray-50 text-gray-300';
+    if (isAnswer)      ring = 'border-emerald-500 bg-emerald-50 text-emerald-900';
+    else if (selected) ring = 'border-red-400 bg-red-50 text-red-800';
+    else               ring = 'border-gray-100 bg-gray-50 text-gray-300';
   }
 
   return (
-    <div className={`rounded-2xl border-2 transition-all duration-150 ${ring} overflow-hidden`}>
-      <button
-        onClick={onSelect}
-        disabled={disabled}
-        className="w-full text-left px-4 py-3.5 font-bold text-sm leading-snug active:opacity-70"
-      >
-        {text}
-      </button>
-      <div className="flex gap-2 px-3 pb-3 pt-0">
-        <button
-          onClick={() => speak(text)}
-          className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-600 active:scale-95 transition-transform"
-        >
-          🔊 発音
-        </button>
-        <button
-          onClick={() => setShowJa(v => !v)}
-          className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 active:scale-95 transition-transform"
-        >
-          {showJa ? '▲ 和訳' : '和訳 ▼'}
-        </button>
-        {showJa && (
-          <span className="text-[10px] text-gray-500 self-center">{ja}</span>
-        )}
-      </div>
-    </div>
+    <button
+      onClick={onSelect}
+      disabled={disabled}
+      className={`w-full text-left px-4 py-3.5 rounded-2xl border-2 font-bold text-sm leading-snug transition-all duration-150 active:opacity-70 ${ring}`}
+    >
+      {revealed && isAnswer && <span className="mr-1.5">✅</span>}
+      {revealed && selected && !isAnswer && <span className="mr-1.5">❌</span>}
+      {text}
+    </button>
   );
 }
 
@@ -178,24 +507,22 @@ export function DailyPractice() {
   const [idx, setIdx]           = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
-  const [showQJa, setShowQJa]   = useState(false);
+  const [flash, setFlash]       = useState<'ok'|'ng'|null>(null);
   const [correct, setCorrect]   = useState(0);
   const [total, setTotal]       = useState(0);
-  const [flash, setFlash]       = useState<'ok'|'ng'|null>(null);
 
   const item = deck[idx % deck.length];
 
-  // Rebuild shuffled choices each time item changes
-  const [choices, setChoices] = useState<{ text: string; ja: string; isAnswer: boolean }[]>([]);
+  const [choices, setChoices] = useState<{ text: string; isAnswer: boolean }[]>([]);
   useEffect(() => {
     setChoices(shuffle([
-      { text: item.a,    ja: item.aJa,    isAnswer: true  },
-      { text: item.w[0], ja: item.wJa[0], isAnswer: false },
-      { text: item.w[1], ja: item.wJa[1], isAnswer: false },
+      { text: item.meaning, isAnswer: true  },
+      { text: item.w[0],    isAnswer: false },
+      { text: item.w[1],    isAnswer: false },
     ]));
     setSelected(null);
     setRevealed(false);
-    setShowQJa(false);
+    setFlash(null);
   }, [idx, item]);
 
   const handleSelect = useCallback((text: string, isAnswer: boolean) => {
@@ -203,71 +530,64 @@ export function DailyPractice() {
     setSelected(text);
     setRevealed(true);
     setTotal(t => t + 1);
-    if (isAnswer) {
-      setCorrect(c => c + 1);
-      setFlash('ok');
+    setFlash(isAnswer ? 'ok' : 'ng');
+    if (isAnswer) setCorrect(c => c + 1);
+  }, [revealed]);
+
+  const handleNext = useCallback(() => {
+    if (idx + 1 >= deck.length) {
+      setDeck(shuffle(DATA));
+      setIdx(0);
     } else {
-      setFlash('ng');
+      setIdx(i => i + 1);
     }
-    setTimeout(() => {
-      setFlash(null);
-      if (idx + 1 >= deck.length) {
-        setDeck(shuffle(DATA));
-        setIdx(0);
-      } else {
-        setIdx(i => i + 1);
-      }
-    }, 900);
-  }, [revealed, idx, deck.length]);
+  }, [idx, deck.length]);
 
   const pct = total > 0 ? Math.round(correct / total * 100) : 0;
 
   return (
-    <div className={`min-h-screen px-4 pt-2 pb-[120px] max-w-md mx-auto transition-colors duration-150 ${
+    <div className={`min-h-screen px-4 pt-2 pb-[120px] max-w-md mx-auto transition-colors duration-200 ${
       flash === 'ok' ? 'bg-emerald-50' : flash === 'ng' ? 'bg-red-50' : 'bg-white'
     }`}>
 
-      {/* Score bar */}
+      {/* ── スコアバー ── */}
       <div className="flex items-center justify-between mb-4 px-1">
-        <span className="text-xs font-bold text-gray-400">
-          {total > 0 ? `${correct}/${total} (${pct}%)` : 'Daily Practice'}
+        <span className="text-xs font-bold text-gray-700">
+          {total > 0 ? `${correct}/${total} (${pct}%)` : '🎧 発音チャンク練習'}
         </span>
-        <span className="text-xs font-bold text-gray-400">
+        <span className="text-xs font-bold text-gray-700">
           {idx + 1} / {deck.length}
         </span>
       </div>
 
-      {/* Question card */}
-      <div className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden mb-5">
-        <div className="px-5 pt-5 pb-3">
-          <p className="text-xl font-black text-gray-900 leading-snug mb-4">{item.q}</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => speak(item.q)}
-              className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-full bg-indigo-600 text-white active:scale-95 transition-transform"
-            >
-              🔊 発音
-            </button>
-            <button
-              onClick={() => setShowQJa(v => !v)}
-              className="flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-600 active:scale-95 transition-transform"
-            >
-              {showQJa ? '▲ 和訳' : '和訳 ▼'}
-            </button>
-            {showQJa && (
-              <span className="text-xs text-gray-500 w-full mt-1">{item.qJa}</span>
-            )}
-          </div>
+      {/* ── 問題カード ── */}
+      <div className="bg-gray-900 rounded-2xl overflow-hidden mb-5 shadow-lg">
+        <div className="px-5 pt-5 pb-4">
+          {/* フレーズ */}
+          <p className="text-2xl font-black text-white leading-snug mb-3 tracking-wide">
+            &ldquo;{item.phrase}&rdquo;
+          </p>
+          {/* TTS ボタン */}
+          <button
+            onClick={() => speak(item.phrase)}
+            className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full bg-white/20 text-white active:scale-95 transition-transform"
+          >
+            🔊 ネイティブ発音を聞く
+          </button>
+        </div>
+        <div className="px-5 pb-4">
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+            正しい意味を選んでください
+          </p>
         </div>
       </div>
 
-      {/* Choices */}
-      <div className="space-y-3">
+      {/* ── 選択肢 ── */}
+      <div className="space-y-3 mb-5">
         {choices.map(c => (
           <ChoiceBtn
             key={c.text}
             text={c.text}
-            ja={c.ja}
             isAnswer={c.isAnswer}
             selected={selected === c.text}
             revealed={revealed}
@@ -276,6 +596,39 @@ export function DailyPractice() {
           />
         ))}
       </div>
+
+      {/* ── 発音のコツ（回答後に表示） ── */}
+      {revealed && (
+        <div className="rounded-2xl border-2 border-violet-400 bg-violet-50 p-4 mb-5 space-y-2 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🎯</span>
+            <p className="text-xs font-black text-violet-800 uppercase tracking-widest">
+              発音のコツ
+            </p>
+          </div>
+          <p className="text-sm font-bold text-gray-900 leading-relaxed">
+            {item.pronunciationTip}
+          </p>
+          <div className="pt-1">
+            <button
+              onClick={() => speak(item.phrase)}
+              className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full bg-violet-700 text-white active:scale-95 transition-transform"
+            >
+              🔊 もう一度聞く
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 次へボタン ── */}
+      {revealed && (
+        <button
+          onClick={handleNext}
+          className="w-full py-3.5 rounded-2xl font-black text-base bg-gray-900 text-white active:scale-[0.98] transition-all shadow-md"
+        >
+          次のチャンクへ →
+        </button>
+      )}
     </div>
   );
 }
