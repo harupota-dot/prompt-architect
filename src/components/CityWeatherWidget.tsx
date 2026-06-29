@@ -11,36 +11,25 @@ type CityKey = keyof typeof CITIES;
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
-// ─── 天気コード ヘルパー ──────────────────────────────────────────
-function wi(code: number): { emoji: string; desc: string } {
-  if (code === 0)  return { emoji: '☀️',  desc: '快晴'       };
-  if (code <= 2)   return { emoji: '🌤️',  desc: '晴れ'       };
-  if (code === 3)  return { emoji: '☁️',  desc: '曇り'       };
-  if (code <= 48)  return { emoji: '🌫️', desc: '霧'         };
-  if (code <= 55)  return { emoji: '🌦️', desc: '霧雨'       };
-  if (code <= 65)  return { emoji: '☔',  desc: '雨'         };
-  if (code <= 67)  return { emoji: '🌨️', desc: 'みぞれ'     };
-  if (code <= 77)  return { emoji: '⛄',  desc: '雪'         };
-  if (code <= 82)  return { emoji: '🌧️', desc: 'にわか雨'   };
-  if (code <= 86)  return { emoji: '🌨️', desc: 'にわか雪'   };
-  if (code === 95) return { emoji: '⛈️', desc: '雷雨'       };
-  return                  { emoji: '⛈️', desc: '激しい雷雨' };
-}
-
-function skyGrad(code: number): string {
-  if (code === 0)  return 'from-sky-400 via-blue-400 to-indigo-500';
-  if (code <= 2)   return 'from-sky-300 via-blue-300 to-indigo-400';
-  if (code === 3)  return 'from-slate-400 via-gray-400 to-slate-500';
-  if (code <= 48)  return 'from-gray-400 via-slate-400 to-gray-500';
-  if (code <= 65)  return 'from-slate-500 via-blue-600 to-indigo-700';
-  if (code <= 77)  return 'from-blue-200 via-slate-300 to-indigo-300';
-  return                  'from-indigo-600 via-purple-700 to-slate-800';
+// ─── 天気コード ───────────────────────────────────────────────────
+function wi(code: number): { emoji: string; desc: string; heroBg: string } {
+  if (code === 0)  return { emoji: '☀️',  desc: '快晴',       heroBg: 'from-sky-500 to-blue-600' };
+  if (code <= 2)   return { emoji: '🌤️',  desc: '晴れ',       heroBg: 'from-sky-400 to-blue-500' };
+  if (code === 3)  return { emoji: '☁️',  desc: '曇り',       heroBg: 'from-slate-500 to-slate-700' };
+  if (code <= 48)  return { emoji: '🌫️', desc: '霧',         heroBg: 'from-gray-500 to-slate-600' };
+  if (code <= 55)  return { emoji: '🌦️', desc: '霧雨',       heroBg: 'from-blue-500 to-slate-600' };
+  if (code <= 65)  return { emoji: '☔',  desc: '雨',         heroBg: 'from-blue-600 to-indigo-700' };
+  if (code <= 67)  return { emoji: '🌨️', desc: 'みぞれ',     heroBg: 'from-blue-300 to-slate-500' };
+  if (code <= 77)  return { emoji: '⛄',  desc: '雪',         heroBg: 'from-blue-200 to-indigo-400' };
+  if (code <= 82)  return { emoji: '🌧️', desc: 'にわか雨',   heroBg: 'from-slate-600 to-blue-700' };
+  if (code <= 86)  return { emoji: '🌨️', desc: 'にわか雪',   heroBg: 'from-blue-300 to-slate-500' };
+  if (code === 95) return { emoji: '⛈️', desc: '雷雨',       heroBg: 'from-indigo-700 to-slate-900' };
+  return                  { emoji: '⛈️', desc: '激しい雷雨', heroBg: 'from-indigo-800 to-slate-900' };
 }
 
 // ─── 型定義 ───────────────────────────────────────────────────────
 interface HourSlot { time: string; temp: number; code: number; }
 interface DaySlot  { date: string; wday: string; code: number; max: number; min: number; }
-
 interface WeatherData {
   temp:      number;
   windspeed: number;
@@ -67,39 +56,35 @@ async function fetchWeather(city: CityKey): Promise<WeatherData> {
     `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
     `&timezone=Asia%2FTokyo`;
 
-  const res  = await fetch(url);
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const j    = await res.json();
-  const cw   = j.current_weather;
+  const j   = await res.json();
+  const cw  = j.current_weather;
 
-  // 現在時刻インデックス（hourly は1時間単位）
-  const nowHour = cw.time.slice(0, 13); // "2024-06-29T14"
-  const hTimes  = j.hourly.time as string[];
-  const hTemps  = j.hourly.temperature_2m as number[];
-  const hCodes  = j.hourly.weathercode as number[];
+  const nowHour  = cw.time.slice(0, 13);
+  const hTimes   = j.hourly.time as string[];
+  const hTemps   = j.hourly.temperature_2m as number[];
+  const hCodes   = j.hourly.weathercode as number[];
   const startIdx = Math.max(0, hTimes.findIndex(t => t.startsWith(nowHour)));
 
   const hourly: HourSlot[] = hTimes
     .slice(startIdx, startIdx + 25)
     .map((t, i) => ({
-      time: t.slice(11, 16),            // "14:00"
+      time: t.slice(11, 16),
       temp: Math.round(hTemps[startIdx + i]),
       code: hCodes[startIdx + i],
     }));
 
-  // daily
   const dDates = j.daily.time as string[];
   const dCodes = j.daily.weathercode as number[];
   const dMax   = j.daily.temperature_2m_max as number[];
   const dMin   = j.daily.temperature_2m_min as number[];
 
   const daily: DaySlot[] = dDates.map((d, i) => {
-    const dt   = new Date(d + 'T00:00:00');
-    const wday = WEEKDAYS[dt.getDay()];
-    const mmdd = `${dt.getMonth() + 1}/${dt.getDate()}`;
+    const dt = new Date(d + 'T00:00:00');
     return {
-      date: mmdd,
-      wday,
+      date: `${dt.getMonth() + 1}/${dt.getDate()}`,
+      wday: WEEKDAYS[dt.getDay()],
       code: dCodes[i],
       max:  Math.round(dMax[i]),
       min:  Math.round(dMin[i]),
@@ -110,8 +95,7 @@ async function fetchWeather(city: CityKey): Promise<WeatherData> {
     temp:      Math.round(cw.temperature * 10) / 10,
     windspeed: Math.round(cw.windspeed),
     code:      cw.weathercode,
-    hourly,
-    daily,
+    hourly, daily,
     fetchedAt: Date.now(),
   };
   cache[city] = data;
@@ -121,24 +105,15 @@ async function fetchWeather(city: CityKey): Promise<WeatherData> {
 // ─── スケルトン ───────────────────────────────────────────────────
 function Skeleton() {
   return (
-    <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-slate-300 to-slate-400 animate-pulse shadow-lg">
+    <div className="rounded-3xl overflow-hidden bg-slate-200 animate-pulse shadow-lg">
       <div className="p-5 space-y-4">
         <div className="flex justify-center">
-          <div className="h-9 w-52 bg-white/20 rounded-full" />
+          <div className="h-11 w-56 bg-slate-300 rounded-full" />
         </div>
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <div className="h-3 w-16 bg-white/20 rounded-full" />
-            <div className="h-14 w-28 bg-white/30 rounded-2xl" />
-            <div className="h-3 w-20 bg-white/20 rounded-full" />
-          </div>
-          <div className="h-20 w-20 bg-white/20 rounded-full" />
-        </div>
-        <div className="h-24 bg-white/10 rounded-2xl" />
-        <div className="space-y-2">
-          {[0,1,2].map(i => (
-            <div key={i} className="h-9 bg-white/10 rounded-xl" />
-          ))}
+        <div className="bg-slate-300 rounded-2xl h-32" />
+        <div className="bg-white rounded-2xl h-24 border border-slate-200" />
+        <div className="bg-white rounded-2xl border border-slate-200 space-y-2 p-3">
+          {[0,1,2].map(i => <div key={i} className="h-10 bg-slate-100 rounded-xl" />)}
         </div>
       </div>
     </div>
@@ -164,11 +139,11 @@ export function CityWeatherWidget() {
   if (loading) return <Skeleton />;
   if (error) {
     return (
-      <div className="rounded-3xl bg-slate-800 text-white p-5 text-center space-y-2 shadow-lg">
-        <p className="text-3xl">📡</p>
-        <p className="text-sm font-bold opacity-70">天気データを取得できませんでした</p>
+      <div className="rounded-3xl bg-slate-800 text-white p-6 text-center space-y-3 shadow-lg">
+        <p className="text-4xl">📡</p>
+        <p className="text-base font-bold">天気データを取得できませんでした</p>
         <button onClick={() => load(city)}
-          className="px-4 py-2 rounded-xl bg-white/15 text-xs font-black active:scale-95 transition-transform">
+          className="px-5 py-2.5 rounded-xl bg-white text-slate-900 text-sm font-black active:scale-95 transition-transform">
           再試行
         </button>
       </div>
@@ -177,124 +152,139 @@ export function CityWeatherWidget() {
 
   const d       = data!;
   const info    = wi(d.code);
-  const grad    = skyGrad(d.code);
   const cityDef = CITIES[city];
   const today   = d.daily[0];
 
   return (
-    <div className={`rounded-3xl overflow-hidden bg-gradient-to-br ${grad} shadow-lg`}>
-      <div className="p-5 space-y-4">
+    <div className="rounded-3xl overflow-hidden shadow-lg bg-white border border-gray-200">
 
-        {/* ══ 都市トグル ══ */}
-        <div className="flex justify-center">
-          <div className="flex bg-black/20 p-1 rounded-full gap-1">
+      {/* ══ ヒーロー（現在の天気） ══ */}
+      <div className={`bg-gradient-to-br ${info.heroBg} p-5`}>
+
+        {/* 都市トグル */}
+        <div className="flex justify-center mb-4">
+          <div className="flex bg-black/30 p-1 rounded-full gap-1">
             {(Object.keys(CITIES) as CityKey[]).map(key => (
               <button key={key} onClick={() => setCity(key)}
-                className={`px-4 py-1.5 rounded-full text-xs font-black transition-all ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-black transition-all ${
                   city === key
-                    ? 'bg-white text-slate-800 shadow-md'
-                    : 'text-white/70 active:text-white'
+                    ? 'bg-white text-gray-900 shadow-lg'
+                    : 'text-white border border-white/50 hover:border-white'
                 }`}>
-                {CITIES[key].icon} {CITIES[key].label}
+                <span>{CITIES[key].icon}</span>
+                <span>{CITIES[key].label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* ══ 現在の天気 ══ */}
+        {/* 現在気温 + アイコン */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-white/60 text-xs font-bold">
+            <p className="text-white text-sm font-bold mb-1">
               {cityDef.label} · {cityDef.labelEn}
             </p>
-            <div className="flex items-end gap-1 mt-0.5">
-              <span className="text-6xl font-black text-white leading-none">{d.temp}</span>
-              <span className="text-xl text-white/80 font-bold mb-1">°C</span>
+            <div className="flex items-end gap-1">
+              <span className="text-7xl font-black text-white leading-none">{d.temp}</span>
+              <span className="text-2xl text-white font-bold mb-2">°C</span>
             </div>
-            <p className="text-white/90 text-sm font-bold mt-1">{info.desc}</p>
-            <p className="text-white/50 text-[10px] mt-0.5">
+            <p className="text-white text-base font-extrabold mt-1">{info.desc}</p>
+            <p className="text-white/80 text-sm font-bold mt-0.5">
               💨 {d.windspeed} km/h &nbsp;·&nbsp;
-              最高 {today?.max ?? '—'}° / 最低 {today?.min ?? '—'}°
+              最高 <span className="text-orange-200 font-black">{today?.max ?? '—'}°</span>
+              {' / '}
+              最低 <span className="text-blue-200 font-black">{today?.min ?? '—'}°</span>
             </p>
           </div>
-          <div className="text-7xl leading-none select-none"
-            style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.35))' }}>
+          <div className="text-8xl leading-none select-none"
+            style={{ filter: 'drop-shadow(0 6px 16px rgba(0,0,0,0.4))' }}>
             {info.emoji}
           </div>
         </div>
+      </div>
 
-        {/* ══ 時間別予報（横スクロール） ══ */}
-        <div>
-          <p className="text-white/50 text-[10px] font-black uppercase tracking-widest mb-2">
-            ⏱ 時間別予報
-          </p>
-          <div className="overflow-x-auto pb-1 -mx-1">
-            <div className="flex gap-2 px-1" style={{ width: 'max-content' }}>
-              {d.hourly.map((h, i) => {
-                const isNow = i === 0;
-                return (
-                  <div key={i}
-                    className={`flex flex-col items-center gap-1 px-3 py-2 rounded-2xl min-w-[54px] ${
-                      isNow ? 'bg-white/30 ring-2 ring-white/60' : 'bg-white/10'
-                    }`}>
-                    <span className="text-[10px] text-white/70 font-bold">
-                      {isNow ? 'Now' : h.time}
-                    </span>
-                    <span className="text-xl leading-none">{wi(h.code).emoji}</span>
-                    <span className="text-xs font-black text-white">{h.temp}°</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* 区切り */}
-        <div className="border-t border-white/15" />
-
-        {/* ══ 週間予報 ══ */}
-        <div>
-          <p className="text-white/50 text-[10px] font-black uppercase tracking-widest mb-2">
-            📅 週間予報
-          </p>
-          <div className="space-y-1">
-            {d.daily.map((day, i) => {
-              const isToday = i === 0;
+      {/* ══ 時間別予報 ══ */}
+      <div className="px-4 pt-4 pb-2">
+        <p className="text-xs font-black text-gray-900 uppercase tracking-widest mb-3">
+          ⏱ 時間別予報（24時間）
+        </p>
+        <div className="overflow-x-auto pb-2 -mx-1">
+          <div className="flex gap-2 px-1" style={{ width: 'max-content' }}>
+            {d.hourly.map((h, i) => {
+              const isNow = i === 0;
               return (
                 <div key={i}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-xl ${
-                    isToday ? 'bg-white/20' : 'bg-white/8'
-                  }`}
-                  style={{ background: isToday ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)' }}>
-                  {/* 曜日・日付 */}
-                  <div className="w-16 flex-shrink-0">
-                    <span className={`text-xs font-black ${isToday ? 'text-white' : 'text-white/70'}`}>
-                      {isToday ? '今日' : `${day.wday}曜`}
-                    </span>
-                    <span className="text-[10px] text-white/40 ml-1">{day.date}</span>
-                  </div>
-                  {/* 天気アイコン */}
-                  <span className="text-xl leading-none flex-shrink-0">{wi(day.code).emoji}</span>
-                  {/* 天気説明 */}
-                  <span className="text-[11px] text-white/60 flex-1 truncate">{wi(day.code).desc}</span>
-                  {/* 気温バー */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <span className="text-xs font-black text-blue-200">{day.min}°</span>
-                    <span className="text-white/30 text-xs">—</span>
-                    <span className="text-xs font-black text-orange-200">{day.max}°</span>
-                  </div>
+                  className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-2xl min-w-[60px] border-2 ${
+                    isNow
+                      ? 'bg-slate-900 border-slate-900'
+                      : 'bg-white border-gray-200'
+                  }`}>
+                  <span className={`text-[11px] font-black ${isNow ? 'text-white' : 'text-gray-900'}`}>
+                    {isNow ? 'Now' : h.time}
+                  </span>
+                  <span className="text-2xl leading-none">{wi(h.code).emoji}</span>
+                  <span className={`text-sm font-black ${isNow ? 'text-white' : 'text-gray-900'}`}>
+                    {h.temp}°
+                  </span>
                 </div>
               );
             })}
           </div>
         </div>
+      </div>
+
+      {/* 区切り */}
+      <div className="mx-4 border-t-2 border-gray-100 my-1" />
+
+      {/* ══ 週間予報 ══ */}
+      <div className="px-4 pt-3 pb-4">
+        <p className="text-xs font-black text-gray-900 uppercase tracking-widest mb-3">
+          📅 週間予報
+        </p>
+        <div className="space-y-1.5">
+          {d.daily.map((day, i) => {
+            const isToday = i === 0;
+            return (
+              <div key={i}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl ${
+                  isToday ? 'bg-slate-900' : 'bg-gray-50 border border-gray-200'
+                }`}>
+                {/* 曜日 */}
+                <div className="w-14 flex-shrink-0">
+                  <span className={`text-sm font-black ${isToday ? 'text-white' : 'text-gray-900'}`}>
+                    {isToday ? '今日' : `${day.wday}曜`}
+                  </span>
+                  <span className={`text-xs font-bold ml-1 ${isToday ? 'text-gray-300' : 'text-gray-500'}`}>
+                    {day.date}
+                  </span>
+                </div>
+                {/* アイコン */}
+                <span className="text-2xl leading-none flex-shrink-0">{wi(day.code).emoji}</span>
+                {/* 説明 */}
+                <span className={`text-sm font-bold flex-1 truncate ${isToday ? 'text-gray-200' : 'text-gray-700'}`}>
+                  {wi(day.code).desc}
+                </span>
+                {/* 気温 */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`text-sm font-black ${isToday ? 'text-blue-300' : 'text-blue-600'}`}>
+                    {day.min}°
+                  </span>
+                  <span className={`text-xs ${isToday ? 'text-gray-500' : 'text-gray-300'}`}>—</span>
+                  <span className={`text-sm font-black ${isToday ? 'text-orange-300' : 'text-orange-600'}`}>
+                    {day.max}°
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
         {/* 更新時刻 */}
-        <p className="text-white/25 text-[9px] text-right">
+        <p className="text-gray-400 text-[10px] font-bold text-right mt-3">
           {new Date(d.fetchedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} 更新 · Open-Meteo
         </p>
-
       </div>
+
     </div>
   );
 }

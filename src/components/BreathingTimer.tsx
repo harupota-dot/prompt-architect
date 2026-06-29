@@ -114,8 +114,8 @@ export function BreathingTimer({ onMinutesChange }: { onMinutesChange: (mins: nu
           >
             {radius > 25 && (
               <>
-                <span className="text-xs leading-tight text-center px-2">{phase.label}</span>
-                {radius > 38 && <span className="text-[9px] opacity-70 leading-tight text-center px-2">{phase.labelSub}</span>}
+                <span className="text-sm font-black leading-tight text-center px-2">{phase.label}</span>
+                {radius > 38 && <span className="text-xs font-bold opacity-90 leading-tight text-center px-2">{phase.labelSub}</span>}
               </>
             )}
           </div>
@@ -124,34 +124,34 @@ export function BreathingTimer({ onMinutesChange }: { onMinutesChange: (mins: nu
         {/* Phase text (outside circle for small sizes) */}
         {radius <= 25 && (
           <div className="text-center">
-            <p className="text-lg font-black" style={{ color: phase.color }}>{phase.label}</p>
-            <p className="text-[11px] text-gray-400">{phase.labelSub}</p>
+            <p className="text-xl font-black" style={{ color: phase.color }}>{phase.label}</p>
+            <p className="text-sm font-bold text-gray-700">{phase.labelSub}</p>
           </div>
         )}
 
         {/* Phase countdown */}
         <div className="text-center">
-          <p className="text-2xl font-black tabular-nums" style={{ color: phase.color }}>
+          <p className="text-3xl font-black tabular-nums" style={{ color: phase.color }}>
             {phase.duration - phaseElapsed}
-            <span className="text-sm font-normal text-gray-400">s</span>
+            <span className="text-base font-bold text-gray-700">s</span>
           </p>
-          <p className="text-[10px] text-gray-400">{cyclesDone > 0 ? `${cyclesDone}サイクル完了` : '深呼吸で自律神経を整えます'}</p>
+          <p className="text-sm font-bold text-gray-700">{cyclesDone > 0 ? `${cyclesDone}サイクル完了` : '深呼吸で自律神経を整えます'}</p>
         </div>
       </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="bg-gray-50 rounded-xl p-2">
-          <p className="text-[10px] text-gray-400">実施時間</p>
-          <p className="text-sm font-black text-gray-800">{totalMins}<span className="text-[10px] font-normal">分</span></p>
+        <div className="bg-gray-100 rounded-xl p-3 border border-gray-200">
+          <p className="text-xs font-bold text-gray-700">実施時間</p>
+          <p className="text-lg font-black text-gray-900">{totalMins}<span className="text-sm font-bold">分</span></p>
         </div>
-        <div className="bg-gray-50 rounded-xl p-2">
-          <p className="text-[10px] text-gray-400">消費</p>
-          <p className="text-sm font-black text-emerald-600">{totalKcal}<span className="text-[10px] font-normal">kcal</span></p>
+        <div className="bg-gray-100 rounded-xl p-3 border border-gray-200">
+          <p className="text-xs font-bold text-gray-700">消費</p>
+          <p className="text-lg font-black text-emerald-700">{totalKcal}<span className="text-sm font-bold">kcal</span></p>
         </div>
-        <div className="bg-gray-50 rounded-xl p-2">
-          <p className="text-[10px] text-gray-400">サイクル</p>
-          <p className="text-sm font-black text-violet-600">{cyclesDone}</p>
+        <div className="bg-gray-100 rounded-xl p-3 border border-gray-200">
+          <p className="text-xs font-bold text-gray-700">サイクル</p>
+          <p className="text-lg font-black text-violet-700">{cyclesDone}</p>
         </div>
       </div>
 
@@ -159,17 +159,17 @@ export function BreathingTimer({ onMinutesChange }: { onMinutesChange: (mins: nu
       <div className="flex gap-2">
         <button
           onClick={() => setRunning(r => !r)}
-          className={`flex-1 py-3 rounded-2xl font-black text-sm transition-all active:scale-[0.98] ${
+          className={`flex-1 py-3 rounded-2xl font-black text-base transition-all active:scale-[0.98] ${
             running
               ? 'bg-amber-500 text-white'
-              : 'bg-violet-600 text-white'
+              : 'bg-violet-700 text-white'
           }`}
         >
           {running ? '⏸ Pause' : '▶ Start'}
         </button>
         <button
           onClick={handleReset}
-          className="px-5 py-3 rounded-2xl font-black text-sm bg-gray-100 text-gray-500 active:scale-[0.98] transition-all"
+          className="px-5 py-3 rounded-2xl font-black text-base bg-gray-200 text-gray-800 active:scale-[0.98] transition-all border border-gray-300"
         >
           ↺ Reset
         </button>

@@ -190,7 +190,7 @@ function GoalsTab({ profile, onSave }: { profile: Profile; onSave: (p: Profile) 
   const calc = calcTargetKcal(form);
 
   const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white";
-  const labelCls = "text-[11px] font-bold text-gray-500 mb-1 block";
+  const labelCls = "text-xs font-bold text-gray-700 mb-1 block";
 
   return (
     <div className="space-y-5">
@@ -208,7 +208,7 @@ function GoalsTab({ profile, onSave }: { profile: Profile; onSave: (p: Profile) 
 
       {/* Profile form */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
-        <p className="text-xs font-black text-gray-500 mb-2">プロフィール</p>
+        <p className="text-xs font-black text-gray-800 mb-2">プロフィール</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>身長 (cm)</label>
@@ -243,7 +243,7 @@ function GoalsTab({ profile, onSave }: { profile: Profile; onSave: (p: Profile) 
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
-        <p className="text-xs font-black text-gray-500 mb-2">目標設定</p>
+        <p className="text-xs font-black text-gray-800 mb-2">目標設定</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>現在の体重 (kg)</label>
@@ -396,10 +396,10 @@ function TodayTab({ profile }: { profile: Profile }) {
             <span className="text-base">{icon}</span>
             <p className={`text-sm font-black ${done ? 'text-emerald-700' : 'text-gray-800'}`}>{title}</p>
             {subtitle && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">{subtitle}</span>}
-            <span className="text-[10px] text-gray-400 ml-auto">−{kcalBurn} kcal</span>
+            <span className="text-xs font-bold text-gray-700 ml-auto">−{kcalBurn} kcal</span>
           </div>
-          <p className="text-[10px] text-indigo-600 font-bold mt-1">{sets}</p>
-          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{desc}</p>
+          <p className="text-xs text-indigo-700 font-bold mt-1">{sets}</p>
+          <p className="text-xs text-gray-700 mt-1 leading-relaxed">{desc}</p>
         </div>
       </div>
     </div>
@@ -479,7 +479,7 @@ function TodayTab({ profile }: { profile: Profile }) {
           <span className="text-2xl">🚶</span>
           <div className="flex-1">
             <p className="text-sm font-black text-gray-800">今日の歩数</p>
-            <p className="text-[10px] text-gray-400">消費 = 歩数 × 体重({weight}kg) × 0.0005</p>
+            <p className="text-xs font-bold text-gray-700">消費 = 歩数 × 体重({weight}kg) × 0.0005</p>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -489,7 +489,7 @@ function TodayTab({ profile }: { profile: Profile }) {
               onChange={e => updateEx({ steps: Math.max(0, parseInt(e.target.value) || 0) })}
               className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:border-indigo-400"
             />
-            <span className="text-xs text-gray-400 font-bold w-6">歩</span>
+            <span className="text-xs text-gray-700 font-bold w-6">歩</span>
           </div>
         </div>
         {stepsKcal > 0 && (
@@ -505,7 +505,7 @@ function TodayTab({ profile }: { profile: Profile }) {
           <span className="text-2xl">🏃</span>
           <div className="flex-1">
             <p className="text-sm font-black text-gray-800">インターバル速歩</p>
-            <p className="text-[10px] text-gray-400">通常歩行の約1.5〜2倍消費（分数 × 体重 × 0.08）</p>
+            <p className="text-xs font-bold text-gray-700">通常歩行の約1.5〜2倍消費（分数 × 体重 × 0.08）</p>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -515,7 +515,7 @@ function TodayTab({ profile }: { profile: Profile }) {
               onChange={e => updateEx({ intervalWalkMins: Math.max(0, parseInt(e.target.value) || 0) })}
               className="w-20 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:border-emerald-400"
             />
-            <span className="text-xs text-gray-400 font-bold w-6">分</span>
+            <span className="text-xs text-gray-700 font-bold w-6">分</span>
           </div>
         </div>
         {intervalKcal > 0 && (
@@ -528,8 +528,8 @@ function TodayTab({ profile }: { profile: Profile }) {
       {/* ══ 今日のワークアウト ══ */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 px-1">
-          <p className="text-xs font-black text-gray-500">今日のワークアウト</p>
-          <span className="text-[10px] text-gray-400">
+          <p className="text-xs font-black text-gray-800">今日のワークアウト</p>
+          <span className="text-xs font-bold text-gray-700">
             {['日','月','火','水','木','金','土'][weekday]}曜日
           </span>
           {exKcal > 0 && (
@@ -568,7 +568,7 @@ function TodayTab({ profile }: { profile: Profile }) {
           <p className="text-sm font-black text-gray-800">今日はもっとできる！</p>
           <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">ボーナス</span>
         </div>
-        <p className="text-[10px] text-gray-400">余裕があるときに追加。完了するとカロリーに加算されます。</p>
+        <p className="text-xs font-bold text-gray-700">余裕があるときに追加。完了するとカロリーに加算されます。</p>
         {([
           { key: 'bonusBurpees'  as const, icon: '🤸', name: 'ステップバック・バーピー', sets: '3セット × 10回', kcal: 80,
             desc: '立った状態から手をついてプランク→足を戻して立ち上がる。有酸素と筋トレを同時に刺激。' },
@@ -623,7 +623,7 @@ function TodayTab({ profile }: { profile: Profile }) {
           { label: '🫒 脂質',       gram: Math.round(targetKcal * 0.25 / 9), unit: 'g' },
         ].map(m => (
           <div key={m.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-            <p className="text-[10px] text-gray-500">{m.label}</p>
+            <p className="text-xs font-bold text-gray-700">{m.label}</p>
             <p className="text-lg font-black text-gray-800">{m.gram}<span className="text-xs font-normal">{m.unit}</span></p>
           </div>
         ))}
@@ -631,35 +631,35 @@ function TodayTab({ profile }: { profile: Profile }) {
 
       {/* ══ 食事追加フォーム ══ */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
-        <p className="text-xs font-black text-gray-500">食事を追加</p>
+        <p className="text-xs font-black text-gray-800">食事を追加</p>
 
         <div>
-          <label className="text-[11px] font-bold text-gray-400 mb-1 block">① タイミング</label>
+          <label className="text-xs font-bold text-gray-700 mb-1 block">① タイミング</label>
           <div className="flex gap-1.5 flex-wrap">
             {MEAL_LABELS.map(l => (
               <button key={l} onClick={() => setTiming(l)}
                 className={`px-3 py-1.5 rounded-full text-xs font-black border-2 transition-all ${
-                  timing === l ? `${LABEL_COLOR[l]} border-current` : 'bg-gray-50 text-gray-400 border-gray-100'
+                  timing === l ? `${LABEL_COLOR[l]} border-current` : 'bg-gray-100 text-gray-700 border-gray-300'
                 }`}>{l}</button>
             ))}
           </div>
         </div>
 
         <div className="relative">
-          <label className="text-[11px] font-bold text-gray-400 mb-1 block">② 食材（五十音順）</label>
+          <label className="text-xs font-bold text-gray-700 mb-1 block">② 食材（五十音順）</label>
           <input type="text" value={search} placeholder="食材名を入力して絞り込み…" className={inputCls}
             onChange={e => { setSearch(e.target.value); setShowDrop(true); setFoodIdx(-1); setGrams(''); }}
             onFocus={() => setShowDrop(true)} />
           {showDrop && (
             <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto">
               {filtered.length === 0
-                ? <p className="text-xs text-gray-400 text-center py-3">該当なし</p>
+                ? <p className="text-xs font-bold text-gray-600 text-center py-3">該当なし</p>
                 : filtered.map(({ f, i }) => (
                   <button key={i}
                     className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
                     onMouseDown={e => { e.preventDefault(); selectFood(i); }}>
                     <span className="font-medium text-gray-800">{f.name}</span>
-                    <span className="text-xs text-gray-400 flex-shrink-0">{f.baseGrams}g/{f.baseKcal}kcal</span>
+                    <span className="text-xs font-bold text-gray-600 flex-shrink-0">{f.baseGrams}g/{f.baseKcal}kcal</span>
                   </button>
                 ))}
             </div>
@@ -668,13 +668,13 @@ function TodayTab({ profile }: { profile: Profile }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-[11px] font-bold text-gray-400 mb-1 block">③ グラム数</label>
+            <label className="text-xs font-bold text-gray-700 mb-1 block">③ グラム数</label>
             <input type="number" value={grams} placeholder={food ? String(food.baseGrams) : '—'}
               disabled={!food} onChange={e => setGrams(e.target.value)}
               className={`${inputCls} text-right disabled:bg-gray-50 disabled:text-gray-300`} />
           </div>
           <div>
-            <label className="text-[11px] font-bold text-gray-400 mb-1 block">④ カロリー</label>
+            <label className="text-xs font-bold text-gray-700 mb-1 block">④ カロリー</label>
             <div className={`${inputCls} text-right font-black cursor-default ${
               computedKcal > 0 ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'bg-gray-50 text-gray-300'
             }`}>{computedKcal > 0 ? computedKcal : '—'}</div>
@@ -705,7 +705,7 @@ function TodayTab({ profile }: { profile: Profile }) {
                       <div key={i} className="flex items-center gap-2 px-4 py-2.5">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-gray-800 truncate">{m.food ?? m.label}</p>
-                          {m.grams != null && <p className="text-[10px] text-gray-400">{m.grams}g</p>}
+                          {m.grams != null && <p className="text-xs font-bold text-gray-600">{m.grams}g</p>}
                         </div>
                         <span className="text-sm font-black text-gray-600 flex-shrink-0">{m.kcal} kcal</span>
                         <button onClick={() => removeMeal(i)}
@@ -767,16 +767,16 @@ function MetricsTab() {
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-gray-100 p-4">
-        <p className="text-xs font-black text-gray-500 mb-3">測定データを入力</p>
+        <p className="text-xs font-black text-gray-800 mb-3">測定データを入力</p>
         <div className="mb-3">
-          <label className="text-[11px] font-bold text-gray-500 mb-1 block">測定日</label>
+          <label className="text-xs font-bold text-gray-700 mb-1 block">測定日</label>
           <input type="date" value={form.date} onChange={e => setField('date', e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           {METRIC_FIELDS.map(f => (
             <div key={f.key}>
-              <label className="text-[11px] font-bold text-gray-500 mb-1 block">
+              <label className="text-xs font-bold text-gray-700 mb-1 block">
                 {f.label}{f.unit ? ` (${f.unit})` : ''}
               </label>
               <input type="number" step={f.step} placeholder="0"
@@ -797,7 +797,7 @@ function MetricsTab() {
       {/* History */}
       {metrics.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <p className="text-xs font-black text-gray-500 px-4 pt-3 pb-2">履歴 ({metrics.length}件)</p>
+          <p className="text-xs font-black text-gray-800 px-4 pt-3 pb-2">履歴 ({metrics.length}件)</p>
           <div className="divide-y divide-gray-50">
             {metrics.slice(0, 10).map(m => (
               <div key={m.date} className="px-4 py-3">
@@ -808,8 +808,8 @@ function MetricsTab() {
                 <div className="grid grid-cols-4 gap-1">
                   {METRIC_FIELDS.map(f => (
                     <div key={f.key} className="text-center">
-                      <p className="text-[9px] text-gray-400">{f.label}</p>
-                      <p className="text-xs font-bold text-gray-700">{(m[f.key] as number) || '—'}</p>
+                      <p className="text-[10px] font-bold text-gray-600">{f.label}</p>
+                      <p className="text-xs font-bold text-gray-900">{(m[f.key] as number) || '—'}</p>
                     </div>
                   ))}
                 </div>
@@ -869,7 +869,7 @@ function TrendsTab() {
         {(['1M','3M','6M','1Y'] as Period[]).map(p => (
           <button key={p} onClick={() => setPeriod(p)}
             className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${
-              period === p ? 'bg-white text-indigo-600 shadow' : 'text-gray-500'
+              period === p ? 'bg-white text-indigo-600 shadow' : 'text-gray-700 font-bold'
             }`}>
             {p}
           </button>
@@ -881,7 +881,7 @@ function TrendsTab() {
         {METRIC_OPTS.map(m => (
           <button key={m.key} onClick={() => toggle(m.key)}
             className={`px-3 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all ${
-              activeKeys.includes(m.key) ? 'text-white' : 'bg-white text-gray-400 border-gray-200'
+              activeKeys.includes(m.key) ? 'text-white' : 'bg-white text-gray-700 border-gray-400'
             }`}
             style={activeKeys.includes(m.key) ? { background: m.color, borderColor: m.color } : {}}>
             {m.label}
@@ -890,7 +890,7 @@ function TrendsTab() {
       </div>
 
       {data.length < 2 ? (
-        <div className="bg-gray-50 rounded-2xl p-8 text-center text-xs text-gray-400">
+        <div className="bg-gray-50 rounded-2xl p-8 text-center text-sm font-bold text-gray-600 border border-gray-200">
           この期間のデータが少ないです。測定を続けるとグラフが表示されます。
         </div>
       ) : (
@@ -919,7 +919,7 @@ function TrendsTab() {
       {/* BMR trend */}
       {data.some(d => d.bmr > 0) && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-[11px] font-black text-gray-500 mb-3">基礎代謝推移 (kcal)</p>
+          <p className="text-xs font-black text-gray-800 mb-3">基礎代謝推移 (kcal)</p>
           <ResponsiveContainer width="100%" height={120}>
             <LineChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1027,7 +1027,7 @@ function AdviceTab({ profile }: { profile: Profile }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs font-black text-gray-400 px-1">パーソナルフィードバック</p>
+      <p className="text-xs font-black text-gray-800 px-1">パーソナルフィードバック</p>
       {advices.map((a, i) => (
         <div key={i} className={`rounded-2xl border p-4 ${a.color}`}>
           <div className="flex items-start gap-3">
@@ -1045,13 +1045,13 @@ function AdviceTab({ profile }: { profile: Profile }) {
         const l = metrics[0];
         return (
           <div className="bg-white rounded-2xl border border-gray-100 p-4 mt-2">
-            <p className="text-xs font-black text-gray-500 mb-3">最新測定値 ({l.date})</p>
+            <p className="text-xs font-black text-gray-800 mb-3">最新測定値 ({l.date})</p>
             <div className="grid grid-cols-4 gap-2">
               {METRIC_FIELDS.map(f => (
                 <div key={f.key} className="text-center">
-                  <p className="text-[9px] text-gray-400">{f.label}</p>
+                  <p className="text-[10px] font-bold text-gray-600">{f.label}</p>
                   <p className="text-xs font-black text-gray-800">{(l[f.key] as number) || '—'}</p>
-                  <p className="text-[9px] text-gray-400">{f.unit}</p>
+                  <p className="text-[10px] font-bold text-gray-600">{f.unit}</p>
                 </div>
               ))}
             </div>
@@ -1097,7 +1097,7 @@ export function HealthDashboard() {
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex-1 flex flex-col items-center py-2 rounded-xl text-[10px] font-black transition-all ${
-                tab === t.id ? 'bg-rose-500 text-white shadow' : 'text-gray-400'
+                tab === t.id ? 'bg-rose-500 text-white shadow' : 'text-gray-700 font-bold'
               }`}>
               <span className="text-base leading-tight">{t.icon}</span>
               <span className="leading-tight mt-0.5">{t.label}</span>

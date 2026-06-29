@@ -40,14 +40,14 @@ export function DailyQuote() {
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 p-5 shadow-lg">
       <div className="absolute top-0 right-0 text-[80px] opacity-5 leading-none select-none pointer-events-none">❝</div>
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">✨ Daily Quote</p>
-      <p className="text-sm font-bold text-white leading-relaxed mb-1">
+      <p className="text-xs font-black text-slate-300 uppercase tracking-widest mb-3">✨ Daily Quote</p>
+      <p className="text-base font-extrabold text-white leading-relaxed mb-2">
         &ldquo;{quote.en}&rdquo;
       </p>
-      <p className="text-[11px] text-slate-300 leading-relaxed mb-3 italic">
+      <p className="text-sm text-slate-200 leading-relaxed mb-3 italic font-medium">
         「{quote.ja}」
       </p>
-      <p className="text-[10px] font-black text-slate-400 text-right">— {quote.author}</p>
+      <p className="text-xs font-black text-slate-300 text-right">— {quote.author}</p>
     </div>
   );
 }
