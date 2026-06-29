@@ -12,6 +12,7 @@ import { CalendarView }        from '@/components/CalendarView';
 import { CameraScheduleInput } from '@/components/CameraScheduleInput';
 import { GoalsList }           from '@/components/GoalsList';
 import { DailyQuote }         from '@/components/DailyQuote';
+import { CityWeatherWidget }  from '@/components/CityWeatherWidget';
 
 export default function Home() {
 
@@ -91,6 +92,11 @@ export default function Home() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 pt-6 pb-40 space-y-5">
+
+        {/* ════════════════════════════════════════
+            🌤 御殿場 ↔ 渋谷 天気ウィジェット
+        ════════════════════════════════════════ */}
+        <CityWeatherWidget />
 
         {/* ════════════════════════════════════════
             ✨ Daily Quote
