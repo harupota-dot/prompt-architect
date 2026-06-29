@@ -25,22 +25,24 @@ export function LearningHub() {
   return (
     <>
       {/* ── 科目切替タブ（最上段・常時固定） ── */}
-      <div className="sticky top-[57px] z-20 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2">
-        <div className="flex gap-1 max-w-md mx-auto bg-gray-100 p-1 rounded-2xl">
-          {SUBJECTS.map(({ id, icon, label, sub, color }) => (
-            <button key={id} onClick={() => setSubject(id)}
-              className={`flex-1 flex items-center justify-center gap-1 py-2 px-1.5 rounded-xl transition-all ${
-                subject === id ? `${color} text-white shadow-md` : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              <span className="text-sm leading-none flex-shrink-0">{icon}</span>
-              <div className="text-left min-w-0">
-                <p className="text-[10px] font-black leading-tight truncate">{label}</p>
-                <p className={`text-[8px] leading-none mt-0.5 ${
-                  subject === id ? 'text-white/70' : 'text-gray-400'
-                }`}>{sub}</p>
-              </div>
-            </button>
-          ))}
+      <div className="sticky top-[57px] z-20 bg-white/95 backdrop-blur border-b border-gray-100 py-2">
+        <div className="overflow-x-auto scrollbar-none px-2">
+          <div className="flex gap-1.5 min-w-max px-1">
+            {SUBJECTS.map(({ id, icon, label, sub, color }) => (
+              <button key={id} onClick={() => setSubject(id)}
+                className={`flex items-center gap-1.5 py-2 px-3 rounded-2xl transition-all whitespace-nowrap ${
+                  subject === id ? `${color} text-white shadow-md` : 'text-gray-500 bg-gray-100'
+                }`}>
+                <span className="text-sm leading-none">{icon}</span>
+                <div className="text-left">
+                  <p className="text-[11px] font-black leading-tight">{label}</p>
+                  <p className={`text-[9px] leading-none mt-0.5 ${
+                    subject === id ? 'text-white/70' : 'text-gray-400'
+                  }`}>{sub}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
