@@ -43,7 +43,6 @@ interface ExerciseLog {
   bonusPlank: boolean;
 }
 
-// 詳細履歴レコード（日付キーでまとめて保存）
 interface DayHistory {
   date: string;
   meals: { category: string; name: string; grams: number; kcal: number }[];
@@ -53,7 +52,7 @@ interface DayHistory {
   breathingMins: number;
   totalIntakeKcal: number;
   totalBurnedKcal: number;
-  netKcal: number;     // 正=余剰 / 負=アンダーカロリー
+  netKcal: number;
   targetKcal: number;
 }
 type HistoryMap = Record<string, DayHistory>;
@@ -109,26 +108,19 @@ function fmtDateJP(iso: string) {
 // ─── 曜日別ワークアウト ───────────────────────────────────────────
 interface WorkoutDef { name: string; desc: string; kcal: number; sets: string; }
 const DAILY_WORKOUT: Record<number, WorkoutDef> = {
-  0: { name: 'アクティブレスト',   kcal: 30,
-       sets: '全身を10分ストレッチ',
+  0: { name: 'アクティブレスト',   kcal: 30,  sets: '全身を10分ストレッチ',
        desc: '筋肉を伸ばし血流を促進。各部位20〜30秒キープ、反動をつけずゆっくり伸ばす。' },
-  1: { name: 'スロースクワット',   kcal: 80,
-       sets: '3セット × 12回',
+  1: { name: 'スロースクワット',   kcal: 80,  sets: '3セット × 12回',
        desc: '背筋を伸ばし、膝が爪先より前に出ないように腰を落とす。4秒かけて下ろし2秒で戻す。' },
-  2: { name: 'プランク',           kcal: 50,
-       sets: '3セット × 30〜60秒',
+  2: { name: 'プランク',           kcal: 50,  sets: '3セット × 30〜60秒',
        desc: '肘を肩の真下に置き、頭〜踵を一直線に保つ。腰が落ちないよう腹に力を入れ続ける。' },
-  3: { name: 'ヒップリフト',       kcal: 60,
-       sets: '3セット × 15回',
+  3: { name: 'ヒップリフト',       kcal: 60,  sets: '3セット × 15回',
        desc: '仰向けで膝を立て、お尻をゆっくり持ち上げ2秒キープ。背中が反らないよう腹筋で支える。' },
-  4: { name: 'バードドッグ',       kcal: 50,
-       sets: '左右各3セット × 10回',
+  4: { name: 'バードドッグ',       kcal: 50,  sets: '左右各3セット × 10回',
        desc: '四つ這いで対角の手足を同時に伸ばし3秒キープ。体が傾かないよう体幹を意識する。' },
-  5: { name: 'リバースランジ',     kcal: 80,
-       sets: '左右各3セット × 10回',
+  5: { name: 'リバースランジ',     kcal: 80,  sets: '左右各3セット × 10回',
        desc: '片足を後ろに引いて膝を床ギリギリまで下ろす。前足の膝は90°、体は垂直を保つ。' },
-  6: { name: 'ロシアンツイスト',   kcal: 60,
-       sets: '3セット × 20回（左右各10）',
+  6: { name: 'ロシアンツイスト',   kcal: 60,  sets: '3セット × 20回（左右各10）',
        desc: '膝を軽く曲げ上体を30°後ろに倒す。両手を合わせ左右交互にひねり、腹斜筋を意識する。' },
 };
 
@@ -144,23 +136,22 @@ function getWeeksSinceStart(): number {
   } catch { return 0; }
 }
 
-// ─── ワークアウト名リスト生成 ──────────────────────────────────────
 function buildWorkoutNames(ex: ExerciseLog, workout: WorkoutDef, repsTarget: number): string[] {
   const names: string[] = [];
-  if (ex.workoutDone)             names.push(`${workout.name}（${workout.sets}）`);
-  if (ex.pushupsDone)             names.push(`腕立て伏せ（${repsTarget}回×3セット）`);
-  if (ex.crunchesDone)            names.push(`腹筋クランチ（${repsTarget}回×3セット）`);
-  if (ex.bonusBurpees)            names.push('ステップバック・バーピー（3セット×10回）');
-  if (ex.bonusMountain)           names.push('マウンテンクライマー（3セット×30秒）');
-  if (ex.bonusPlank)              names.push('プランク追加（2セット×60秒）');
-  if (ex.intervalWalkMins > 0)    names.push(`インターバル速歩（${ex.intervalWalkMins}分）`);
-  if (ex.breathingMins > 0)       names.push(`腹式呼吸（${ex.breathingMins}分）`);
-  if (ex.steps > 0)               names.push(`ウォーキング（${ex.steps.toLocaleString()}歩）`);
+  if (ex.workoutDone)          names.push(`${workout.name}（${workout.sets}）`);
+  if (ex.pushupsDone)          names.push(`腕立て伏せ（${repsTarget}回×3セット）`);
+  if (ex.crunchesDone)         names.push(`腹筋クランチ（${repsTarget}回×3セット）`);
+  if (ex.bonusBurpees)         names.push('ステップバック・バーピー（3セット×10回）');
+  if (ex.bonusMountain)        names.push('マウンテンクライマー（3セット×30秒）');
+  if (ex.bonusPlank)           names.push('プランク追加（2セット×60秒）');
+  if (ex.intervalWalkMins > 0) names.push(`インターバル速歩（${ex.intervalWalkMins}分）`);
+  if (ex.breathingMins > 0)    names.push(`腹式呼吸（${ex.breathingMins}分）`);
+  if (ex.steps > 0)            names.push(`ウォーキング（${ex.steps.toLocaleString()}歩）`);
   return names;
 }
 
 // ─── 食材データベース（五十音順） ──────────────────────────────────
-interface FoodItem { name: string; baseGrams: number; baseKcal: number; }
+interface FoodItem { name: string; baseGrams: number; baseKcal: number; custom?: true; }
 const FOOD_DB: FoodItem[] = [
   { name: 'アイスクリーム（濃厚/アイス規格）',   baseGrams: 100, baseKcal: 212 },
   { name: 'アイスクリーム（中間/ラクトアイス）', baseGrams: 100, baseKcal: 224 },
@@ -203,6 +194,8 @@ const FOOD_DB: FoodItem[] = [
   { name: 'ヨーグルト（無糖）',                  baseGrams: 100, baseKcal:  62 },
   { name: 'りんご',                              baseGrams: 150, baseKcal:  85 },
   { name: 'レタス',                              baseGrams:  50, baseKcal:   6 },
+  // 自由入力プレースホルダー
+  { name: 'その他（自由入力）', baseGrams: 0, baseKcal: 0, custom: true },
 ];
 
 // ─── Sub-tab type ─────────────────────────────────────────────────
@@ -214,20 +207,11 @@ type Tab = 'goals' | 'today' | 'metrics' | 'trends' | 'advice' | 'history';
 function GoalsTab({ profile, onSave }: { profile: Profile; onSave: (p: Profile) => void }) {
   const [form, setForm] = useState<Profile>(profile);
   const [saved, setSaved] = useState(false);
-
-  const set = (k: keyof Profile, v: string | number) =>
-    setForm(f => ({ ...f, [k]: v }));
-
-  const handle = () => {
-    onSave(form);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  };
-
+  const set = (k: keyof Profile, v: string | number) => setForm(f => ({ ...f, [k]: v }));
+  const handle = () => { onSave(form); setSaved(true); setTimeout(() => setSaved(false), 1500); };
   const calc = calcTargetKcal(form);
-
   const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white";
-  const labelCls = "text-xs font-bold text-gray-700 mb-1 block";
+  const labelCls = "text-xs font-bold text-gray-800 mb-1 block";
 
   return (
     <div className="space-y-5">
@@ -241,67 +225,40 @@ function GoalsTab({ profile, onSave }: { profile: Profile; onSave: (p: Profile) 
           <div><p className="text-[10px] opacity-60">残り日数</p><p className="text-sm font-bold">{calc.daysLeft} 日</p></div>
         </div>
       </div>
-
       <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
-        <p className="text-xs font-black text-gray-800 mb-2">プロフィール</p>
+        <p className="text-xs font-black text-gray-900 mb-2">プロフィール</p>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>身長 (cm)</label>
-            <input type="number" className={inputCls} value={form.height || ''}
-              onChange={e => set('height', +e.target.value)} placeholder="170" />
-          </div>
-          <div>
-            <label className={labelCls}>年齢</label>
-            <input type="number" className={inputCls} value={form.age || ''}
-              onChange={e => set('age', +e.target.value)} placeholder="25" />
-          </div>
-          <div>
-            <label className={labelCls}>性別</label>
-            <select className={inputCls} value={form.sex}
-              onChange={e => set('sex', e.target.value as 'male'|'female')}>
-              <option value="male">男性</option>
-              <option value="female">女性</option>
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>活動レベル</label>
-            <select className={inputCls} value={form.activityLevel}
-              onChange={e => set('activityLevel', +e.target.value)}>
+          <div><label className={labelCls}>身長 (cm)</label>
+            <input type="number" className={inputCls} value={form.height || ''} onChange={e => set('height', +e.target.value)} placeholder="170" /></div>
+          <div><label className={labelCls}>年齢</label>
+            <input type="number" className={inputCls} value={form.age || ''} onChange={e => set('age', +e.target.value)} placeholder="25" /></div>
+          <div><label className={labelCls}>性別</label>
+            <select className={inputCls} value={form.sex} onChange={e => set('sex', e.target.value as 'male'|'female')}>
+              <option value="male">男性</option><option value="female">女性</option>
+            </select></div>
+          <div><label className={labelCls}>活動レベル</label>
+            <select className={inputCls} value={form.activityLevel} onChange={e => set('activityLevel', +e.target.value)}>
               <option value={1.2}>座り仕事中心</option>
               <option value={1.375}>軽い運動あり</option>
               <option value={1.55}>週3〜5回運動</option>
               <option value={1.725}>毎日ハード運動</option>
               <option value={1.9}>肉体労働</option>
-            </select>
-          </div>
+            </select></div>
         </div>
       </div>
-
       <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
-        <p className="text-xs font-black text-gray-800 mb-2">目標設定</p>
+        <p className="text-xs font-black text-gray-900 mb-2">目標設定</p>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>現在の体重 (kg)</label>
-            <input type="number" step="0.1" className={inputCls} value={form.currentWeight || ''}
-              onChange={e => set('currentWeight', +e.target.value)} placeholder="70.0" />
-          </div>
-          <div>
-            <label className={labelCls}>目標体重 (kg)</label>
-            <input type="number" step="0.1" className={inputCls} value={form.goalWeight || ''}
-              onChange={e => set('goalWeight', +e.target.value)} placeholder="65.0" />
-          </div>
-          <div className="col-span-2">
-            <label className={labelCls}>目標達成日</label>
-            <input type="date" className={inputCls} value={form.goalDate}
-              onChange={e => set('goalDate', e.target.value)} />
-          </div>
+          <div><label className={labelCls}>現在の体重 (kg)</label>
+            <input type="number" step="0.1" className={inputCls} value={form.currentWeight || ''} onChange={e => set('currentWeight', +e.target.value)} placeholder="70.0" /></div>
+          <div><label className={labelCls}>目標体重 (kg)</label>
+            <input type="number" step="0.1" className={inputCls} value={form.goalWeight || ''} onChange={e => set('goalWeight', +e.target.value)} placeholder="65.0" /></div>
+          <div className="col-span-2"><label className={labelCls}>目標達成日</label>
+            <input type="date" className={inputCls} value={form.goalDate} onChange={e => set('goalDate', e.target.value)} /></div>
         </div>
       </div>
-
       <button onClick={handle}
-        className={`w-full py-3.5 rounded-2xl font-black text-sm transition-all ${
-          saved ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white active:scale-95'
-        }`}>
+        className={`w-full py-3.5 rounded-2xl font-black text-sm transition-all ${saved ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white active:scale-95'}`}>
         {saved ? '✓ 保存しました' : '保存する'}
       </button>
     </div>
@@ -309,85 +266,84 @@ function GoalsTab({ profile, onSave }: { profile: Profile; onSave: (p: Profile) 
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Daily tracker tab
+// Daily tracker tab（selectedDate ベース）
 // ═══════════════════════════════════════════════════════════════════
 const MEAL_LABELS = ['朝食', '昼食', '夕食', '間食', 'ドリンク'];
 const LABEL_COLOR: Record<string, string> = {
-  '朝食':    'bg-amber-100 text-amber-700',
-  '昼食':    'bg-sky-100 text-sky-700',
-  '夕食':    'bg-indigo-100 text-indigo-700',
-  '間食':    'bg-rose-100 text-rose-700',
-  'ドリンク':'bg-emerald-100 text-emerald-700',
+  '朝食':    'bg-amber-100 text-amber-800',
+  '昼食':    'bg-sky-100 text-sky-800',
+  '夕食':    'bg-indigo-100 text-indigo-800',
+  '間食':    'bg-rose-100 text-rose-800',
+  'ドリンク':'bg-emerald-100 text-emerald-800',
 };
 
-function TodayTab({ profile }: { profile: Profile }) {
+function TodayTab({
+  profile,
+  selectedDate,
+  onDateChange,
+}: {
+  profile: Profile;
+  selectedDate: string;
+  onDateChange: (d: string) => void;
+}) {
   const targetKcal = calcTargetKcal(profile).target;
-  const today      = todayStr();
-  const weekday    = new Date().getDay();
+  const isToday    = selectedDate === todayStr();
+  const weekday    = new Date(selectedDate + 'T00:00:00').getDay();
   const workout    = DAILY_WORKOUT[weekday];
   const weeks      = getWeeksSinceStart();
   const repsTarget = 10 + weeks * 2;
 
   // ── Food log state ──
   const [logs, setLogs] = useState<DailyLog[]>(() => load<DailyLog[]>(LS_DAILY, []));
-  const [timing,   setTiming]   = useState(MEAL_LABELS[0]);
-  const [foodIdx,  setFoodIdx]  = useState<number>(-1);
-  const [grams,    setGrams]    = useState('');
-  const [search,   setSearch]   = useState('');
-  const [showDrop, setShowDrop] = useState(false);
-
-  // ── Exercise state ──
   const [exLogs, setExLogs] = useState<ExerciseLog[]>(() => load<ExerciseLog[]>(LS_EXERCISE, []));
-  const todayEx: ExerciseLog = exLogs.find(e => e.date === today) ?? {
-    date: today, steps: 0, intervalWalkMins: 0, breathingMins: 0,
+
+  // 選択日付が変わったら最新データを再ロード
+  useEffect(() => {
+    setLogs(load<DailyLog[]>(LS_DAILY, []));
+    setExLogs(load<ExerciseLog[]>(LS_EXERCISE, []));
+  }, [selectedDate]);
+
+  const todayLog: DailyLog = logs.find(l => l.date === selectedDate) ?? { date: selectedDate, meals: [] };
+  const todayEx: ExerciseLog = exLogs.find(e => e.date === selectedDate) ?? {
+    date: selectedDate, steps: 0, intervalWalkMins: 0, breathingMins: 0,
     workoutDone: false, pushupsDone: false, crunchesDone: false,
     bonusBurpees: false, bonusMountain: false, bonusPlank: false,
   };
 
   const updateEx = (patch: Partial<ExerciseLog>) => {
-    const updated = exLogs.filter(e => e.date !== today);
+    const updated = exLogs.filter(e => e.date !== selectedDate);
     const next    = [{ ...todayEx, ...patch }, ...updated];
     setExLogs(next);
     save(LS_EXERCISE, next);
   };
 
   // ── Calorie maths ──
-  const todayLog  = logs.find(l => l.date === today) ?? { date: today, meals: [] };
-  const foodKcal  = todayLog.meals.reduce((s, m) => s + m.kcal, 0);
-
+  const foodKcal       = todayLog.meals.reduce((s, m) => s + m.kcal, 0);
   const weight         = profile.currentWeight || 60;
   const stepsKcal      = Math.round(todayEx.steps * weight * 0.0005);
   const intervalKcal   = Math.round((todayEx.intervalWalkMins || 0) * weight * 0.08);
   const breathingKcal  = (todayEx.breathingMins || 0) * 3;
   const exKcal         =
     (todayEx.workoutDone   ? workout.kcal : 0) +
-    (todayEx.pushupsDone   ? 30           : 0) +
-    (todayEx.crunchesDone  ? 20           : 0) +
-    (todayEx.bonusBurpees  ? 80           : 0) +
-    (todayEx.bonusMountain ? 60           : 0) +
-    (todayEx.bonusPlank    ? 40           : 0) +
+    (todayEx.pushupsDone   ? 30 : 0) +
+    (todayEx.crunchesDone  ? 20 : 0) +
+    (todayEx.bonusBurpees  ? 80 : 0) +
+    (todayEx.bonusMountain ? 60 : 0) +
+    (todayEx.bonusPlank    ? 40 : 0) +
     intervalKcal + breathingKcal;
-
   const totalBurned = stepsKcal + exKcal;
   const remaining   = targetKcal + totalBurned - foodKcal;
   const success     = remaining >= 0;
-
   const effectiveTarget = targetKcal + totalBurned;
   const pct = Math.min(100, Math.round(foodKcal / Math.max(1, effectiveTarget) * 100));
   const barColor = pct >= 100 ? 'bg-red-500' : pct >= 85 ? 'bg-amber-500' : 'bg-emerald-500';
 
-  // ── 詳細履歴への自動保存 ──────────────────────────────────────
+  // ── 詳細履歴への自動保存 ──
   useEffect(() => {
     const historyMap: HistoryMap = load<HistoryMap>(LS_HISTORY, {});
-    const mealRecords = todayLog.meals.map(m => ({
-      category: m.label,
-      name:     m.food ?? m.label,
-      grams:    m.grams ?? 0,
-      kcal:     m.kcal,
-    }));
-    historyMap[today] = {
-      date:            today,
-      meals:           mealRecords,
+    historyMap[selectedDate] = {
+      date:            selectedDate,
+      meals:           todayLog.meals.map(m => ({ category: m.label, name: m.food ?? m.label, grams: m.grams ?? 0, kcal: m.kcal })),
       workouts:        buildWorkoutNames(todayEx, workout, repsTarget),
       steps:           todayEx.steps,
       intervalWalkMins: todayEx.intervalWalkMins,
@@ -399,66 +355,99 @@ function TodayTab({ profile }: { profile: Profile }) {
     };
     save(LS_HISTORY, historyMap);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logs, exLogs]);
+  }, [logs, exLogs, selectedDate]);
 
-  // ── Food form helpers ──
+  // ── Food form state ──
+  const [timing,      setTiming]      = useState(MEAL_LABELS[0]);
+  const [foodIdx,     setFoodIdx]     = useState<number>(-1);
+  const [grams,       setGrams]       = useState('');
+  const [search,      setSearch]      = useState('');
+  const [showDrop,    setShowDrop]    = useState(false);
+  // カスタム入力モード
+  const [customMode,  setCustomMode]  = useState(false);
+  const [customName,  setCustomName]  = useState('');
+  const [customGrams, setCustomGrams] = useState('');
+  const [customKcal,  setCustomKcal]  = useState('');
+
   const food = foodIdx >= 0 ? FOOD_DB[foodIdx] : null;
+  const isCustom = food?.custom === true;
+
   const computedKcal = (() => {
+    if (isCustom) return parseInt(customKcal) || 0;
     if (!food || !grams) return 0;
     const g = parseFloat(grams);
     return g > 0 ? Math.round((g / food.baseGrams) * food.baseKcal) : 0;
   })();
+
   const selectFood = (idx: number) => {
-    setFoodIdx(idx); setGrams(String(FOOD_DB[idx].baseGrams));
-    setSearch(FOOD_DB[idx].name); setShowDrop(false);
+    const f = FOOD_DB[idx];
+    setFoodIdx(idx);
+    if (f.custom) {
+      setCustomMode(true);
+      setGrams('');
+      setSearch(f.name);
+    } else {
+      setCustomMode(false);
+      setGrams(String(f.baseGrams));
+      setSearch(f.name);
+    }
+    setShowDrop(false);
+    setCustomName(''); setCustomGrams(''); setCustomKcal('');
   };
+
   const filtered = (search.trim() === '' || (food && search === food.name))
     ? FOOD_DB.map((f, i) => ({ f, i }))
-    : FOOD_DB.map((f, i) => ({ f, i })).filter(({ f }) =>
-        f.name.includes(search));
+    : FOOD_DB.map((f, i) => ({ f, i })).filter(({ f }) => f.name.includes(search));
 
   const addMeal = () => {
-    if (!food || computedKcal <= 0) return;
-    const newMeal: MealEntry = { label: timing, kcal: computedKcal, food: food.name, grams: parseFloat(grams) };
-    const updated = logs.filter(l => l.date !== today);
-    const next = [{ date: today, meals: [...todayLog.meals, newMeal] }, ...updated];
+    const kcal = computedKcal;
+    if (kcal <= 0) return;
+    const name  = isCustom ? (customName.trim() || 'カスタム') : (food?.name ?? '');
+    const g     = isCustom ? (parseFloat(customGrams) || 0) : parseFloat(grams);
+    const newMeal: MealEntry = { label: timing, kcal, food: name, grams: g || undefined };
+    const updated = logs.filter(l => l.date !== selectedDate);
+    const next = [{ date: selectedDate, meals: [...todayLog.meals, newMeal] }, ...updated];
     setLogs(next); save(LS_DAILY, next);
     setFoodIdx(-1); setGrams(''); setSearch('');
+    setCustomMode(false); setCustomName(''); setCustomGrams(''); setCustomKcal('');
   };
+
   const removeMeal = (i: number) => {
-    const next = [{ date: today, meals: todayLog.meals.filter((_, idx) => idx !== i) },
-                  ...logs.filter(l => l.date !== today)];
+    const next = [
+      { date: selectedDate, meals: todayLog.meals.filter((_, idx) => idx !== i) },
+      ...logs.filter(l => l.date !== selectedDate),
+    ];
     setLogs(next); save(LS_DAILY, next);
   };
+
   const grouped = MEAL_LABELS.map(lbl => ({
     lbl, meals: todayLog.meals.map((m, i) => ({ m, i })).filter(({ m }) => m.label === lbl),
   })).filter(g => g.meals.length > 0);
 
-  const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white';
+  const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 bg-white text-gray-900';
 
+  // ── WorkoutCard ──
   const WorkoutCard = ({
     icon, title, subtitle, desc, sets, kcalBurn, done, onToggle,
   }: {
     icon: string; title: string; subtitle?: string; desc: string;
     sets: string; kcalBurn: number; done: boolean; onToggle: () => void;
   }) => (
-    <div className={`rounded-2xl border-2 p-4 transition-all ${done ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100 bg-white'}`}>
+    <div className={`rounded-2xl border-2 p-4 transition-all ${done ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
       <div className="flex items-start gap-3">
         <button onClick={onToggle}
           className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-sm border-2 transition-all mt-0.5 ${
-            done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 text-transparent'
-          }`}>
-          ✓
-        </button>
+            done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-400 text-transparent'
+          }`}>✓</button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base">{icon}</span>
-            <p className={`text-sm font-black ${done ? 'text-emerald-700' : 'text-gray-800'}`}>{title}</p>
-            {subtitle && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">{subtitle}</span>}
-            <span className="text-xs font-bold text-gray-700 ml-auto">−{kcalBurn} kcal</span>
+            <p className={`text-sm font-black ${done ? 'text-emerald-800' : 'text-gray-900'}`}>{title}</p>
+            {subtitle && <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">{subtitle}</span>}
+            <span className="text-xs font-bold text-gray-800 ml-auto">−{kcalBurn} kcal</span>
           </div>
-          <p className="text-xs text-indigo-700 font-bold mt-1">{sets}</p>
-          <p className="text-xs text-gray-700 mt-1 leading-relaxed">{desc}</p>
+          <p className="text-xs text-indigo-800 font-bold mt-1">{sets}</p>
+          <p className="text-xs text-gray-800 mt-1 leading-relaxed">{desc}</p>
         </div>
       </div>
     </div>
@@ -467,56 +456,63 @@ function TodayTab({ profile }: { profile: Profile }) {
   return (
     <div className="space-y-4">
 
+      {/* ══ 日付セレクター ══ */}
+      <div className={`rounded-2xl p-4 border-2 ${isToday ? 'border-gray-900 bg-gray-900' : 'border-amber-500 bg-amber-50'}`}>
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <p className={`text-xs font-black mb-1 ${isToday ? 'text-gray-300' : 'text-amber-800'}`}>
+              {isToday ? '📅 今日の記録' : '✏️ 過去の記録を編集中'}
+            </p>
+            <input
+              type="date"
+              value={selectedDate}
+              max={todayStr()}
+              onChange={e => e.target.value && onDateChange(e.target.value)}
+              className={`w-full rounded-xl px-3 py-2.5 text-base font-black border-0 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                isToday ? 'bg-white/10 text-white' : 'bg-white text-gray-900 border border-amber-300'
+              }`}
+            />
+          </div>
+          {!isToday && (
+            <button
+              onClick={() => onDateChange(todayStr())}
+              className="flex-shrink-0 px-3 py-2 rounded-xl bg-amber-500 text-white text-xs font-black active:scale-95 transition-all">
+              今日に戻る
+            </button>
+          )}
+        </div>
+        {!isToday && (
+          <p className="text-xs font-bold text-amber-700 mt-2">
+            ⚠️ {fmtDateJP(selectedDate)} のデータを編集しています
+          </p>
+        )}
+      </div>
+
       {/* ══ カロリー収支サマリー ══ */}
       <div className={`rounded-2xl p-5 text-white ${success
         ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
         : 'bg-gradient-to-br from-rose-500 to-red-600'}`}>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-bold opacity-80">{new Date().toLocaleDateString('ja-JP')}</p>
+          <p className="text-xs font-bold opacity-80">{fmtDateJP(selectedDate)}</p>
           <span className="text-xs font-black px-2.5 py-1 rounded-full bg-white/20">
             {success ? '✅ Success！' : '⚠️ Over...'}
           </span>
         </div>
         <div className="text-center mb-4">
           <p className="text-5xl font-black">{Math.abs(remaining).toLocaleString()}</p>
-          <p className="text-sm opacity-80">
-            {success ? 'kcal まだ食べられる' : 'kcal オーバー'}
-          </p>
+          <p className="text-sm opacity-80">{success ? 'kcal まだ食べられる' : 'kcal オーバー'}</p>
         </div>
         <div className="bg-white/15 rounded-xl p-3 space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="opacity-80">目標摂取</span>
-            <span className="font-black">+{targetKcal.toLocaleString()} kcal</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="opacity-80">🚶 歩数消費 ({todayEx.steps.toLocaleString()}歩)</span>
-            <span className="font-black">+{stepsKcal} kcal</span>
-          </div>
-          {intervalKcal > 0 && (
-            <div className="flex justify-between">
-              <span className="opacity-80">🏃 インターバル速歩 ({todayEx.intervalWalkMins}分)</span>
-              <span className="font-black">+{intervalKcal} kcal</span>
-            </div>
-          )}
-          {breathingKcal > 0 && (
-            <div className="flex justify-between">
-              <span className="opacity-80">🌬️ 腹式呼吸 ({todayEx.breathingMins}分)</span>
-              <span className="font-black">+{breathingKcal} kcal</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="opacity-80">💪 運動消費</span>
-            <span className="font-black">+{exKcal - intervalKcal - breathingKcal} kcal</span>
-          </div>
-          <div className="flex justify-between border-t border-white/20 pt-1.5">
-            <span className="opacity-80">🍽️ 食事摂取</span>
-            <span className="font-black">−{foodKcal.toLocaleString()} kcal</span>
-          </div>
+          <div className="flex justify-between"><span className="opacity-80">目標摂取</span><span className="font-black">+{targetKcal.toLocaleString()} kcal</span></div>
+          <div className="flex justify-between"><span className="opacity-80">🚶 歩数消費 ({todayEx.steps.toLocaleString()}歩)</span><span className="font-black">+{stepsKcal} kcal</span></div>
+          {intervalKcal > 0 && <div className="flex justify-between"><span className="opacity-80">🏃 速歩 ({todayEx.intervalWalkMins}分)</span><span className="font-black">+{intervalKcal} kcal</span></div>}
+          {breathingKcal > 0 && <div className="flex justify-between"><span className="opacity-80">🌬️ 腹式呼吸 ({todayEx.breathingMins}分)</span><span className="font-black">+{breathingKcal} kcal</span></div>}
+          <div className="flex justify-between"><span className="opacity-80">💪 運動消費</span><span className="font-black">+{exKcal - intervalKcal - breathingKcal} kcal</span></div>
+          <div className="flex justify-between border-t border-white/20 pt-1.5"><span className="opacity-80">🍽️ 食事摂取</span><span className="font-black">−{foodKcal.toLocaleString()} kcal</span></div>
         </div>
         <div className="mt-3">
           <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-              style={{ width: `${pct}%` }} />
+            <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
           </div>
           <p className="text-[10px] opacity-70 mt-1 text-right">
             {success ? '素晴らしいペースです！このまま続けよう 🎯' : '明日調整しましょう。運動でリカバリーも◎'}
@@ -525,95 +521,67 @@ function TodayTab({ profile }: { profile: Profile }) {
       </div>
 
       {/* ══ 歩数入力 ══ */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🚶</span>
           <div className="flex-1">
-            <p className="text-sm font-black text-gray-800">今日の歩数</p>
-            <p className="text-xs font-bold text-gray-700">消費 = 歩数 × 体重({weight}kg) × 0.0005</p>
+            <p className="text-sm font-black text-gray-900">歩数</p>
+            <p className="text-xs font-bold text-gray-800">消費 = 歩数 × 体重({weight}kg) × 0.0005</p>
           </div>
           <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={todayEx.steps || ''}
-              placeholder="0"
+            <input type="number" value={todayEx.steps || ''} placeholder="0"
               onChange={e => updateEx({ steps: Math.max(0, parseInt(e.target.value) || 0) })}
-              className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:border-indigo-400"
-            />
-            <span className="text-xs text-gray-700 font-bold w-6">歩</span>
+              className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:border-indigo-400 text-gray-900" />
+            <span className="text-xs text-gray-800 font-bold w-6">歩</span>
           </div>
         </div>
-        {stepsKcal > 0 && (
-          <p className="text-xs text-emerald-600 font-black mt-2 text-right">
-            消費 {stepsKcal} kcal
-          </p>
-        )}
+        {stepsKcal > 0 && <p className="text-xs text-emerald-700 font-black mt-2 text-right">消費 {stepsKcal} kcal</p>}
       </div>
 
       {/* ══ インターバル速歩 ══ */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
         <div className="flex items-center gap-3">
           <span className="text-2xl">🏃</span>
           <div className="flex-1">
-            <p className="text-sm font-black text-gray-800">インターバル速歩</p>
-            <p className="text-xs font-bold text-gray-700">通常歩行の約1.5〜2倍消費（分数 × 体重 × 0.08）</p>
+            <p className="text-sm font-black text-gray-900">インターバル速歩</p>
+            <p className="text-xs font-bold text-gray-800">分数 × 体重 × 0.08</p>
           </div>
           <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={todayEx.intervalWalkMins || ''}
-              placeholder="0"
+            <input type="number" value={todayEx.intervalWalkMins || ''} placeholder="0"
               onChange={e => updateEx({ intervalWalkMins: Math.max(0, parseInt(e.target.value) || 0) })}
-              className="w-20 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:border-emerald-400"
-            />
-            <span className="text-xs text-gray-700 font-bold w-6">分</span>
+              className="w-20 border border-gray-200 rounded-xl px-3 py-2 text-sm text-right focus:outline-none focus:border-emerald-400 text-gray-900" />
+            <span className="text-xs text-gray-800 font-bold w-6">分</span>
           </div>
         </div>
-        {intervalKcal > 0 && (
-          <p className="text-xs text-emerald-600 font-black mt-2 text-right">
-            消費 {intervalKcal} kcal
-          </p>
-        )}
+        {intervalKcal > 0 && <p className="text-xs text-emerald-700 font-black mt-2 text-right">消費 {intervalKcal} kcal</p>}
       </div>
 
       {/* ══ 今日のワークアウト ══ */}
       <div className="space-y-2">
         <div className="flex items-center gap-2 px-1">
-          <p className="text-xs font-black text-gray-800">今日のワークアウト</p>
-          <span className="text-xs font-bold text-gray-700">
-            {['日','月','火','水','木','金','土'][weekday]}曜日
+          <p className="text-xs font-black text-gray-900">ワークアウト</p>
+          <span className="text-xs font-bold text-gray-800">
+            {['日','月','火','水','木','金','土'][weekday]}曜日メニュー
           </span>
-          {exKcal > 0 && (
-            <span className="ml-auto text-xs font-black text-emerald-600">合計 −{exKcal} kcal</span>
-          )}
+          {exKcal > 0 && <span className="ml-auto text-xs font-black text-emerald-700">合計 −{exKcal} kcal</span>}
         </div>
-        <WorkoutCard
-          icon="🏋️" title={workout.name} sets={workout.sets} desc={workout.desc}
-          kcalBurn={workout.kcal} done={todayEx.workoutDone}
-          onToggle={() => updateEx({ workoutDone: !todayEx.workoutDone })}
-        />
-        <WorkoutCard
-          icon="💪" title="腕立て伏せ" subtitle={`目標 ${repsTarget}回 × 3セット`}
-          sets={`${repsTarget}回 × 3セット（${weeks}週目・漸進的負荷）`}
-          desc={PUSHUP_DESC} kcalBurn={30} done={todayEx.pushupsDone}
-          onToggle={() => updateEx({ pushupsDone: !todayEx.pushupsDone })}
-        />
-        <WorkoutCard
-          icon="🔥" title="腹筋（クランチ）" subtitle={`目標 ${repsTarget}回 × 3セット`}
-          sets={`${repsTarget}回 × 3セット（${weeks}週目・漸進的負荷）`}
-          desc={CRUNCH_DESC} kcalBurn={20} done={todayEx.crunchesDone}
-          onToggle={() => updateEx({ crunchesDone: !todayEx.crunchesDone })}
-        />
+        <WorkoutCard icon="🏋️" title={workout.name} sets={workout.sets} desc={workout.desc}
+          kcalBurn={workout.kcal} done={todayEx.workoutDone} onToggle={() => updateEx({ workoutDone: !todayEx.workoutDone })} />
+        <WorkoutCard icon="💪" title="腕立て伏せ" subtitle={`目標 ${repsTarget}回 × 3セット`}
+          sets={`${repsTarget}回 × 3セット（${weeks}週目）`} desc={PUSHUP_DESC}
+          kcalBurn={30} done={todayEx.pushupsDone} onToggle={() => updateEx({ pushupsDone: !todayEx.pushupsDone })} />
+        <WorkoutCard icon="🔥" title="腹筋（クランチ）" subtitle={`目標 ${repsTarget}回 × 3セット`}
+          sets={`${repsTarget}回 × 3セット（${weeks}週目）`} desc={CRUNCH_DESC}
+          kcalBurn={20} done={todayEx.crunchesDone} onToggle={() => updateEx({ crunchesDone: !todayEx.crunchesDone })} />
       </div>
 
       {/* ══ ボーナスワークアウト ══ */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <span className="text-lg">⚡</span>
-          <p className="text-sm font-black text-gray-800">今日はもっとできる！</p>
-          <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">ボーナス</span>
+          <p className="text-sm font-black text-gray-900">今日はもっとできる！</p>
+          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">ボーナス</span>
         </div>
-        <p className="text-xs font-bold text-gray-700">余裕があるときに追加。完了するとカロリーに加算されます。</p>
         {([
           { key: 'bonusBurpees'  as const, icon: '🤸', name: 'ステップバック・バーピー', sets: '3セット × 10回', kcal: 80,
             desc: '立った状態から手をついてプランク→足を戻して立ち上がる。有酸素と筋トレを同時に刺激。' },
@@ -622,11 +590,8 @@ function TodayTab({ profile }: { profile: Profile }) {
           { key: 'bonusPlank'    as const, icon: '🧱', name: 'プランク（追加セット）', sets: '2セット × 60秒', kcal: 40,
             desc: '肩・腹・臀部を一直線に保ち追加キープ。体幹の持久力を底上げする。' },
         ] as const).map(({ key, icon, name, sets, kcal, desc }) => (
-          <WorkoutCard key={key}
-            icon={icon} title={name} sets={sets} desc={desc}
-            kcalBurn={kcal} done={todayEx[key]}
-            onToggle={() => updateEx({ [key]: !todayEx[key] })}
-          />
+          <WorkoutCard key={key} icon={icon} title={name} sets={sets} desc={desc}
+            kcalBurn={kcal} done={todayEx[key]} onToggle={() => updateEx({ [key]: !todayEx[key] })} />
         ))}
       </div>
 
@@ -634,11 +599,11 @@ function TodayTab({ profile }: { profile: Profile }) {
       <BreathingTimer onMinutesChange={mins => updateEx({ breathingMins: mins })} />
 
       {/* ══ Motivation Music ══ */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-lg">🎵</span>
-          <p className="text-sm font-black text-gray-800">Motivation Music</p>
-          <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">YouTube</span>
+          <p className="text-sm font-black text-gray-900">Motivation Music</p>
+          <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">YouTube</span>
         </div>
         {[
           { title: 'Say So', artist: 'Doja Cat', emoji: '🌸', query: 'Doja Cat Say So Official Music Video', color: 'from-pink-500 to-rose-500' },
@@ -648,8 +613,7 @@ function TodayTab({ profile }: { profile: Profile }) {
           <a key={title}
             href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`}
             target="_blank" rel="noopener noreferrer"
-            className={`flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r ${color} text-white active:scale-[0.98] transition-all shadow-sm`}
-          >
+            className={`flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r ${color} text-white active:scale-[0.98] transition-all shadow-sm`}>
             <span className="text-xl">{emoji}</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-black leading-tight">{title}</p>
@@ -667,96 +631,142 @@ function TodayTab({ profile }: { profile: Profile }) {
           { label: '🍚 炭水化物',   gram: Math.round(targetKcal * 0.45 / 4), unit: 'g' },
           { label: '🫒 脂質',       gram: Math.round(targetKcal * 0.25 / 9), unit: 'g' },
         ].map(m => (
-          <div key={m.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-            <p className="text-xs font-bold text-gray-700">{m.label}</p>
-            <p className="text-lg font-black text-gray-800">{m.gram}<span className="text-xs font-normal">{m.unit}</span></p>
+          <div key={m.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-200">
+            <p className="text-xs font-bold text-gray-800">{m.label}</p>
+            <p className="text-lg font-black text-gray-900">{m.gram}<span className="text-xs font-normal">{m.unit}</span></p>
           </div>
         ))}
       </div>
 
       {/* ══ 食事追加フォーム ══ */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
-        <p className="text-xs font-black text-gray-800">食事を追加</p>
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
+        <p className="text-xs font-black text-gray-900">食事を追加</p>
+
+        {/* タイミング */}
         <div>
-          <label className="text-xs font-bold text-gray-700 mb-1 block">① タイミング</label>
+          <label className="text-xs font-bold text-gray-800 mb-1 block">① タイミング</label>
           <div className="flex gap-1.5 flex-wrap">
             {MEAL_LABELS.map(l => (
               <button key={l} onClick={() => setTiming(l)}
                 className={`px-3 py-1.5 rounded-full text-xs font-black border-2 transition-all ${
-                  timing === l ? `${LABEL_COLOR[l]} border-current` : 'bg-gray-100 text-gray-700 border-gray-300'
+                  timing === l ? `${LABEL_COLOR[l]} border-current` : 'bg-gray-100 text-gray-800 border-gray-300'
                 }`}>{l}</button>
             ))}
           </div>
         </div>
+
+        {/* 食材選択 */}
         <div className="relative">
-          <label className="text-xs font-bold text-gray-700 mb-1 block">② 食材（五十音順）</label>
-          <input type="text" value={search} placeholder="食材名を入力して絞り込み…" className={inputCls}
-            onChange={e => { setSearch(e.target.value); setShowDrop(true); setFoodIdx(-1); setGrams(''); }}
+          <label className="text-xs font-bold text-gray-800 mb-1 block">② 食材を選択</label>
+          <input type="text" value={search} placeholder="食材名で絞り込み…（「その他」で自由入力）"
+            className={inputCls}
+            onChange={e => { setSearch(e.target.value); setShowDrop(true); setFoodIdx(-1); setGrams(''); setCustomMode(false); }}
             onFocus={() => setShowDrop(true)} />
           {showDrop && (
             <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-52 overflow-y-auto">
               {filtered.length === 0
-                ? <p className="text-xs font-bold text-gray-600 text-center py-3">該当なし</p>
+                ? <p className="text-xs font-bold text-gray-800 text-center py-3">該当なし</p>
                 : filtered.map(({ f, i }) => (
                   <button key={i}
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0 ${f.custom ? 'bg-amber-50' : ''}`}
                     onMouseDown={e => { e.preventDefault(); selectFood(i); }}>
-                    <span className="font-medium text-gray-800">{f.name}</span>
-                    <span className="text-xs font-bold text-gray-600 flex-shrink-0">{f.baseGrams}g/{f.baseKcal}kcal</span>
+                    <span className={`font-bold ${f.custom ? 'text-amber-800' : 'text-gray-900'}`}>
+                      {f.custom ? '✏️ ' : ''}{f.name}
+                    </span>
+                    {!f.custom && <span className="text-xs font-bold text-gray-700 flex-shrink-0">{f.baseGrams}g/{f.baseKcal}kcal</span>}
                   </button>
                 ))}
             </div>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-bold text-gray-700 mb-1 block">③ グラム数</label>
-            <input type="number" value={grams} placeholder={food ? String(food.baseGrams) : '—'}
-              disabled={!food} onChange={e => setGrams(e.target.value)}
-              className={`${inputCls} text-right disabled:bg-gray-50 disabled:text-gray-300`} />
+
+        {/* 通常入力 */}
+        {food && !isCustom && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-gray-800 mb-1 block">③ グラム数</label>
+              <input type="number" value={grams} placeholder={food ? String(food.baseGrams) : '—'}
+                onChange={e => setGrams(e.target.value)}
+                className={`${inputCls} text-right`} />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-800 mb-1 block">④ カロリー（自動計算）</label>
+              <div className={`${inputCls} text-right font-black cursor-default ${
+                computedKcal > 0 ? 'text-indigo-700 bg-indigo-50 border-indigo-200' : 'bg-gray-50 text-gray-400'
+              }`}>{computedKcal > 0 ? computedKcal : '—'}</div>
+            </div>
           </div>
-          <div>
-            <label className="text-xs font-bold text-gray-700 mb-1 block">④ カロリー</label>
-            <div className={`${inputCls} text-right font-black cursor-default ${
-              computedKcal > 0 ? 'text-indigo-600 bg-indigo-50 border-indigo-200' : 'bg-gray-50 text-gray-300'
-            }`}>{computedKcal > 0 ? computedKcal : '—'}</div>
+        )}
+
+        {/* 自由入力モード */}
+        {customMode && (
+          <div className="space-y-3 bg-amber-50 border border-amber-200 rounded-2xl p-3">
+            <p className="text-xs font-black text-amber-800">✏️ 自由入力モード</p>
+            <div>
+              <label className="text-xs font-bold text-gray-800 mb-1 block">③ 食材名（自由入力）</label>
+              <input type="text" value={customName} placeholder="例：自家製スープ、コンビニサラダ…"
+                onChange={e => setCustomName(e.target.value)}
+                className={inputCls} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-gray-800 mb-1 block">④ グラム数（任意）</label>
+                <input type="number" value={customGrams} placeholder="0"
+                  onChange={e => setCustomGrams(e.target.value)}
+                  className={`${inputCls} text-right`} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-800 mb-1 block">⑤ カロリー（必須）</label>
+                <input type="number" value={customKcal} placeholder="kcal を入力"
+                  onChange={e => setCustomKcal(e.target.value)}
+                  className={`${inputCls} text-right font-black ${parseInt(customKcal) > 0 ? 'text-indigo-700 bg-indigo-50 border-indigo-200' : ''}`} />
+              </div>
+            </div>
           </div>
-        </div>
-        <button onClick={addMeal} disabled={!food || computedKcal <= 0}
-          className="w-full py-3 rounded-2xl font-black text-sm bg-indigo-600 text-white disabled:bg-gray-100 disabled:text-gray-300 active:scale-[0.98] transition-all">
-          追加する
+        )}
+
+        <button onClick={addMeal}
+          disabled={customMode ? (parseInt(customKcal) <= 0) : (!food || computedKcal <= 0)}
+          className="w-full py-3 rounded-2xl font-black text-sm bg-indigo-600 text-white disabled:bg-gray-200 disabled:text-gray-500 active:scale-[0.98] transition-all">
+          {selectedDate === todayStr() ? '追加する' : `${fmtDate(selectedDate)} の記録に追加`}
         </button>
       </div>
 
       {/* ══ 食事ログ（タイミング別） ══ */}
       {grouped.length === 0
-        ? <p className="text-xs text-gray-300 text-center py-4">まだ食事記録がありません</p>
+        ? <p className="text-xs text-gray-500 font-bold text-center py-4">まだ食事記録がありません</p>
         : (
           <div className="space-y-2">
             {grouped.map(({ lbl, meals }) => {
               const groupTotal = meals.reduce((s, { m }) => s + m.kcal, 0);
               return (
-                <div key={lbl} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                <div key={lbl} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
                   <div className={`px-4 py-2 flex items-center justify-between ${LABEL_COLOR[lbl]}`}>
                     <span className="text-xs font-black">{lbl}</span>
                     <span className="text-xs font-bold">{groupTotal} kcal</span>
                   </div>
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-gray-100">
                     {meals.map(({ m, i }) => (
                       <div key={i} className="flex items-center gap-2 px-4 py-2.5">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-gray-800 truncate">{m.food ?? m.label}</p>
-                          {m.grams != null && <p className="text-xs font-bold text-gray-600">{m.grams}g</p>}
+                          <p className="text-sm font-bold text-gray-900 truncate">{m.food ?? m.label}</p>
+                          {m.grams != null && m.grams > 0 && <p className="text-xs font-bold text-gray-700">{m.grams}g</p>}
                         </div>
-                        <span className="text-sm font-black text-gray-600 flex-shrink-0">{m.kcal} kcal</span>
+                        <span className="text-sm font-black text-gray-800 flex-shrink-0">{m.kcal} kcal</span>
                         <button onClick={() => removeMeal(i)}
-                          className="text-gray-300 text-xl leading-none active:text-red-400 flex-shrink-0">×</button>
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm active:scale-90 transition-all flex-shrink-0 font-black">
+                          🗑
+                        </button>
                       </div>
                     ))}
                   </div>
                 </div>
               );
             })}
+            <div className="flex justify-between px-2">
+              <span className="text-xs font-black text-gray-800">合計摂取</span>
+              <span className="text-xs font-black text-gray-900">{foodKcal.toLocaleString()} kcal</span>
+            </div>
           </div>
         )
       }
@@ -786,69 +796,58 @@ function MetricsTab() {
   const [metrics, setMetrics] = useState<WeeklyMetric[]>(() => load<WeeklyMetric[]>(LS_METRICS, []));
   const [form, setForm]       = useState<WeeklyMetric>(emptyMetric);
   const [saved, setSaved]     = useState(false);
-
-  const setField = (k: keyof WeeklyMetric, v: string | number) =>
-    setForm(f => ({ ...f, [k]: v }));
-
+  const setField = (k: keyof WeeklyMetric, v: string | number) => setForm(f => ({ ...f, [k]: v }));
   const handleSave = () => {
     const existing = metrics.filter(m => m.date !== form.date);
     const next = [form, ...existing].sort((a, b) => b.date.localeCompare(a.date));
-    setMetrics(next);
-    save(LS_METRICS, next);
-    setSaved(true);
+    setMetrics(next); save(LS_METRICS, next); setSaved(true);
     setTimeout(() => { setSaved(false); setForm(emptyMetric()); }, 1500);
   };
-
   const deleteMetric = (date: string) => {
     const next = metrics.filter(m => m.date !== date);
-    setMetrics(next);
-    save(LS_METRICS, next);
+    setMetrics(next); save(LS_METRICS, next);
   };
+  const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 text-gray-900";
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-gray-100 p-4">
-        <p className="text-xs font-black text-gray-800 mb-3">測定データを入力</p>
+      <div className="bg-white rounded-2xl border border-gray-200 p-4">
+        <p className="text-xs font-black text-gray-900 mb-3">測定データを入力</p>
         <div className="mb-3">
-          <label className="text-xs font-bold text-gray-700 mb-1 block">測定日</label>
-          <input type="date" value={form.date} onChange={e => setField('date', e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400" />
+          <label className="text-xs font-bold text-gray-800 mb-1 block">測定日</label>
+          <input type="date" value={form.date} onChange={e => setField('date', e.target.value)} className={inputCls} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           {METRIC_FIELDS.map(f => (
             <div key={f.key}>
-              <label className="text-xs font-bold text-gray-700 mb-1 block">
-                {f.label}{f.unit ? ` (${f.unit})` : ''}
-              </label>
+              <label className="text-xs font-bold text-gray-800 mb-1 block">{f.label}{f.unit ? ` (${f.unit})` : ''}</label>
               <input type="number" step={f.step} placeholder="0"
                 value={(form[f.key] as number) || ''}
                 onChange={e => setField(f.key, +e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400 text-right" />
+                className={`${inputCls} text-right`} />
             </div>
           ))}
         </div>
         <button onClick={handleSave}
-          className={`w-full mt-4 py-3 rounded-2xl font-black text-sm transition-all ${
-            saved ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white active:scale-95'
-          }`}>
+          className={`w-full mt-4 py-3 rounded-2xl font-black text-sm transition-all ${saved ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white active:scale-95'}`}>
           {saved ? '✓ 保存しました' : '記録する'}
         </button>
       </div>
       {metrics.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <p className="text-xs font-black text-gray-800 px-4 pt-3 pb-2">履歴 ({metrics.length}件)</p>
-          <div className="divide-y divide-gray-50">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <p className="text-xs font-black text-gray-900 px-4 pt-3 pb-2">履歴 ({metrics.length}件)</p>
+          <div className="divide-y divide-gray-100">
             {metrics.slice(0, 10).map(m => (
               <div key={m.date} className="px-4 py-3">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-gray-700">{m.date}</span>
-                  <button onClick={() => deleteMetric(m.date)} className="text-xs text-gray-300 active:text-red-400">削除</button>
+                  <span className="text-xs font-black text-gray-900">{m.date}</span>
+                  <button onClick={() => deleteMetric(m.date)} className="text-xs font-bold text-red-500 active:scale-90 transition-all">削除</button>
                 </div>
                 <div className="grid grid-cols-4 gap-1">
                   {METRIC_FIELDS.map(f => (
                     <div key={f.key} className="text-center">
-                      <p className="text-[10px] font-bold text-gray-600">{f.label}</p>
-                      <p className="text-xs font-bold text-gray-900">{(m[f.key] as number) || '—'}</p>
+                      <p className="text-[10px] font-bold text-gray-700">{f.label}</p>
+                      <p className="text-xs font-black text-gray-900">{(m[f.key] as number) || '—'}</p>
                     </div>
                   ))}
                 </div>
@@ -866,7 +865,6 @@ function MetricsTab() {
 // ═══════════════════════════════════════════════════════════════════
 type Period = '1M' | '3M' | '6M' | '1Y';
 const PERIOD_DAYS: Record<Period, number> = { '1M': 30, '3M': 90, '6M': 180, '1Y': 365 };
-
 type MetricKey = 'weight' | 'fatPct' | 'muscleMass' | 'bmi';
 const METRIC_OPTS: { key: MetricKey; label: string; color: string; unit: string }[] = [
   { key: 'weight',     label: '体重',     color: '#6366f1', unit: 'kg' },
@@ -876,39 +874,29 @@ const METRIC_OPTS: { key: MetricKey; label: string; color: string; unit: string 
 ];
 
 function TrendsTab() {
-  const [metrics] = useState<WeeklyMetric[]>(() => load<WeeklyMetric[]>(LS_METRICS, []));
+  const [metrics]                   = useState<WeeklyMetric[]>(() => load<WeeklyMetric[]>(LS_METRICS, []));
   const [period, setPeriod]         = useState<Period>('3M');
   const [activeKeys, setActiveKeys] = useState<MetricKey[]>(['weight', 'fatPct']);
-
   const toggle = (k: MetricKey) =>
     setActiveKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]);
-
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - PERIOD_DAYS[period]);
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - PERIOD_DAYS[period]);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
-
-  const data = metrics
-    .filter(m => m.date >= cutoffStr)
-    .sort((a, b) => a.date.localeCompare(b.date))
+  const data = metrics.filter(m => m.date >= cutoffStr).sort((a, b) => a.date.localeCompare(b.date))
     .map(m => ({ ...m, dateLabel: fmtDate(m.date) }));
 
-  if (metrics.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-300">
-        <p className="text-4xl mb-2">📊</p>
-        <p className="text-sm">「測定」タブでデータを記録するとグラフが表示されます</p>
-      </div>
-    );
-  }
+  if (metrics.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+      <p className="text-4xl mb-2">📊</p>
+      <p className="text-sm font-bold">「測定」タブでデータを記録するとグラフが表示されます</p>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl">
         {(['1M','3M','6M','1Y'] as Period[]).map(p => (
           <button key={p} onClick={() => setPeriod(p)}
-            className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${
-              period === p ? 'bg-white text-indigo-600 shadow' : 'text-gray-700 font-bold'
-            }`}>
+            className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${period === p ? 'bg-white text-indigo-700 shadow' : 'text-gray-800 font-bold'}`}>
             {p}
           </button>
         ))}
@@ -917,7 +905,7 @@ function TrendsTab() {
         {METRIC_OPTS.map(m => (
           <button key={m.key} onClick={() => toggle(m.key)}
             className={`px-3 py-1.5 rounded-full text-[11px] font-bold border-2 transition-all ${
-              activeKeys.includes(m.key) ? 'text-white' : 'bg-white text-gray-700 border-gray-400'
+              activeKeys.includes(m.key) ? 'text-white' : 'bg-white text-gray-800 border-gray-400'
             }`}
             style={activeKeys.includes(m.key) ? { background: m.color, borderColor: m.color } : {}}>
             {m.label}
@@ -925,18 +913,17 @@ function TrendsTab() {
         ))}
       </div>
       {data.length < 2 ? (
-        <div className="bg-gray-50 rounded-2xl p-8 text-center text-sm font-bold text-gray-600 border border-gray-200">
+        <div className="bg-gray-50 rounded-2xl p-8 text-center text-sm font-bold text-gray-700 border border-gray-200">
           この期間のデータが少ないです。測定を続けるとグラフが表示されます。
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 p-4">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4">
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="dateLabel" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip
-                contentStyle={{ fontSize: 11, borderRadius: 12, border: '1px solid #e5e7eb' }}
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 12, border: '1px solid #e5e7eb' }}
                 formatter={(v, name) => {
                   const m = METRIC_OPTS.find(x => x.label === name);
                   return [`${v}${m?.unit ?? ''}`, name as string];
@@ -951,16 +938,15 @@ function TrendsTab() {
         </div>
       )}
       {data.some(d => d.bmr > 0) && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-xs font-black text-gray-800 mb-3">基礎代謝推移 (kcal)</p>
+        <div className="bg-white rounded-2xl border border-gray-200 p-4">
+          <p className="text-xs font-black text-gray-900 mb-3">基礎代謝推移 (kcal)</p>
           <ResponsiveContainer width="100%" height={120}>
             <LineChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="dateLabel" tick={{ fontSize: 9 }} />
               <YAxis tick={{ fontSize: 9 }} domain={['auto', 'auto']} />
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 12 }} />
-              <Line type="monotone" dataKey="bmr" name="基礎代謝" stroke="#8b5cf6"
-                strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="bmr" name="基礎代謝" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -981,87 +967,66 @@ function generateAdvice(metrics: WeeklyMetric[], profile: Profile): Advice[] {
       body: '「測定」タブで週次の体組成データを入力すると、パーソナルアドバイスが表示されます。' });
     return advices;
   }
-
-  const latest = metrics[0];
-  const prev   = metrics[1];
-  const calc   = calcTargetKcal(profile);
-
+  const latest = metrics[0]; const prev = metrics[1]; const calc = calcTargetKcal(profile);
   if (profile.goalDate && profile.currentWeight && profile.goalWeight) {
     const goalDiff = profile.currentWeight - profile.goalWeight;
     const weightLost = profile.currentWeight - (latest.weight || profile.currentWeight);
     const pace = calc.daysLeft > 0 ? (weightLost / (profile.currentWeight - profile.goalWeight || 1)) : 0;
     if (goalDiff > 0) {
-      if (pace >= 0.8)
-        advices.push({ icon: '🏆', title: '目標達成ペース！', color: 'border-emerald-200 bg-emerald-50',
-          body: `順調に減量中です！このペースを維持しましょう。残り ${calc.daysLeft} 日、目標まであと ${Math.max(0, goalDiff - weightLost).toFixed(1)} kg。` });
-      else if (pace > 0)
-        advices.push({ icon: '💪', title: '順調に進んでいます', color: 'border-blue-200 bg-blue-50',
-          body: `少しペースが遅めです。毎日の目標摂取カロリー ${calc.target.toLocaleString()} kcal を守りましょう。` });
+      if (pace >= 0.8) advices.push({ icon: '🏆', title: '目標達成ペース！', color: 'border-emerald-200 bg-emerald-50',
+        body: `順調に減量中です！残り ${calc.daysLeft} 日、目標まであと ${Math.max(0, goalDiff - weightLost).toFixed(1)} kg。` });
+      else if (pace > 0) advices.push({ icon: '💪', title: '順調に進んでいます', color: 'border-blue-200 bg-blue-50',
+        body: `少しペースが遅めです。目標摂取カロリー ${calc.target.toLocaleString()} kcal を守りましょう。` });
     }
   }
-
   if (prev && latest.weight < prev.weight && latest.muscleMass < prev.muscleMass) {
     const muscleLoss = prev.muscleMass - latest.muscleMass;
     advices.push({ icon: '⚠️', title: '筋肉量が減っています', color: 'border-amber-200 bg-amber-50',
-      body: `体重は ${(prev.weight - latest.weight).toFixed(1)} kg 減りましたが、筋肉量も ${muscleLoss.toFixed(1)} kg 減少しています。たんぱく質（体重×1.5〜2g）を意識しましょう。` });
+      body: `体重は ${(prev.weight - latest.weight).toFixed(1)} kg 減りましたが、筋肉量も ${muscleLoss.toFixed(1)} kg 減少。たんぱく質（体重×1.5〜2g）を意識しましょう。` });
   } else if (prev && latest.weight < prev.weight && latest.muscleMass >= prev.muscleMass) {
     advices.push({ icon: '✨', title: '理想的な減量です！', color: 'border-emerald-200 bg-emerald-50',
-      body: '体重を落としながら筋肉量を維持できています。素晴らしい！この食事・運動バランスを続けましょう。' });
+      body: '体重を落としながら筋肉量を維持できています。素晴らしい！' });
   }
-
   if (latest.fatPct > 0) {
     const isMale = profile.sex === 'male';
-    const highFat = isMale ? latest.fatPct > 25 : latest.fatPct > 35;
-    const goodFat = isMale ? latest.fatPct < 18 : latest.fatPct < 28;
-    if (highFat)
+    if (isMale ? latest.fatPct > 25 : latest.fatPct > 35)
       advices.push({ icon: '🔥', title: '体脂肪率を下げましょう', color: 'border-orange-200 bg-orange-50',
-        body: `体脂肪率 ${latest.fatPct}% は高めです。有酸素運動（週3回、30分以上）とカロリー制限の組み合わせが効果的です。` });
-    else if (goodFat)
+        body: `体脂肪率 ${latest.fatPct}% は高めです。有酸素運動（週3回、30分以上）とカロリー制限が効果的です。` });
+    else if (isMale ? latest.fatPct < 18 : latest.fatPct < 28)
       advices.push({ icon: '💯', title: '体脂肪率が良好です', color: 'border-emerald-200 bg-emerald-50',
-        body: `体脂肪率 ${latest.fatPct}% は理想的な範囲です。現在の生活習慣を維持しましょう！` });
+        body: `体脂肪率 ${latest.fatPct}% は理想的な範囲です！` });
   }
-
   if (latest.bmi > 0) {
-    if (latest.bmi >= 30)
-      advices.push({ icon: '🏃', title: 'BMIが高めです', color: 'border-red-200 bg-red-50',
-        body: `BMI ${latest.bmi} は肥満域です。1日 ${calc.deficit} kcal の不足を目標に、食事管理と運動を継続しましょう。` });
-    else if (latest.bmi >= 25)
-      advices.push({ icon: '📉', title: 'BMI 標準に向けて', color: 'border-amber-200 bg-amber-50',
-        body: `BMI ${latest.bmi} は過体重域です。目標摂取 ${calc.target.toLocaleString()} kcal を意識した食生活を心がけましょう。` });
-    else if (latest.bmi >= 18.5)
-      advices.push({ icon: '🌟', title: 'BMI 標準範囲', color: 'border-green-200 bg-green-50',
-        body: `BMI ${latest.bmi} は正常範囲です。体重の維持を目標に、バランスの良い食事を続けましょう。` });
+    if (latest.bmi >= 30) advices.push({ icon: '🏃', title: 'BMIが高めです', color: 'border-red-200 bg-red-50',
+      body: `BMI ${latest.bmi} は肥満域です。1日 ${calc.deficit} kcal 不足を目標に継続しましょう。` });
+    else if (latest.bmi >= 25) advices.push({ icon: '📉', title: 'BMI 標準に向けて', color: 'border-amber-200 bg-amber-50',
+      body: `BMI ${latest.bmi} は過体重域です。目標摂取 ${calc.target.toLocaleString()} kcal を意識しましょう。` });
+    else if (latest.bmi >= 18.5) advices.push({ icon: '🌟', title: 'BMI 標準範囲', color: 'border-green-200 bg-green-50',
+      body: `BMI ${latest.bmi} は正常範囲です。バランスの良い食事を続けましょう。` });
   }
-
-  if (latest.visceralFat >= 10)
-    advices.push({ icon: '❤️', title: '内臓脂肪に注意', color: 'border-red-200 bg-red-50',
-      body: `内臓脂肪レベル ${latest.visceralFat} は高めです。アルコールや糖質の過剰摂取を避け、有酸素運動が特に効果的です。` });
-
+  if (latest.visceralFat >= 10) advices.push({ icon: '❤️', title: '内臓脂肪に注意', color: 'border-red-200 bg-red-50',
+    body: `内臓脂肪レベル ${latest.visceralFat} は高めです。有酸素運動が特に効果的です。` });
   if (prev && latest.weight < prev.weight && latest.fatPct < prev.fatPct)
     advices.push({ icon: '🎉', title: 'ダブル改善！', color: 'border-violet-200 bg-violet-50',
-      body: '体重も体脂肪率も先週より改善しています！モチベーションを保ちながら継続しましょう。' });
-
-  if (advices.length === 0)
-    advices.push({ icon: '📊', title: 'データを蓄積中...', color: 'border-gray-200 bg-gray-50',
-      body: '週次測定を2〜3回記録すると、より詳細なアドバイスが生成されます。' });
-
+      body: '体重も体脂肪率も先週より改善！モチベーションを保ちながら継続しましょう。' });
+  if (advices.length === 0) advices.push({ icon: '📊', title: 'データを蓄積中...', color: 'border-gray-200 bg-gray-50',
+    body: '週次測定を2〜3回記録すると、より詳細なアドバイスが生成されます。' });
   return advices;
 }
 
 function AdviceTab({ profile }: { profile: Profile }) {
   const metrics = load<WeeklyMetric[]>(LS_METRICS, []);
   const advices = generateAdvice(metrics, profile);
-
   return (
     <div className="space-y-3">
-      <p className="text-xs font-black text-gray-800 px-1">パーソナルフィードバック</p>
+      <p className="text-xs font-black text-gray-900 px-1">パーソナルフィードバック</p>
       {advices.map((a, i) => (
         <div key={i} className={`rounded-2xl border p-4 ${a.color}`}>
           <div className="flex items-start gap-3">
             <span className="text-xl leading-none mt-0.5">{a.icon}</span>
             <div>
-              <p className="text-sm font-black text-gray-800 mb-1">{a.title}</p>
-              <p className="text-xs text-gray-600 leading-relaxed">{a.body}</p>
+              <p className="text-sm font-black text-gray-900 mb-1">{a.title}</p>
+              <p className="text-xs text-gray-800 leading-relaxed">{a.body}</p>
             </div>
           </div>
         </div>
@@ -1069,14 +1034,14 @@ function AdviceTab({ profile }: { profile: Profile }) {
       {metrics.length > 0 && (() => {
         const l = metrics[0];
         return (
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 mt-2">
-            <p className="text-xs font-black text-gray-800 mb-3">最新測定値 ({l.date})</p>
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 mt-2">
+            <p className="text-xs font-black text-gray-900 mb-3">最新測定値 ({l.date})</p>
             <div className="grid grid-cols-4 gap-2">
               {METRIC_FIELDS.map(f => (
                 <div key={f.key} className="text-center">
-                  <p className="text-[10px] font-bold text-gray-600">{f.label}</p>
-                  <p className="text-xs font-black text-gray-800">{(l[f.key] as number) || '—'}</p>
-                  <p className="text-[10px] font-bold text-gray-600">{f.unit}</p>
+                  <p className="text-[10px] font-bold text-gray-700">{f.label}</p>
+                  <p className="text-xs font-black text-gray-900">{(l[f.key] as number) || '—'}</p>
+                  <p className="text-[10px] font-bold text-gray-700">{f.unit}</p>
                 </div>
               ))}
             </div>
@@ -1088,191 +1053,118 @@ function AdviceTab({ profile }: { profile: Profile }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// History tab — 日付別詳細履歴 + 比較機能
+// History tab
 // ═══════════════════════════════════════════════════════════════════
-function HistoryTab() {
-  const [historyMap, setHistoryMap] = useState<HistoryMap>(() =>
-    load<HistoryMap>(LS_HISTORY, {}));
+function HistoryTab({ onEditDate }: { onEditDate: (date: string) => void }) {
+  const [historyMap, setHistoryMap] = useState<HistoryMap>(() => load<HistoryMap>(LS_HISTORY, {}));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [compareMode, setCompareMode]   = useState(false);
   const [selected, setSelected]         = useState<string[]>([]);
 
-  const days = Object.values(historyMap)
-    .sort((a, b) => b.date.localeCompare(a.date));
-
-  const toggleExpand = (date: string) =>
-    setExpandedDate(v => v === date ? null : date);
-
+  const days = Object.values(historyMap).sort((a, b) => b.date.localeCompare(a.date));
+  const toggleExpand = (date: string) => setExpandedDate(v => v === date ? null : date);
   const toggleSelect = (date: string) => {
-    if (selected.includes(date)) {
-      setSelected(s => s.filter(d => d !== date));
-    } else if (selected.length < 2) {
-      setSelected(s => [...s, date]);
-    }
+    if (selected.includes(date)) setSelected(s => s.filter(d => d !== date));
+    else if (selected.length < 2)  setSelected(s => [...s, date]);
   };
-
   const deleteDay = (date: string) => {
-    const next = { ...historyMap };
-    delete next[date];
-    setHistoryMap(next);
-    save(LS_HISTORY, next);
+    const next = { ...historyMap }; delete next[date];
+    setHistoryMap(next); save(LS_HISTORY, next);
   };
 
   // ── 比較ビュー ──
   if (compareMode && selected.length === 2) {
-    const [dA, dB] = selected.map(d => historyMap[d]).sort((a, b) => a.date.localeCompare(b.date));
-    if (dA && dB) {
-      return (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-black text-gray-800">📊 日付比較</p>
-            <button onClick={() => { setCompareMode(false); setSelected([]); }}
-              className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full active:scale-95 transition-all">
-              ← 一覧に戻る
-            </button>
-          </div>
-
-          {/* ヘッダー */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="col-span-1" />
-            {[dA, dB].map(d => (
-              <div key={d.date} className="bg-gray-900 rounded-2xl p-3 text-center">
-                <p className="text-white font-black text-xs">{fmtDateJP(d.date)}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* 比較テーブル */}
-          {[
-            { label: '🎯 目標', keyFn: (d: DayHistory) => `${d.targetKcal.toLocaleString()} kcal` },
-            { label: '🍽️ 摂取', keyFn: (d: DayHistory) => `${d.totalIntakeKcal.toLocaleString()} kcal` },
-            { label: '💪 消費', keyFn: (d: DayHistory) => `${d.totalBurnedKcal.toLocaleString()} kcal` },
-            { label: '⚖️ 収支', keyFn: (d: DayHistory) => {
-              const sign = d.netKcal >= 0;
-              return `${sign ? '+' : ''}${d.netKcal.toLocaleString()} kcal`;
-            }},
-            { label: '🚶 歩数', keyFn: (d: DayHistory) => `${d.steps.toLocaleString()} 歩` },
-            { label: '🏃 速歩', keyFn: (d: DayHistory) => d.intervalWalkMins > 0 ? `${d.intervalWalkMins} 分` : '—' },
-            { label: '🌬️ 呼吸', keyFn: (d: DayHistory) => d.breathingMins > 0 ? `${d.breathingMins} 分` : '—' },
-            { label: '🍱 食事数', keyFn: (d: DayHistory) => `${d.meals.length} 品目` },
-            { label: '🏋️ 運動数', keyFn: (d: DayHistory) => `${d.workouts.length} 種目` },
-          ].map(row => (
-            <div key={row.label} className="grid grid-cols-3 gap-2 items-center">
-              <p className="text-xs font-bold text-gray-700">{row.label}</p>
-              {[dA, dB].map(d => {
-                const val = row.keyFn(d);
-                const isNet = row.label.includes('収支');
-                const isGood = isNet ? d.netKcal >= 0 : false;
-                const isBad  = isNet ? d.netKcal < 0 : false;
-                return (
-                  <div key={d.date} className={`rounded-xl p-2.5 text-center border ${
-                    isGood ? 'bg-emerald-50 border-emerald-200' :
-                    isBad  ? 'bg-red-50 border-red-200' :
-                    'bg-gray-50 border-gray-200'
-                  }`}>
-                    <p className={`text-xs font-black ${
-                      isGood ? 'text-emerald-700' :
-                      isBad  ? 'text-red-700' :
-                      'text-gray-900'
-                    }`}>{val}</p>
-                  </div>
-                );
-              })}
+    const sorted = selected.slice().sort();
+    const [dA, dB] = sorted.map(d => historyMap[d]);
+    if (dA && dB) return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-black text-gray-900">📊 日付比較</p>
+          <button onClick={() => { setCompareMode(false); setSelected([]); }}
+            className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-200 active:scale-95 transition-all">
+            ← 一覧に戻る
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div />
+          {[dA, dB].map(d => (
+            <div key={d.date} className="bg-gray-900 rounded-2xl p-3 text-center">
+              <p className="text-white font-black text-xs">{fmtDateJP(d.date)}</p>
             </div>
           ))}
-
-          {/* 食事明細 */}
-          <div className="grid grid-cols-2 gap-3 mt-2">
-            {[dA, dB].map(d => (
-              <div key={d.date} className="space-y-2">
-                <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
-                  {fmtDate(d.date)} 食事
-                </p>
-                {d.meals.length === 0
-                  ? <p className="text-[10px] text-gray-400">記録なし</p>
-                  : d.meals.map((m, i) => (
-                    <div key={i} className="bg-white border border-gray-200 rounded-xl px-3 py-2">
-                      <p className="text-[10px] font-black text-gray-500">{m.category}</p>
-                      <p className="text-xs font-bold text-gray-800 truncate">{m.name}</p>
-                      <p className="text-[10px] font-bold text-gray-600">{m.grams}g · {m.kcal}kcal</p>
-                    </div>
-                  ))
-                }
-              </div>
-            ))}
-          </div>
-
-          {/* 運動明細 */}
-          <div className="grid grid-cols-2 gap-3">
-            {[dA, dB].map(d => (
-              <div key={d.date} className="space-y-1">
-                <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest">
-                  {fmtDate(d.date)} 運動
-                </p>
-                {d.workouts.length === 0
-                  ? <p className="text-[10px] text-gray-400">記録なし</p>
-                  : d.workouts.map((w, i) => (
-                    <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5">
-                      <p className="text-[10px] font-bold text-emerald-800 leading-snug">{w}</p>
-                    </div>
-                  ))
-                }
-              </div>
-            ))}
-          </div>
         </div>
-      );
-    }
-  }
-
-  if (days.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-300">
-        <p className="text-4xl mb-2">📅</p>
-        <p className="text-sm text-center">「今日」タブで食事・運動を記録すると<br/>ここに履歴が蓄積されます</p>
+        {[
+          { label: '🎯 目標',   fn: (d: DayHistory) => `${d.targetKcal.toLocaleString()} kcal` },
+          { label: '🍽️ 摂取',  fn: (d: DayHistory) => `${d.totalIntakeKcal.toLocaleString()} kcal` },
+          { label: '💪 消費',   fn: (d: DayHistory) => `${d.totalBurnedKcal.toLocaleString()} kcal` },
+          { label: '⚖️ 収支',  fn: (d: DayHistory) => `${d.netKcal >= 0 ? '+' : ''}${d.netKcal.toLocaleString()} kcal`, net: true },
+          { label: '🚶 歩数',   fn: (d: DayHistory) => `${d.steps.toLocaleString()} 歩` },
+          { label: '🍱 食事数', fn: (d: DayHistory) => `${d.meals.length} 品目` },
+          { label: '🏋️ 運動数', fn: (d: DayHistory) => `${d.workouts.length} 種目` },
+        ].map(row => (
+          <div key={row.label} className="grid grid-cols-3 gap-2 items-center">
+            <p className="text-xs font-bold text-gray-800">{row.label}</p>
+            {[dA, dB].map(d => {
+              const isGood = row.net ? d.netKcal >= 0 : false;
+              const isBad  = row.net ? d.netKcal < 0 : false;
+              return (
+                <div key={d.date} className={`rounded-xl p-2.5 text-center border ${isGood ? 'bg-emerald-50 border-emerald-200' : isBad ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                  <p className={`text-xs font-black ${isGood ? 'text-emerald-800' : isBad ? 'text-red-800' : 'text-gray-900'}`}>{row.fn(d)}</p>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        <div className="grid grid-cols-2 gap-3 mt-2">
+          {[dA, dB].map(d => (
+            <div key={d.date} className="space-y-2">
+              <p className="text-[10px] font-black text-gray-800 uppercase tracking-widest">{fmtDate(d.date)} 食事</p>
+              {d.meals.length === 0 ? <p className="text-[10px] text-gray-600">記録なし</p>
+                : d.meals.map((m, i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-xl px-3 py-2">
+                    <p className="text-[10px] font-black text-gray-700">{m.category}</p>
+                    <p className="text-xs font-bold text-gray-900 truncate">{m.name}</p>
+                    <p className="text-[10px] font-bold text-gray-700">{m.grams}g · {m.kcal}kcal</p>
+                  </div>
+                ))}
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
 
+  if (days.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+      <p className="text-4xl mb-2">📅</p>
+      <p className="text-sm font-bold text-center">「今日」タブで食事・運動を記録すると<br/>ここに履歴が蓄積されます</p>
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {/* ヘッダー行 */}
       <div className="flex items-center justify-between px-1">
-        <p className="text-xs font-black text-gray-800">
-          📅 詳細履歴 <span className="text-gray-500 font-bold">({days.length}日分)</span>
+        <p className="text-xs font-black text-gray-900">
+          📅 詳細履歴 <span className="text-gray-700 font-bold">({days.length}日分)</span>
         </p>
-        <button
-          onClick={() => { setCompareMode(v => !v); setSelected([]); }}
+        <button onClick={() => { setCompareMode(v => !v); setSelected([]); }}
           className={`text-xs font-black px-3 py-1.5 rounded-full transition-all active:scale-95 ${
-            compareMode
-              ? 'bg-indigo-600 text-white'
-              : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-          }`}
-        >
+            compareMode ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+          }`}>
           {compareMode ? '✕ 比較モードOFF' : '🔄 2日を比較'}
         </button>
       </div>
 
       {compareMode && (
         <div className={`rounded-2xl p-3 border text-xs font-bold ${
-          selected.length === 2
-            ? 'bg-indigo-600 text-white border-indigo-700'
-            : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+          selected.length === 2 ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-indigo-50 text-indigo-900 border-indigo-200'
         }`}>
           {selected.length === 0 && '比較したい日付を2日タップしてください'}
           {selected.length === 1 && `✅ ${fmtDateJP(selected[0])} 選択済み。あと1日選択してください`}
-          {selected.length === 2 && (
-            <button
-              onClick={() => setCompareMode(true)}
-              className="w-full font-black text-center"
-            >
-              📊 {fmtDate(selected[0])} と {fmtDate(selected[1])} を比較する →
-            </button>
-          )}
+          {selected.length === 2 && `📊 ${fmtDate(selected[0])} と ${fmtDate(selected[1])} を比較します（上のバーで確認）`}
         </div>
       )}
 
-      {/* 日付カードリスト */}
       {days.map(day => {
         const isExpanded = expandedDate === day.date;
         const isSelected = selected.includes(day.date);
@@ -1280,150 +1172,106 @@ function HistoryTab() {
         const isToday    = day.date === todayStr();
 
         return (
-          <div key={day.date}
-            className={`rounded-2xl border-2 overflow-hidden transition-all ${
-              isSelected ? 'border-indigo-500 bg-indigo-50' :
-              isToday    ? 'border-gray-900 bg-white' :
-                           'border-gray-100 bg-white'
-            }`}>
-
-            {/* カードヘッダー */}
-            <button
-              className="w-full px-4 py-3 flex items-center gap-3 active:bg-gray-50 transition-colors"
-              onClick={() => compareMode ? toggleSelect(day.date) : toggleExpand(day.date)}
-            >
-              {/* 比較モード チェック */}
+          <div key={day.date} className={`rounded-2xl border-2 overflow-hidden transition-all ${
+            isSelected ? 'border-indigo-500 bg-indigo-50' : isToday ? 'border-gray-900 bg-white' : 'border-gray-200 bg-white'
+          }`}>
+            <button className="w-full px-4 py-3 flex items-center gap-3 active:bg-gray-50 transition-colors"
+              onClick={() => compareMode ? toggleSelect(day.date) : toggleExpand(day.date)}>
               {compareMode && (
                 <div className={`w-5 h-5 rounded-md border-2 flex-shrink-0 flex items-center justify-center text-xs ${
-                  isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-300'
-                }`}>
-                  {isSelected && '✓'}
-                </div>
+                  isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-400'
+                }`}>{isSelected && '✓'}</div>
               )}
-
-              {/* 日付 */}
               <div className="flex-shrink-0 text-left">
-                <p className={`text-xs font-black ${isToday ? 'text-gray-900' : 'text-gray-700'}`}>
+                <p className={`text-xs font-black ${isToday ? 'text-gray-900' : 'text-gray-800'}`}>
                   {isToday ? '🔴 今日' : fmtDateJP(day.date)}
                 </p>
-                {isToday && <p className="text-[10px] font-bold text-gray-500">{day.date}</p>}
+                {isToday && <p className="text-[10px] font-bold text-gray-600">{day.date}</p>}
               </div>
-
-              {/* 収支バッジ */}
               <span className={`text-xs font-black px-2.5 py-1 rounded-full flex-shrink-0 ${
-                underCal
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-red-100 text-red-700'
+                underCal ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-800'
               }`}>
                 {underCal ? '✅' : '⚠️'} {underCal ? '+' : ''}{day.netKcal.toLocaleString()} kcal
               </span>
-
-              {/* 摂取/消費クイック */}
               <div className="flex-1 flex items-center gap-3 justify-end text-right">
-                <div>
-                  <p className="text-[10px] font-bold text-gray-500">摂取</p>
-                  <p className="text-xs font-black text-gray-800">{day.totalIntakeKcal.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-gray-500">消費</p>
-                  <p className="text-xs font-black text-emerald-700">{day.totalBurnedKcal.toLocaleString()}</p>
-                </div>
-                {!compareMode && (
-                  <span className={`text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
-                )}
+                <div><p className="text-[10px] font-bold text-gray-700">摂取</p><p className="text-xs font-black text-gray-900">{day.totalIntakeKcal.toLocaleString()}</p></div>
+                <div><p className="text-[10px] font-bold text-gray-700">消費</p><p className="text-xs font-black text-emerald-800">{day.totalBurnedKcal.toLocaleString()}</p></div>
+                {!compareMode && <span className={`text-gray-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>}
               </div>
             </button>
 
-            {/* クイックスタッツ（常時） */}
             <div className="px-4 pb-2 flex gap-3 flex-wrap">
-              {day.steps > 0 && (
-                <span className="text-[10px] font-bold text-gray-600">🚶 {day.steps.toLocaleString()}歩</span>
-              )}
-              {day.intervalWalkMins > 0 && (
-                <span className="text-[10px] font-bold text-gray-600">🏃 {day.intervalWalkMins}分</span>
-              )}
-              {day.breathingMins > 0 && (
-                <span className="text-[10px] font-bold text-gray-600">🌬️ {day.breathingMins}分</span>
-              )}
-              {day.workouts.length > 0 && (
-                <span className="text-[10px] font-bold text-gray-600">🏋️ {day.workouts.length}種目</span>
-              )}
-              {day.meals.length > 0 && (
-                <span className="text-[10px] font-bold text-gray-600">🍱 {day.meals.length}品目</span>
-              )}
+              {day.steps > 0 && <span className="text-[10px] font-bold text-gray-700">🚶 {day.steps.toLocaleString()}歩</span>}
+              {day.intervalWalkMins > 0 && <span className="text-[10px] font-bold text-gray-700">🏃 {day.intervalWalkMins}分</span>}
+              {day.workouts.length > 0 && <span className="text-[10px] font-bold text-gray-700">🏋️ {day.workouts.length}種目</span>}
+              {day.meals.length > 0 && <span className="text-[10px] font-bold text-gray-700">🍱 {day.meals.length}品目</span>}
             </div>
 
-            {/* 展開詳細 */}
             {isExpanded && !compareMode && (
               <div className="border-t border-gray-100 px-4 py-3 space-y-3 bg-gray-50">
+                {/* この日を編集ボタン */}
+                <button onClick={() => onEditDate(day.date)}
+                  className="w-full py-2.5 rounded-xl bg-gray-900 text-white text-xs font-black active:scale-[0.98] transition-all">
+                  ✏️ この日（{fmtDateJP(day.date)}）を編集する
+                </button>
 
-                {/* 食事明細 */}
                 {day.meals.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2">🍽️ 食事記録</p>
+                    <p className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-2">🍽️ 食事記録</p>
                     <div className="space-y-1">
                       {['朝食','昼食','夕食','間食','ドリンク'].map(cat => {
                         const catMeals = day.meals.filter(m => m.category === cat);
                         if (catMeals.length === 0) return null;
                         return (
                           <div key={cat}>
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                              LABEL_COLOR[cat] ?? 'bg-gray-100 text-gray-600'
-                            }`}>{cat}</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${LABEL_COLOR[cat] ?? 'bg-gray-100 text-gray-800'}`}>{cat}</span>
                             {catMeals.map((m, i) => (
                               <div key={i} className="flex items-center justify-between pl-2 py-1">
-                                <span className="text-xs font-bold text-gray-800">{m.name}</span>
-                                <span className="text-xs font-bold text-gray-600">{m.grams}g · {m.kcal}kcal</span>
+                                <span className="text-xs font-bold text-gray-900">{m.name}</span>
+                                <span className="text-xs font-bold text-gray-800">{m.grams}g · {m.kcal}kcal</span>
                               </div>
                             ))}
                           </div>
                         );
                       })}
                       <div className="flex justify-between pt-1 border-t border-gray-200">
-                        <span className="text-xs font-black text-gray-700">合計摂取</span>
+                        <span className="text-xs font-black text-gray-800">合計</span>
                         <span className="text-xs font-black text-gray-900">{day.totalIntakeKcal.toLocaleString()} kcal</span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* 運動明細 */}
                 {day.workouts.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2">🏋️ 運動記録</p>
+                    <p className="text-[10px] font-black text-gray-800 uppercase tracking-widest mb-2">🏋️ 運動記録</p>
                     <div className="space-y-1">
                       {day.workouts.map((w, i) => (
                         <div key={i} className="flex items-center gap-2 py-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                          <span className="text-xs font-bold text-gray-800">{w}</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
+                          <span className="text-xs font-bold text-gray-900">{w}</span>
                         </div>
                       ))}
                       <div className="flex justify-between pt-1 border-t border-gray-200">
-                        <span className="text-xs font-black text-gray-700">合計消費</span>
-                        <span className="text-xs font-black text-emerald-700">{day.totalBurnedKcal.toLocaleString()} kcal</span>
+                        <span className="text-xs font-black text-gray-800">消費</span>
+                        <span className="text-xs font-black text-emerald-800">{day.totalBurnedKcal.toLocaleString()} kcal</span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* カロリー収支サマリー */}
-                <div className={`rounded-xl p-3 text-center border ${
-                  underCal ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
-                }`}>
-                  <p className="text-[10px] font-bold text-gray-600 mb-1">
-                    目標 {day.targetKcal.toLocaleString()} kcal · 摂取 {day.totalIntakeKcal.toLocaleString()} · 消費 {day.totalBurnedKcal.toLocaleString()}
+                <div className={`rounded-xl p-3 text-center border ${underCal ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                  <p className="text-[10px] font-bold text-gray-700 mb-1">
+                    目標 {day.targetKcal.toLocaleString()} · 摂取 {day.totalIntakeKcal.toLocaleString()} · 消費 {day.totalBurnedKcal.toLocaleString()}
                   </p>
-                  <p className={`text-base font-black ${underCal ? 'text-emerald-700' : 'text-red-700'}`}>
+                  <p className={`text-base font-black ${underCal ? 'text-emerald-800' : 'text-red-800'}`}>
                     {underCal ? 'アンダーカロリー' : 'オーバーカロリー'}
-                    <span className="text-sm ml-1">
-                      {Math.abs(day.netKcal).toLocaleString()} kcal
-                    </span>
+                    <span className="text-sm ml-1">{Math.abs(day.netKcal).toLocaleString()} kcal</span>
                   </p>
                 </div>
-
                 <button onClick={() => deleteDay(day.date)}
-                  className="w-full text-xs font-bold text-gray-400 py-1.5 active:text-red-500 transition-colors">
-                  この日の記録を削除
+                  className="w-full text-xs font-bold text-red-600 py-1.5 bg-red-50 rounded-xl border border-red-200 active:scale-[0.98] transition-all">
+                  🗑 この日の記録を完全削除
                 </button>
               </div>
             )}
@@ -1439,7 +1287,7 @@ function HistoryTab() {
 // ═══════════════════════════════════════════════════════════════════
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'goals',   icon: '🎯', label: '目標'  },
-  { id: 'today',   icon: '🍽️', label: '今日'  },
+  { id: 'today',   icon: '🍽️', label: '記録'  },
   { id: 'history', icon: '📅', label: '履歴'  },
   { id: 'metrics', icon: '📋', label: '測定'  },
   { id: 'trends',  icon: '📈', label: 'グラフ'},
@@ -1454,12 +1302,16 @@ const DEFAULT_PROFILE: Profile = {
 };
 
 export function HealthDashboard() {
-  const [tab, setTab] = useState<Tab>('goals');
-  const [profile, setProfile] = useState<Profile>(() => load<Profile>(LS_PROF, DEFAULT_PROFILE));
+  const [tab, setTab]               = useState<Tab>('goals');
+  const [selectedDate, setSelectedDate] = useState(todayStr());
+  const [profile, setProfile]       = useState<Profile>(() => load<Profile>(LS_PROF, DEFAULT_PROFILE));
 
-  const saveProfile = useCallback((p: Profile) => {
-    setProfile(p);
-    save(LS_PROF, p);
+  const saveProfile = useCallback((p: Profile) => { setProfile(p); save(LS_PROF, p); }, []);
+
+  // 履歴タブから「この日を編集」
+  const handleEditDate = useCallback((date: string) => {
+    setSelectedDate(date);
+    setTab('today');
   }, []);
 
   return (
@@ -1470,7 +1322,7 @@ export function HealthDashboard() {
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex-shrink-0 flex flex-col items-center py-2 px-2 rounded-xl text-[9px] font-black transition-all ${
-                tab === t.id ? 'bg-rose-500 text-white shadow' : 'text-gray-700 font-bold'
+                tab === t.id ? 'bg-rose-500 text-white shadow' : 'text-gray-800 font-bold'
               }`}>
               <span className="text-base leading-tight">{t.icon}</span>
               <span className="leading-tight mt-0.5 whitespace-nowrap">{t.label}</span>
@@ -1480,12 +1332,12 @@ export function HealthDashboard() {
       </div>
 
       <div className="px-4 pt-4 max-w-md mx-auto">
-        {tab === 'goals'   && <GoalsTab   profile={profile} onSave={saveProfile} />}
-        {tab === 'today'   && <TodayTab   profile={profile} />}
-        {tab === 'history' && <HistoryTab />}
+        {tab === 'goals'   && <GoalsTab profile={profile} onSave={saveProfile} />}
+        {tab === 'today'   && <TodayTab profile={profile} selectedDate={selectedDate} onDateChange={setSelectedDate} />}
+        {tab === 'history' && <HistoryTab onEditDate={handleEditDate} />}
         {tab === 'metrics' && <MetricsTab />}
-        {tab === 'trends'  && <TrendsTab  />}
-        {tab === 'advice'  && <AdviceTab  profile={profile} />}
+        {tab === 'trends'  && <TrendsTab />}
+        {tab === 'advice'  && <AdviceTab profile={profile} />}
       </div>
     </div>
   );
