@@ -30,6 +30,13 @@ interface WeeklyMetric {
 interface MealEntry { label: string; kcal: number; food?: string; grams?: number; }
 interface DailyLog  { date: string; meals: MealEntry[]; }
 
+interface AddedWorkout {
+  id: string;
+  name: string;
+  kcalBurn: number;
+  done: boolean;
+}
+
 interface ExerciseLog {
   date: string;
   steps: number;
@@ -41,6 +48,7 @@ interface ExerciseLog {
   bonusBurpees: boolean;
   bonusMountain: boolean;
   bonusPlank: boolean;
+  addedWorkouts?: AddedWorkout[];
 }
 
 interface DayHistory {
@@ -144,11 +152,23 @@ function buildWorkoutNames(ex: ExerciseLog, workout: WorkoutDef, repsTarget: num
   if (ex.bonusBurpees)         names.push('ステップバック・バーピー（3セット×10回）');
   if (ex.bonusMountain)        names.push('マウンテンクライマー（3セット×30秒）');
   if (ex.bonusPlank)           names.push('プランク追加（2セット×60秒）');
+  (ex.addedWorkouts ?? []).forEach(w => names.push(`${w.name}（${w.kcalBurn}kcal）`));
   if (ex.intervalWalkMins > 0) names.push(`インターバル速歩（${ex.intervalWalkMins}分）`);
   if (ex.breathingMins > 0)    names.push(`腹式呼吸（${ex.breathingMins}分）`);
   if (ex.steps > 0)            names.push(`ウォーキング（${ex.steps.toLocaleString()}歩）`);
   return names;
 }
+
+// ─── 選択式追加ワークアウトの定義 ──────────────────────────────────
+interface AddWorkoutOption { label: string; icon: string; met: number; hours: number; }
+const ADD_WORKOUT_OPTIONS: AddWorkoutOption[] = [
+  { label: 'ウォーキング（30分）',        icon: '🚶', met: 3.5, hours: 0.5   },
+  { label: 'ジョギング（20分）',          icon: '🏃', met: 7.0, hours: 0.333 },
+  { label: 'サイクリング（30分）',        icon: '🚴', met: 6.0, hours: 0.5   },
+  { label: '水泳（30分）',               icon: '🏊', met: 8.0, hours: 0.5   },
+  { label: 'ヨガ・ストレッチ（20分）',    icon: '🧘', met: 2.5, hours: 0.333 },
+  { label: 'HIIT（10分）',              icon: '⚡', met: 8.0, hours: 0.167 },
+];
 
 // ─── 食材データベース（五十音順） ──────────────────────────────────
 interface FoodItem { name: string; baseGrams: number; baseKcal: number; custom?: true; }
@@ -308,6 +328,7 @@ function TodayTab({
     date: selectedDate, steps: 0, intervalWalkMins: 0, breathingMins: 0,
     workoutDone: false, pushupsDone: false, crunchesDone: false,
     bonusBurpees: false, bonusMountain: false, bonusPlank: false,
+    addedWorkouts: [],
   };
 
   const updateEx = (patch: Partial<ExerciseLog>) => {
@@ -323,6 +344,7 @@ function TodayTab({
   const stepsKcal      = Math.round(todayEx.steps * weight * 0.0005);
   const intervalKcal   = Math.round((todayEx.intervalWalkMins || 0) * weight * 0.08);
   const breathingKcal  = (todayEx.breathingMins || 0) * 3;
+  const addedKcal      = (todayEx.addedWorkouts ?? []).filter(w => w.done).reduce((s, w) => s + w.kcalBurn, 0);
   const exKcal         =
     (todayEx.workoutDone   ? workout.kcal : 0) +
     (todayEx.pushupsDone   ? 30 : 0) +
@@ -330,7 +352,7 @@ function TodayTab({
     (todayEx.bonusBurpees  ? 80 : 0) +
     (todayEx.bonusMountain ? 60 : 0) +
     (todayEx.bonusPlank    ? 40 : 0) +
-    intervalKcal + breathingKcal;
+    addedKcal + intervalKcal + breathingKcal;
   const totalBurned = stepsKcal + exKcal;
   const remaining   = targetKcal + totalBurned - foodKcal;
   const success     = remaining >= 0;
@@ -356,6 +378,27 @@ function TodayTab({
     save(LS_HISTORY, historyMap);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logs, exLogs, selectedDate]);
+
+  // ── 追加ワークアウト state ──
+  const [addWkIdx, setAddWkIdx] = useState(0);
+  const addWorkout = () => {
+    const opt = ADD_WORKOUT_OPTIONS[addWkIdx];
+    const kcalBurn = Math.round(opt.met * weight * opt.hours * 1.05);
+    const newW: AddedWorkout = { id: Date.now().toString(), name: opt.label, kcalBurn, done: false };
+    const next = exLogs.filter(e => e.date !== selectedDate);
+    const updated = [{ ...todayEx, addedWorkouts: [...(todayEx.addedWorkouts ?? []), newW] }, ...next];
+    setExLogs(updated); save(LS_EXERCISE, updated);
+  };
+  const toggleAddedWorkout = (id: string) => {
+    const updated = (todayEx.addedWorkouts ?? []).map(w => w.id === id ? { ...w, done: !w.done } : w);
+    const next = [{ ...todayEx, addedWorkouts: updated }, ...exLogs.filter(e => e.date !== selectedDate)];
+    setExLogs(next); save(LS_EXERCISE, next);
+  };
+  const removeAddedWorkout = (id: string) => {
+    const updated = (todayEx.addedWorkouts ?? []).filter(w => w.id !== id);
+    const next = [{ ...todayEx, addedWorkouts: updated }, ...exLogs.filter(e => e.date !== selectedDate)];
+    setExLogs(next); save(LS_EXERCISE, next);
+  };
 
   // ── Food form state ──
   const [timing,      setTiming]      = useState(MEAL_LABELS[0]);
@@ -488,6 +531,70 @@ function TodayTab({
         )}
       </div>
 
+      {/* ══ 体重進捗バー ══ */}
+      {(() => {
+        const cw = profile.currentWeight;
+        const gw = profile.goalWeight;
+        if (!cw || !gw || cw <= 0 || gw <= 0) return null;
+        const bmr = Math.round(calcBMR(profile));
+        const remaining = Math.max(0, cw - gw);
+        const totalNeeded = Math.max(0.1, cw - gw);
+        // 進捗 = どれだけ目標に近づいたか（0%=現在体重、100%=目標体重）
+        // ここでは「現在から目標までの距離」を視覚化
+        const progressPct = cw <= gw ? 100 : 0; // 目標達成時100%
+        // 開始体重をメトリクスの最大値から取得、なければ currentWeight
+        const metrics = load<WeeklyMetric[]>(LS_METRICS, []);
+        const maxWeight = metrics.length > 0 ? Math.max(...metrics.map(m => m.weight).filter(v => v > 0)) : cw;
+        const startW = Math.max(maxWeight, cw);
+        const totalLoss = Math.max(0.1, startW - gw);
+        const lostSoFar = Math.max(0, startW - cw);
+        const pctDone = Math.min(100, Math.round((lostSoFar / totalLoss) * 100));
+        const isGoalReached = cw <= gw;
+        return (
+          <div className={`rounded-2xl p-4 border-2 ${isGoalReached ? 'border-emerald-500 bg-emerald-50' : 'border-indigo-200 bg-white'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-black text-gray-900">⚖️ 体重の進捗</p>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isGoalReached ? 'bg-emerald-500 text-white' : 'bg-indigo-100 text-indigo-900'}`}>
+                {isGoalReached ? '🎉 目標達成！' : `あと ${remaining.toFixed(1)} kg`}
+              </span>
+            </div>
+            <div className="flex items-end justify-between mb-2 gap-2">
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-gray-700">スタート</p>
+                <p className="text-base font-black text-gray-900">{startW.toFixed(1)}<span className="text-xs font-bold">kg</span></p>
+              </div>
+              <div className="flex-1">
+                <div className="h-4 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${isGoalReached ? 'bg-emerald-500' : 'bg-gradient-to-r from-indigo-400 to-violet-500'}`}
+                    style={{ width: `${Math.max(4, pctDone)}%` }}
+                  />
+                </div>
+                <p className="text-center text-xs font-black text-indigo-800 mt-1">{pctDone}%</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-gray-700">目標</p>
+                <p className="text-base font-black text-emerald-800">{gw.toFixed(1)}<span className="text-xs font-bold">kg</span></p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-1">
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-gray-700">現在の体重</p>
+                <p className="text-xl font-black text-gray-900">{cw.toFixed(1)}<span className="text-sm font-bold">kg</span></p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-gray-700">推定 BMR</p>
+                <p className="text-xl font-black text-indigo-900">{bmr.toLocaleString()}<span className="text-sm font-bold">kcal</span></p>
+              </div>
+              <div className="text-center">
+                <p className="text-[10px] font-bold text-gray-700">1日目標</p>
+                <p className="text-xl font-black text-violet-900">{targetKcal.toLocaleString()}<span className="text-sm font-bold">kcal</span></p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ══ カロリー収支サマリー ══ */}
       <div className={`rounded-2xl p-5 text-white ${success
         ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
@@ -507,7 +614,8 @@ function TodayTab({
           <div className="flex justify-between"><span className="opacity-80">🚶 歩数消費 ({todayEx.steps.toLocaleString()}歩)</span><span className="font-black">+{stepsKcal} kcal</span></div>
           {intervalKcal > 0 && <div className="flex justify-between"><span className="opacity-80">🏃 速歩 ({todayEx.intervalWalkMins}分)</span><span className="font-black">+{intervalKcal} kcal</span></div>}
           {breathingKcal > 0 && <div className="flex justify-between"><span className="opacity-80">🌬️ 腹式呼吸 ({todayEx.breathingMins}分)</span><span className="font-black">+{breathingKcal} kcal</span></div>}
-          <div className="flex justify-between"><span className="opacity-80">💪 運動消費</span><span className="font-black">+{exKcal - intervalKcal - breathingKcal} kcal</span></div>
+          {addedKcal > 0 && <div className="flex justify-between"><span className="opacity-80">➕ 追加運動</span><span className="font-black">+{addedKcal} kcal</span></div>}
+          <div className="flex justify-between"><span className="opacity-80">💪 運動消費</span><span className="font-black">+{exKcal - intervalKcal - breathingKcal - addedKcal} kcal</span></div>
           <div className="flex justify-between border-t border-white/20 pt-1.5"><span className="opacity-80">🍽️ 食事摂取</span><span className="font-black">−{foodKcal.toLocaleString()} kcal</span></div>
         </div>
         <div className="mt-3">
@@ -593,6 +701,59 @@ function TodayTab({
           <WorkoutCard key={key} icon={icon} title={name} sets={sets} desc={desc}
             kcalBurn={kcal} done={todayEx[key]} onToggle={() => updateEx({ [key]: !todayEx[key] })} />
         ))}
+      </div>
+
+      {/* ══ 追加ワークアウト ══ */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">➕</span>
+          <p className="text-sm font-black text-gray-900">運動を追加する</p>
+          <span className="text-[10px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">Add Workout</span>
+        </div>
+        <div className="flex gap-2">
+          <select
+            value={addWkIdx}
+            onChange={e => setAddWkIdx(Number(e.target.value))}
+            className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-400 bg-white">
+            {ADD_WORKOUT_OPTIONS.map((opt, i) => {
+              const kcal = Math.round(opt.met * weight * opt.hours * 1.05);
+              return (
+                <option key={i} value={i}>{opt.icon} {opt.label}（約{kcal}kcal）</option>
+              );
+            })}
+          </select>
+          <button
+            onClick={addWorkout}
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-black active:scale-95 transition-all flex-shrink-0">
+            追加
+          </button>
+        </div>
+        {(todayEx.addedWorkouts ?? []).length > 0 && (
+          <div className="space-y-2 pt-1">
+            <p className="text-xs font-black text-gray-800">追加済みの運動</p>
+            {(todayEx.addedWorkouts ?? []).map(w => (
+              <div key={w.id} className={`rounded-xl border-2 p-3 flex items-center gap-3 transition-all ${w.done ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}>
+                <button
+                  onClick={() => toggleAddedWorkout(w.id)}
+                  className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-sm border-2 transition-all ${
+                    w.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-400 text-transparent'
+                  }`}>✓</button>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-black ${w.done ? 'text-emerald-800' : 'text-gray-900'}`}>{w.name}</p>
+                  <p className="text-xs font-bold text-gray-800">消費 {w.kcalBurn} kcal</p>
+                </div>
+                <button
+                  onClick={() => removeAddedWorkout(w.id)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm active:scale-90 transition-all flex-shrink-0 font-black">
+                  🗑
+                </button>
+              </div>
+            ))}
+            {addedKcal > 0 && (
+              <p className="text-xs font-black text-emerald-700 text-right">追加運動合計 −{addedKcal} kcal</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ══ 腹式呼吸タイマー ══ */}
