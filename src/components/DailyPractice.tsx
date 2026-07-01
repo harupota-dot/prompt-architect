@@ -14,10 +14,10 @@ function speak(text: string) {
 
 // ─── Types ────────────────────────────────────────────────────────
 interface Item {
-  phrase: string;           // English chunk
-  meaning: string;          // Correct Japanese meaning
-  pronunciationTip: string; // 音声変化の解説
-  w: [string, string];      // Wrong Japanese meanings
+  phrase: string;   // English phrase
+  meaning: string;  // Correct Japanese meaning
+  tip: string;      // 使い方・ニュアンスの解説
+  w: [string, string];  // Wrong Japanese meanings
 }
 
 // ─── Shuffle ──────────────────────────────────────────────────────
@@ -30,446 +30,476 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// ─── Dataset (70 チャンク) ─────────────────────────────────────────
+// ─── Dataset (75 ネイティブ日常フレーズ) ──────────────────────────
 const DATA: Item[] = [
-  // ══ フラッピング（母音間のtがラ行化） ══
+  // ══ 挨拶・リアクション ══
   {
-    phrase: "out of order",
-    meaning: "故障して・順番が違う",
-    pronunciationTip: "【フラッピング】 'out' の t が母音 u と o に挟まれるためラ行化し、「アウダ・オーダ」のように聞こえます。",
-    w: ["〜の代わりに", "ちょうどその時"],
+    phrase: "I'm on my way.",
+    meaning: "今向かっています",
+    tip: "到着が近いことを相手に伝えるフレーズ。「今出発するよ」より具体的に「もう動いてるよ」というニュアンスがあります。",
+    w: ["もう到着しました", "少し遅れます"],
   },
   {
-    phrase: "let it go",
-    meaning: "手放す・諦める",
-    pronunciationTip: "【フラッピング】 let の t が i と o に挟まれてラ行化し、「レリゴー」と一気に発音されます。",
-    w: ["〜に申し込む", "気づく"],
+    phrase: "I'm good.",
+    meaning: "大丈夫です・結構です",
+    tip: "「元気ですか？」への返答にもなりますが、何かを勧められた時に「いや、大丈夫」と断る時にも使います。文脈で意味が変わる便利な一言。",
+    w: ["ちょっと待ってください", "もっとください"],
   },
   {
-    phrase: "put it on",
-    meaning: "着る・身につける",
-    pronunciationTip: "【リンキング＆フラッピング】 put の t が it の i と繋がり、さらにラ行化して「プリロン」のように聞こえます。",
-    w: ["延期する", "提出する"],
+    phrase: "Take it easy.",
+    meaning: "ゆっくりしてね・お大事に",
+    tip: "別れ際の挨拶にも使いますし、疲れている相手や怒っている相手に「落ち着いて」と伝える時にも使えます。",
+    w: ["急いでください", "もっと頑張って"],
   },
   {
-    phrase: "get it done",
-    meaning: "やり遂げる・完了させる",
-    pronunciationTip: "【フラッピング】 get の t が it の i との間でラ行化し「ゲリダン」と聞こえます。ネイティブの会話では「ゲラダン」に近い音も出ます。",
-    w: ["手放す", "追いつく"],
+    phrase: "Same here.",
+    meaning: "私も同じです",
+    tip: "「Me too.」と同じ意味ですが、より会話らしい自然な言い方。相手の言ったことが自分にも当てはまる時にサッと使えます。",
+    w: ["私はちょっと違います", "全然違います"],
   },
   {
-    phrase: "wait a minute",
-    meaning: "ちょっと待って",
-    pronunciationTip: "【フラッピング】 wait の t が a と繋がりラ行化し、「ウェイラミニッ(ト)」と聞こえます。minute 末尾の t はほぼ消えます。",
-    w: ["取り消す", "乗り遅れる"],
+    phrase: "Not bad.",
+    meaning: "悪くないね・まあまあだよ",
+    tip: "直訳は「悪くない」ですが、控えめな好評価として使います。「How was it?」に対して「まあよかったよ」という感じ。",
+    w: ["最悪でした", "とても良かった"],
   },
   {
-    phrase: "a lot of time",
-    meaning: "たくさんの時間",
-    pronunciationTip: "【フラッピング＋リダクション】 lot の t がラ行化し、of は「ア」に縮まるため「アラダタイム」のように聞こえます。",
-    w: ["締め切り", "空き時間"],
+    phrase: "My bad.",
+    meaning: "私のミスです・ごめん",
+    tip: "軽いミスやうっかりをカジュアルに認める口語表現。フォーマルな場には不向きですが、友人や同僚との会話では自然な謝り方です。",
+    w: ["あなたのせいです", "問題ありません"],
   },
   {
-    phrase: "not at all",
-    meaning: "全然〜ない・どういたしまして",
-    pronunciationTip: "【フラッピング】 not の t と at の t がいずれも母音に挟まれてラ行化し、「ナラロール」のように連続して流れます。",
-    w: ["何と言っても", "全力で"],
+    phrase: "There you go.",
+    meaning: "ほらね・それでいいですよ",
+    tip: "相手が正しいことをした時（「そうそう、その調子」）や、予想通りのことが起きた時（「ほらやっぱり」）の両方に使えます。",
+    w: ["そこへ行ってください", "もう一度やって"],
   },
   {
-    phrase: "what a day",
-    meaning: "なんて日だ（驚き・疲労）",
-    pronunciationTip: "【フラッピング】 what の t が a と繋がりラ行化して「ワラデイ」と聞こえます。感嘆表現でよく使われます。",
-    w: ["今日の予定", "一日中"],
+    phrase: "Go for it.",
+    meaning: "やってみて！・行け！",
+    tip: "相手の背中を押す時のシンプルな励まし。「Should I try it?」と聞かれたら「Go for it!」と返すだけで OK です。",
+    w: ["やめておいて", "気をつけて"],
   },
   {
-    phrase: "write it down",
-    meaning: "書き留める",
-    pronunciationTip: "【フラッピング】 write の t が it の i と繋がりラ行化し「ライリダウン」と聞こえます。",
-    w: ["書き直す", "消去する"],
+    phrase: "You got it.",
+    meaning: "了解・任せて",
+    tip: "依頼に「Sure!」より積極的に応じる返事。「Can you handle this?」→「You got it!」のような流れで使います。",
+    w: ["それは難しいです", "もう持っています"],
   },
   {
-    phrase: "better late than never",
-    meaning: "遅くてもやらないよりはまし",
-    pronunciationTip: "【フラッピング】 better の tt と late の t がいずれもラ行化し、「ベラレイダン・ネバー」のようにリズムよく聞こえます。",
-    w: ["急がば回れ", "時は金なり"],
-  },
-
-  // ══ リンキング（子音が次の母音と繋がる） ══
-  {
-    phrase: "take a look at it",
-    meaning: "それを見る・確認する",
-    pronunciationTip: "【リンキング】 take の k と a、look の k と a、at の t と it がすべて繋がり「テイカルッカリッ(ト)」と一息で発音されます。",
-    w: ["それを取る", "それを聞く"],
-  },
-  {
-    phrase: "pick it up",
-    meaning: "拾い上げる・習得する",
-    pronunciationTip: "【リンキング】 pick の ck と it の i が繋がり「ピキラップ」のように聞こえます。",
-    w: ["送り届ける", "片付ける"],
-  },
-  {
-    phrase: "turn it off",
-    meaning: "（電源を）切る",
-    pronunciationTip: "【リンキング】 turn の n と it の i が繋がり「ターニット」→「ターニロフ」と続きます。",
-    w: ["つける", "下げる"],
-  },
-  {
-    phrase: "call it a day",
-    meaning: "その日の作業を終わりにする",
-    pronunciationTip: "【リンキング】 call の l と it の i が繋がり「コーリラデイ」と聞こえます。仕事終わりの定番フレーズです。",
-    w: ["一日休む", "予定を延ばす"],
-  },
-  {
-    phrase: "look it up",
-    meaning: "調べる（辞書・ネットで）",
-    pronunciationTip: "【リンキング】 look の k と it の i が繋がり「ルキラップ」のように発音されます。",
-    w: ["見上げる", "確認する"],
-  },
-  {
-    phrase: "hand it in",
-    meaning: "提出する",
-    pronunciationTip: "【リンキング】 hand の d と it の i、it の t と in の i が繋がり「ハンディティン」のように流れます。",
-    w: ["持ち帰る", "引き渡す"],
-  },
-  {
-    phrase: "think about it",
-    meaning: "それについて考える",
-    pronunciationTip: "【リンキング＋フラッピング】 about の t が it の i と繋がりラ行化し「シンカバウリッ(ト)」と一気に発音されます。",
-    w: ["忘れてしまう", "無視する"],
-  },
-  {
-    phrase: "work it out",
-    meaning: "解決する・うまく処理する",
-    pronunciationTip: "【リンキング】 work の k と it が繋がり「ワーキラウト」と聞こえます。",
-    w: ["諦める", "延期する"],
-  },
-  {
-    phrase: "figure it out",
-    meaning: "理解する・解き明かす",
-    pronunciationTip: "【フラッピング＋リンキング】 figure の r と it が繋がり、it の t もラ行化して「フィギャリラウト」のように流れます。",
-    w: ["描き出す", "やり遂げる"],
-  },
-  {
-    phrase: "make an effort",
-    meaning: "努力する",
-    pronunciationTip: "【リンキング】 make の k と an が繋がり「メイカン・エファト」のように一続きに聞こえます。",
-    w: ["影響を与える", "諦める"],
+    phrase: "I hear you.",
+    meaning: "わかるよ・言いたいことはわかる",
+    tip: "完全同意ではなくても、相手の気持ちや言い分をちゃんと受け止めているという共感を示す表現です。",
+    w: ["あなたの声が聞こえません", "賛成できません"],
   },
 
-  // ══ リダクション（機能語が短縮・弱化） ══
+  // ══ 同意・賛成 ══
   {
-    phrase: "kind of",
-    meaning: "ちょっと・〜のような",
-    pronunciationTip: "【リダクション】 of は強形「オヴ」ではなく「ア/ダ」に縮み「カインダ」と聞こえます。カジュアルな会話では 'kinda' と表記されることも。",
-    w: ["〜のおかげで", "〜の種類"],
+    phrase: "Sounds good to me.",
+    meaning: "それでいいね・賛成です",
+    tip: "提案や計画に対して「いいね、それで行こう」と賛同するフレーズ。「to me」がついているので「私は」という個人の同意感があります。",
+    w: ["ちょっと心配です", "考えさせてください"],
   },
   {
-    phrase: "sort of",
-    meaning: "ある程度・まあ（曖昧な同意）",
-    pronunciationTip: "【リダクション】 of が「ダ/ア」に縮まり「ソーラ」のように聞こえます。'sorta' と書かれることも多いです。",
-    w: ["〜を整理する", "選別する"],
+    phrase: "That works.",
+    meaning: "それで大丈夫・それでいきましょう",
+    tip: "スケジュールや条件が「合う・機能する」時に使います。「Does Tuesday work for you?」→「That works!」のように使います。",
+    w: ["それは壊れています", "うまくいきません"],
   },
   {
-    phrase: "going to",
-    meaning: "〜するつもり・〜する予定",
-    pronunciationTip: "【リダクション】 going to は会話では「ガナ (gonna)」に縮まります。ネイティブは 'I'm gonna call you.' のように発音します。",
-    w: ["〜し終えた", "〜だったはず"],
+    phrase: "Makes sense.",
+    meaning: "納得・それは理にかなっている",
+    tip: "説明を聞いて「なるほど」と思った時の自然な反応。「Make sense?」と疑問形にすると「わかった？」と確認できます。",
+    w: ["意味がわかりません", "やり直してください"],
   },
   {
-    phrase: "want to",
-    meaning: "〜したい",
-    pronunciationTip: "【リダクション】 want to は「ウォナ (wanna)」に縮まります。'I wanna go.' のように話し言葉では頻繁に使われます。",
-    w: ["〜しなければ", "〜できる"],
+    phrase: "Exactly.",
+    meaning: "まさに・その通り",
+    tip: "相手の言ったことに100%同意する時の力強い表現。「Yes.」より断然テンションが上がって見えます。",
+    w: ["全然違います", "ほとんどそうです"],
   },
   {
-    phrase: "have to",
-    meaning: "〜しなければならない",
-    pronunciationTip: "【リダクション】 have to は「ハフタ」と発音されます。h が弱まり「アフタ」に近く聞こえることもあります。",
-    w: ["〜してもよい", "〜するつもり"],
+    phrase: "Fair enough.",
+    meaning: "まあそうだね・一理ある",
+    tip: "完全には同意しないけれど、相手の言い分を認める時のニュートラルな返し方。議論をうまく着地させるのに便利です。",
+    w: ["絶対に嫌です", "それは不公平です"],
   },
   {
-    phrase: "used to",
-    meaning: "かつては〜していた",
-    pronunciationTip: "【リダクション】 used to は「ユーストゥ → ユーストゥ」が速くなると「ユーストゥ」の d が消え「ユースタ」と聞こえます。",
-    w: ["〜に慣れている", "〜に使われる"],
+    phrase: "I'm with you.",
+    meaning: "同意します・あなたの味方です",
+    tip: "意見だけでなく、感情的・立場的にも「一緒にいるよ」というサポートを示せる温かい表現です。",
+    w: ["あなたに反対です", "一人にしてください"],
   },
   {
-    phrase: "supposed to",
-    meaning: "〜することになっている・〜のはず",
-    pronunciationTip: "【リダクション】 supposed to は「サポーストゥ → サポーストゥ」が崩れ「サポーズタ」のように聞こえます。",
-    w: ["〜と推測される", "仮定する"],
+    phrase: "Sure thing.",
+    meaning: "もちろん・いいですよ",
+    tip: "依頼や提案に気軽に応じる口語表現。「Sure.」よりノリが良くてフレンドリーな印象を与えます。",
+    w: ["絶対にダメです", "考えておきます"],
   },
   {
-    phrase: "could have",
-    meaning: "〜できたはず（できなかった）",
-    pronunciationTip: "【リダクション】 could have は「クッダ (coulda)」と縮まります。'You coulda told me.' のように聞こえます。",
-    w: ["〜すべきだった", "〜したかもしれない"],
-  },
-  {
-    phrase: "should have",
-    meaning: "〜すべきだった（しなかった）",
-    pronunciationTip: "【リダクション】 should have は「シュッダ (shoulda)」に縮まります。後悔の表現として頻出です。",
-    w: ["〜できたはず", "〜してもよかった"],
-  },
-  {
-    phrase: "would have",
-    meaning: "〜したであろう（しなかった）",
-    pronunciationTip: "【リダクション】 would have は「ウッダ (woulda)」に縮まります。'I woulda helped you.' のように聞こえます。",
-    w: ["〜するだろう", "〜したはず"],
+    phrase: "Why not?",
+    meaning: "いいじゃない・やろうよ",
+    tip: "断る理由が特にない時の軽い同意。逆に「なんでダメなの？」と理由を問う時にも使われます。文脈で判断しましょう。",
+    w: ["絶対やりません", "理由を教えて"],
   },
 
-  // ══ H脱落（代名詞の h が消える） ══
+  // ══ 気持ち・状態 ══
   {
-    phrase: "give him a call",
-    meaning: "彼に電話する",
-    pronunciationTip: "【H脱落】 him の h は非強調位置では消え「give'im a call → ギビマコール」のように聞こえます。",
-    w: ["彼をやり過ごす", "彼に会いに行く"],
+    phrase: "I'm beat.",
+    meaning: "へとへとです・もうクタクタ",
+    tip: "「I'm tired.」より強い疲労感を表します。長い仕事や運動の後に使うと、伝わり方がかなりリアルになります。",
+    w: ["元気いっぱいです", "怒っています"],
   },
   {
-    phrase: "tell her the truth",
-    meaning: "彼女に真実を告げる",
-    pronunciationTip: "【H脱落】 her の h が落ちて tell と繋がり「テラー・ザ・トゥルース」のように聞こえます。",
-    w: ["彼女に嘘をつく", "彼女に頼む"],
+    phrase: "I'm stuffed.",
+    meaning: "お腹いっぱいです",
+    tip: "食事後によく使うカジュアル表現。「Full」よりも「もう限界」というニュアンスが強め。食事会のお断りにも使えます。",
+    w: ["お腹が空きました", "気持ち悪いです"],
   },
   {
-    phrase: "ask him about it",
-    meaning: "それについて彼に聞く",
-    pronunciationTip: "【H脱落＋フラッピング】 him の h が消えて「アスキム」→ about it の t もラ行化し「アスキマバウリッ」と流れます。",
-    w: ["彼に許可を求める", "彼を試す"],
+    phrase: "I'm lost.",
+    meaning: "迷子です・わからなくなった",
+    tip: "道に迷った時だけでなく、会話や授業についていけない時にも使います。「Sorry, I'm lost — can you repeat that?」という感じで。",
+    w: ["見つかりました", "全部わかりました"],
   },
   {
-    phrase: "help him out",
-    meaning: "彼を助け出す",
-    pronunciationTip: "【H脱落＋リンキング】 him の h が消えhelpと繋がり「ヘルピマウト」と聞こえます。",
-    w: ["彼を外に出す", "彼に反論する"],
-  },
-
-  // ══ T消去・弱化（語末や子音前の t が消える） ══
-  {
-    phrase: "next time",
-    meaning: "次回・今度",
-    pronunciationTip: "【T消去】 next の t は子音 t の前に来るため消え「ネクスタイム」と聞こえます。",
-    w: ["毎回", "今すぐ"],
+    phrase: "I'm in.",
+    meaning: "参加します・やります",
+    tip: "誘いや提案に乗る時の短くてノリのいい返事。「Are you coming?」→「I'm in!」でOK。チームへの参加宣言にも使えます。",
+    w: ["参加しません", "考え中です"],
   },
   {
-    phrase: "last night",
-    meaning: "昨夜",
-    pronunciationTip: "【T消去】 last の t は子音 n の前で消えほぼ「ラスナイト」になります。",
-    w: ["毎晩", "先週末"],
+    phrase: "I'm out.",
+    meaning: "パスします・抜けます",
+    tip: "逆に断る・その場を去る時の表現。「I'm in.」のセットで覚えておくと便利です。「Count me out.」と同じ意味。",
+    w: ["参加します", "まだここにいます"],
   },
   {
-    phrase: "just in case",
-    meaning: "念のために",
-    pronunciationTip: "【T消去＋リンキング】 just の t は消え in の i と繋がり「ジャスキンケイス」のように聞こえます。",
-    w: ["いずれにせよ", "場合によっては"],
+    phrase: "I'm down.",
+    meaning: "乗った！・やる気あるよ",
+    tip: "「I'm in.」と同じく誘いに応じる表現。若者言葉から広まり、今は幅広い世代が使います。",
+    w: ["気分が悪いです", "断ります"],
   },
   {
-    phrase: "best friend",
-    meaning: "親友",
-    pronunciationTip: "【T消去】 best の t は子音 f の前で消え「ベスフレンド」と聞こえます。",
-    w: ["古い友人", "同僚"],
-  },
-  {
-    phrase: "first time",
-    meaning: "初めて",
-    pronunciationTip: "【T消去】 first の t は子音 t の前で消え「ファースタイム」のように発音されます。",
-    w: ["最後に", "次回"],
+    phrase: "I'm over it.",
+    meaning: "もう気にしてない・吹っ切れた",
+    tip: "過去の出来事や感情を引きずっていないことを示します。失恋や失敗について「もう立ち直ったよ」と伝える時に便利です。",
+    w: ["まだ怒っています", "もう一度やります"],
   },
 
-  // ══ アシミレーション（隣の音に同化・融合） ══
+  // ══ 依頼・提案 ══
   {
-    phrase: "don't you",
-    meaning: "〜じゃないですか？（確認）",
-    pronunciationTip: "【アシミレーション】 don't の t と you の y が融合し「ドンチュ (dontcha)」と聞こえます。",
-    w: ["〜してください", "〜するつもり？"],
+    phrase: "Let me know.",
+    meaning: "教えてください・連絡して",
+    tip: "情報が入ったら知らせてほしいという柔らかな依頼。「Let me know if you need anything.（何かあれば知らせて）」と使うことも多いです。",
+    w: ["放っておいてください", "自分で決めます"],
   },
   {
-    phrase: "did you",
-    meaning: "〜しましたか？",
-    pronunciationTip: "【アシミレーション】 did の d と you の y が融合し「ディジュ (didja)」と聞こえます。",
-    w: ["〜できますか？", "〜でしたか？"],
+    phrase: "Go ahead.",
+    meaning: "どうぞ・先に行って",
+    tip: "相手に「許可を与える」または「先に行っていい」と伝える表現。扉を開けて譲る時にも使えます。",
+    w: ["止まってください", "後でいいですよ"],
   },
   {
-    phrase: "would you",
-    meaning: "〜していただけますか？（丁寧な依頼）",
-    pronunciationTip: "【アシミレーション】 would の d と you が融合し「ウッジュ (wouldja)」と聞こえます。",
-    w: ["〜してはどうですか？", "〜できますか？"],
+    phrase: "Take your time.",
+    meaning: "ゆっくりでいいですよ",
+    tip: "相手に急いでほしい気持ちがあっても、プレッシャーをかけずに待てることを示す思いやりのある表現。",
+    w: ["急いでください", "時間がないです"],
   },
   {
-    phrase: "could you",
-    meaning: "〜してもらえますか？",
-    pronunciationTip: "【アシミレーション】 could の d と you が融合し「クッジュ (couldja)」と聞こえます。依頼表現の定番です。",
-    w: ["〜かもしれません", "〜できましたか？"],
+    phrase: "Bear with me.",
+    meaning: "もう少し待ってください・辛抱して",
+    tip: "ちょっと時間がかかることを謝りつつお願いする表現。プレゼンや電話中に「少しお待ちを」という時に使えます。",
+    w: ["私について来てください", "今すぐやめて"],
   },
   {
-    phrase: "miss you",
-    meaning: "あなたに会いたい",
-    pronunciationTip: "【アシミレーション】 miss の s と you の y が融合して「ミシュ (mishyu)」のような音になります。",
-    w: ["あなたを知っている", "あなたを見た"],
+    phrase: "Leave it to me.",
+    meaning: "私に任せて",
+    tip: "責任を持って引き受けることを宣言する頼もしいフレーズ。「I'll handle it.」と同じ意味です。",
+    w: ["私は関係ありません", "あなたがやって"],
+  },
+  {
+    phrase: "Count me in.",
+    meaning: "私も混ぜて・参加します",
+    tip: "誰かのプランに自分を入れてほしいとアピールする表現。「Count me out.（抜かして）」の逆として覚えると便利です。",
+    w: ["数えないでください", "参加しません"],
+  },
+  {
+    phrase: "Help yourself.",
+    meaning: "ご自由にどうぞ",
+    tip: "食べ物や物を自由に使っていいと伝える歓迎の言葉。直訳は「自分でやって」ですが、実際は「遠慮しないで」という意味です。",
+    w: ["手伝ってください", "触らないでください"],
+  },
+  {
+    phrase: "Bear in mind.",
+    meaning: "念頭においてください・覚えておいて",
+    tip: "忘れないよう注意を促す表現。「Keep in mind.」と全く同じ意味で、どちらも会話・ビジネスで使えます。",
+    w: ["すぐに忘れていいですよ", "心配しないで"],
   },
 
-  // ══ TOEICビジネスチャンク ══
+  // ══ 確認・理解 ══
   {
-    phrase: "in charge of",
-    meaning: "〜を担当して・〜の責任者で",
-    pronunciationTip: "【リダクション】 of が「ア」に縮まり「インチャーヂャ」と聞こえます。TOEICパート3・4で頻出です。",
-    w: ["〜に申し込む", "〜を代表して"],
+    phrase: "Make sense?",
+    meaning: "意味わかりますか？・理解できた？",
+    tip: "説明した後に相手の理解を確認する定番の一言。「Does that make sense?」の短縮形で、カジュアルな会話でよく使われます。",
+    w: ["もう一度言って", "気にしないで"],
   },
   {
-    phrase: "as soon as possible",
-    meaning: "できる限り早く（ASAP）",
-    pronunciationTip: "【リダクション】 as は「アズ → ア」に弱まり「ア・スーナズ・パッサブル」のように流れます。ビジネスメールでは ASAP と略されます。",
-    w: ["できる限り丁寧に", "できる限り正確に"],
+    phrase: "Got it.",
+    meaning: "わかった・了解",
+    tip: "指示や説明を理解したと短く伝える返事。「I got it.」とも言います。仕事でもカジュアルな場でも自然に使えます。",
+    w: ["まだわかりません", "取ってきました"],
   },
   {
-    phrase: "in advance",
-    meaning: "前もって・事前に",
-    pronunciationTip: "【リンキング】 in の n と advance の a が繋がり「イナドヴァンス」のように聞こえます。",
-    w: ["〜に加えて", "結果として"],
+    phrase: "You know what I mean?",
+    meaning: "言いたいこと、わかる？",
+    tip: "うまく言葉にできない時に、相手に自分のニュアンスを確認するフレーズ。会話中によく聞くフィラー的な表現でもあります。",
+    w: ["私の名前知ってる？", "あなたは何が好き？"],
   },
   {
-    phrase: "on behalf of",
-    meaning: "〜を代表して・〜の代わりに",
-    pronunciationTip: "【リダクション】 of が「ア/ダ」に縮まり「オン・ビハーフア」と聞こえます。ビジネスメールの冒頭でよく使われます。",
-    w: ["〜の隣に", "〜に関して"],
+    phrase: "I get it.",
+    meaning: "わかりました・理解しました",
+    tip: "「Got it.」と同じ意味ですが、少しだけ強調した感じ。「Now I get it.（今やっとわかった！）」という形でもよく使います。",
+    w: ["取ってきます", "全然わかりません"],
   },
   {
-    phrase: "due to",
-    meaning: "〜が原因で・〜のせいで",
-    pronunciationTip: "【リダクション】 to が「タ/トゥ」に弱まり「デュートゥ → デュータ」と聞こえます。",
-    w: ["〜にもかかわらず", "〜の前に"],
+    phrase: "Come again?",
+    meaning: "もう一度言ってもらえますか？",
+    tip: "聞き取れなかった時の丁寧な聞き返し表現。「What?」よりずっと礼儀正しく聞こえます。ビジネスでも使えます。",
+    w: ["また来てください", "もう帰りますか？"],
   },
   {
-    phrase: "in spite of",
-    meaning: "〜にもかかわらず",
-    pronunciationTip: "【リダクション＋リンキング】 spite の t と of の o が繋がり、of は「ア」に縮まって「インスパイタ」と聞こえます。",
-    w: ["〜のおかげで", "〜の代わりに"],
+    phrase: "What do you mean?",
+    meaning: "どういう意味ですか？",
+    tip: "相手の言葉が理解できなかった時に使う自然な返し。驚きや反論のニュアンスで「それってどういうこと？」とも使えます。",
+    w: ["何を食べたいですか？", "どこへ行きますか？"],
   },
   {
-    phrase: "with regard to",
-    meaning: "〜に関して（ビジネスメール定番）",
-    pronunciationTip: "【リダクション】 regard は r と d で流れるように発音され、to は「タ」に縮まり「ウィズリガードタ」と聞こえます。",
-    w: ["〜を尊重して", "〜とともに"],
+    phrase: "I'm not sure.",
+    meaning: "わかりません・確信が持てません",
+    tip: "「I don't know.」より柔らかい表現で、考え中・調べてみる余地を残すニュアンスがあります。ビジネスでも自然です。",
+    w: ["確かめました", "絶対にそうです"],
+  },
+
+  // ══ 断り・受け入れ ══
+  {
+    phrase: "Never mind.",
+    meaning: "気にしないで・やっぱりいい",
+    tip: "一度言ったことを取り消す時や、相手にプレッシャーをかけたくない時に使います。少しがっかりした雰囲気が出ることも。",
+    w: ["絶対に覚えておいて", "もう一度やって"],
   },
   {
-    phrase: "prior to",
-    meaning: "〜の前に・〜に先立ち",
-    pronunciationTip: "【リンキング＋リダクション】 prior の r と to が繋がり「プライアータ」と聞こえます。フォーマルな書き言葉でも頻出です。",
-    w: ["〜の後に", "〜の代わりに"],
+    phrase: "It's not a big deal.",
+    meaning: "大したことじゃないよ",
+    tip: "問題を小さく見せる時や相手を安心させる時に使います。自分がミスした時の言い訳にもなりうるので使い所に注意。",
+    w: ["これは大問題です", "すぐ直してください"],
   },
   {
-    phrase: "result in",
-    meaning: "〜という結果になる",
-    pronunciationTip: "【リンキング】 result の t と in の i が繋がり「リザルティン」と聞こえます。",
-    w: ["〜から生じる", "〜を含む"],
+    phrase: "I'll pass.",
+    meaning: "パスします・遠慮します",
+    tip: "参加や提案を穏やかに断る定番フレーズ。「I'll pass on the dessert.（デザートは遠慮します）」のように使えます。",
+    w: ["喜んで参加します", "全部もらいます"],
   },
   {
-    phrase: "consist of",
-    meaning: "〜から構成される",
-    pronunciationTip: "【リダクション】 of が「ア」に縮まり「コンシストア」と聞こえます。",
-    w: ["〜に同意する", "〜を含む"],
+    phrase: "That's too bad.",
+    meaning: "それは残念ですね",
+    tip: "相手の悪いニュースに共感を示す自然な返し。「I'm sorry to hear that.」より軽めのカジュアルな表現です。",
+    w: ["それは最高ですね", "あなたのせいです"],
   },
   {
-    phrase: "apply for",
-    meaning: "〜に申し込む・応募する",
-    pronunciationTip: "【リダクション】 for が「ファー → ファ」に弱まり「アプライファ」のように聞こえます。TOEICパート5・6で頻出の動詞句です。",
-    w: ["〜を取り消す", "〜を要求する"],
+    phrase: "It is what it is.",
+    meaning: "そういうもんだよ・しょうがない",
+    tip: "どうにもならない状況を受け入れる時の達観した表現。諦めではなく「現実を受け入れよう」という前向きな意味合いもあります。",
+    w: ["もっと頑張ればいい", "絶対に変えられる"],
+  },
+
+  // ══ 時間・行動 ══
+  {
+    phrase: "I'll get it.",
+    meaning: "私がやります・私が取ってきます",
+    tip: "電話が鳴った時に「私が出る」や、ドアのベルが鳴った時に「私が行く」という場面で使います。申し出る時の便利な一言。",
+    w: ["私はできません", "後でやります"],
   },
   {
-    phrase: "look forward to",
-    meaning: "〜を楽しみにしている",
-    pronunciationTip: "【リダクション＋リンキング】 forward の d と to が繋がり「ルックフォーワートゥ → フォーワータ」と流れます。to の後に動名詞（-ing）が続きます。",
-    w: ["〜を振り返る", "〜に向かって進む"],
+    phrase: "Let's figure it out.",
+    meaning: "一緒に考えよう・どうにかしよう",
+    tip: "問題解決に前向きに取り組む姿勢を示します。「I don't know, but let's figure it out.」と繋げると自然です。",
+    w: ["もう諦めよう", "誰かに任せよう"],
   },
   {
-    phrase: "make sure",
-    meaning: "確かめる・必ず〜する",
-    pronunciationTip: "【リンキング】 make の k と sure が繋がり「メイクシュア」と一息で発音されます。命令文 'Make sure you...' でよく使われます。",
-    w: ["見逃さない", "安心させる"],
+    phrase: "Hang in there.",
+    meaning: "頑張って・くじけないで",
+    tip: "苦しんでいる相手を励ます温かい言葉。「Keep going.」より感情的なサポートのニュアンスが強い表現です。",
+    w: ["やめていいよ", "ぶら下がって"],
   },
   {
-    phrase: "come up with",
-    meaning: "思いつく・〜を考え出す",
-    pronunciationTip: "【リンキング】 up の p と with が繋がり「カムアップウィズ」と流れます。アイデアを出す場面で必須の句動詞です。",
-    w: ["〜に追いつく", "〜を諦める"],
+    phrase: "Hold on.",
+    meaning: "少し待って",
+    tip: "何かを止めてもらう時の短い一言。電話で「少々お待ちください」という場面でもよく使われます。",
+    w: ["放してください", "続けてください"],
   },
   {
-    phrase: "keep in mind",
-    meaning: "覚えておく・肝に銘じる",
-    pronunciationTip: "【リンキング】 keep の p と in が繋がり「キーピン・マインド」と聞こえます。",
-    w: ["気にしない", "忘れてしまう"],
+    phrase: "Catch you later.",
+    meaning: "またね・じゃあまた",
+    tip: "別れ際のカジュアルな挨拶。「See you later.」と同じ意味ですが、よりスラング的でノリのいい印象を与えます。",
+    w: ["今すぐ連絡して", "あとで捕まえる"],
+  },
+
+  // ══ 感嘆・雑談 ══
+  {
+    phrase: "No way!",
+    meaning: "まさか！・嘘でしょ！",
+    tip: "信じられないことや驚いたことへの強いリアクション。語尾を上げると驚き、語尾を下げると否定の意味になります。",
+    w: ["通れません", "もちろんです"],
   },
   {
-    phrase: "carry out",
-    meaning: "実行する・遂行する",
-    pronunciationTip: "【フラッピング】 carry の r と out が繋がり、ry の y が母音化して「キャリーアウト → キャリャウト」のように速く流れます。",
-    w: ["中止する", "持ち帰る"],
+    phrase: "You're kidding!",
+    meaning: "冗談でしょ！・まさか！",
+    tip: "驚いた時のリアクションとして非常によく使われます。「You're kidding me!」と言うとより強い驚きが出ます。",
+    w: ["冗談を言ってください", "子供ですね"],
   },
   {
-    phrase: "take part in",
-    meaning: "〜に参加する",
-    pronunciationTip: "【リンキング＋T消去】 take の k と part の t が連続し、part の t は in の前で「テイクパーリン」のように流れます。",
-    w: ["〜を分担する", "〜から離れる"],
+    phrase: "Tell me about it.",
+    meaning: "まったくだよね・そうそう",
+    tip: "「詳しく教えて」ではなく「よーくわかるよ、私も同じ気持ち！」という強い共感の表現。意味が逆になるので注意。",
+    w: ["話してください", "それは知りません"],
   },
   {
-    phrase: "in terms of",
-    meaning: "〜に関しては・〜の点では",
-    pronunciationTip: "【リダクション】 of が「ア」に縮まり「インタームズア」のように聞こえます。比較や説明でよく使われます。",
-    w: ["〜のおかげで", "〜にもかかわらず"],
+    phrase: "Long time no see.",
+    meaning: "久しぶり！",
+    tip: "長い間会っていなかった人に再会した時の定番挨拶。英語では文法的に不自然ですが、慣用句として定着しています。",
+    w: ["はじめまして", "またすぐ会いましょう"],
   },
   {
-    phrase: "get rid of",
-    meaning: "〜を取り除く・捨てる",
-    pronunciationTip: "【フラッピング＋リダクション】 get の t がラ行化し、of が「ア」に縮まって「ゲリダ」と流れます。",
-    w: ["〜を集める", "〜を保管する"],
+    phrase: "What a small world!",
+    meaning: "世間は狭いね！",
+    tip: "偶然の出会いや意外な繋がりに驚いた時の表現。「小さな世界だ！」という意味から転じた慣用句です。",
+    w: ["地球は広いね", "なんて大きな世界"],
   },
   {
-    phrase: "point out",
-    meaning: "指摘する・注意を向ける",
-    pronunciationTip: "【リンキング】 point の t と out の ou が繋がり「ポインタウト」のように聞こえます。",
-    w: ["指示する", "証明する"],
+    phrase: "That's news to me.",
+    meaning: "初耳です・それは知らなかった",
+    tip: "聞いたことがない情報に対する自然な反応。「私にとってはニュースだ」という直訳から来ています。",
+    w: ["それはよく知っています", "ニュースを見てください"],
   },
   {
-    phrase: "cut down on",
-    meaning: "〜を減らす・削減する",
-    pronunciationTip: "【リンキング】 down の n と on が繋がり「カット・ダウノン」のように流れます。",
-    w: ["〜を増やす", "〜を廃止する"],
+    phrase: "I could use a break.",
+    meaning: "少し休みたいな",
+    tip: "「could use」は「〜があるといいな」という表現。直接「休みたい」と言うより少し遠回しで柔らかく聞こえます。",
+    w: ["全然疲れていません", "休んではいけません"],
   },
   {
-    phrase: "a piece of cake",
-    meaning: "朝飯前・とても簡単なこと",
-    pronunciationTip: "【リンキング】 piece の s と of が繋がり「ア・ピーサ・ケイク」と流れます。of はここでも「ア」に縮まります。",
-    w: ["大変な仕事", "甘い話"],
+    phrase: "It's up to you.",
+    meaning: "あなた次第です",
+    tip: "判断や決断を相手に委ねる表現。相手にプレッシャーをかけずに選ばせる時や、どちらでもいい時に使います。",
+    w: ["私が決めます", "どちらでもいけません"],
   },
   {
-    phrase: "break a leg",
-    meaning: "頑張って！（舞台・試験前の励まし）",
-    pronunciationTip: "【リンキング】 break の k と a が繋がり「ブレイカレッグ」と発音されます。直訳の意味では使いません。",
-    w: ["気をつけて", "急いで"],
+    phrase: "Keep it up!",
+    meaning: "その調子で続けて！",
+    tip: "相手が良い仕事をしている時に褒めながら励ます言葉。「You're doing great, keep it up!」と組み合わせてよく使います。",
+    w: ["もうやめて", "元に戻して"],
   },
   {
-    phrase: "under the weather",
-    meaning: "体調が優れない",
-    pronunciationTip: "【リダクション】 the が「ザ → ダ」に弱まり、under と繋がって「アンダダ・ウェザー」と聞こえます。",
-    w: ["雨の中で", "天気が悪い"],
+    phrase: "Be right back.",
+    meaning: "すぐ戻ります",
+    tip: "席を外す時に伝える短い一言。チャットやゲームでは「BRB」と略されます。「I'll be right back.」の省略形です。",
+    w: ["永遠に戻りません", "後で戻ります"],
+  },
+
+  // ══ 職場・日常生活 ══
+  {
+    phrase: "My plate is full.",
+    meaning: "手一杯です・いっぱいいっぱいです",
+    tip: "仕事が多すぎて余裕がない状態を「皿がいっぱい」に例えた表現。「お皿にもう乗らない」というイメージから来ています。",
+    w: ["お皿が汚れています", "もっとください"],
   },
   {
-    phrase: "once in a while",
-    meaning: "時々・たまに",
-    pronunciationTip: "【リンキング＋フラッピング】 once の s と in が繋がり、in の n と a が繋がって「ワンシナワイル」のように流れます。",
-    w: ["いつも", "全く〜ない"],
+    phrase: "Touch base later.",
+    meaning: "後で連絡しましょう",
+    tip: "後で確認や連絡を取り合うことを軽く約束する表現。野球の「塁（base）に触れる」から来たビジネス定番フレーズです。",
+    w: ["もう連絡しません", "今すぐ話しましょう"],
   },
   {
-    phrase: "on the other hand",
-    meaning: "一方で・他方では",
-    pronunciationTip: "【リダクション】 the は「ダ」に縮まり「オンダ・アザーハンド」のように聞こえます。",
-    w: ["その結果", "最終的に"],
+    phrase: "Get the ball rolling.",
+    meaning: "物事を始める・取り掛かろう",
+    tip: "ボールを転がし始めるイメージから、計画や仕事をスタートさせることを指します。「Let's get the ball rolling!」と使えます。",
+    w: ["ボールを止める", "ゆっくり進める"],
   },
   {
-    phrase: "make a difference",
-    meaning: "変化をもたらす・重要である",
-    pronunciationTip: "【リンキング＋フラッピング】 make の k と a が繋がり、difference の t がラ行化して「メイカ・ディファランス」のように流れます。",
-    w: ["違いを無視する", "問題を引き起こす"],
+    phrase: "You're all set.",
+    meaning: "準備万端ですよ・大丈夫ですよ",
+    tip: "相手が必要なものを全て揃えた時や、手続きが完了した時に伝える安心の一言。ホテルや店でよく耳にします。",
+    w: ["まだ準備できていません", "全部やり直して"],
+  },
+  {
+    phrase: "I'll take care of it.",
+    meaning: "私が対処します・任せてください",
+    tip: "問題や仕事を自分が解決すると申し出る表現。「Leave it to me.」と似ていますが、より具体的な行動のニュアンスがあります。",
+    w: ["私には無理です", "誰かに頼んでください"],
+  },
+  {
+    phrase: "Can you cover for me?",
+    meaning: "代わりにやってもらえる？",
+    tip: "代役をお願いする時のフレンドリーな依頼。仕事の代わりだけでなく「ちょっと言い訳してくれる？」という場面でも使います。",
+    w: ["私を隠してください", "一緒に来てください"],
+  },
+  {
+    phrase: "Let's get to it.",
+    meaning: "さっそく取り掛かろう",
+    tip: "話より行動を促すやる気のある表現。「Let's get started.」とほぼ同じ意味ですが、より口語的でテンポが良い言い方。",
+    w: ["もう少し待ちましょう", "やめましょう"],
+  },
+  {
+    phrase: "On it.",
+    meaning: "取り掛かっています・了解",
+    tip: "指示を受けてすぐに動くことを示す簡潔な返答。「I'm on it.」の省略形で、忙しいやり取りの中でサクッと使えます。",
+    w: ["その上にいます", "まだ始めていません"],
+  },
+  {
+    phrase: "Wrap it up.",
+    meaning: "まとめましょう・終わりにしよう",
+    tip: "会議や作業を締めくくる時に使います。「時間が来たので終わりにしよう」というニュアンスで、少し急かす感じもあります。",
+    w: ["もっと続けましょう", "包んでください"],
+  },
+  {
+    phrase: "That's a good point.",
+    meaning: "良い指摘ですね",
+    tip: "相手の意見を評価して議論を前向きに進める表現。相手の発言を受け止めつつ会話をスムーズにつなぐ便利なフレーズです。",
+    w: ["鉛筆がいいですね", "その点は間違っています"],
+  },
+
+  // ══ 感謝・関係 ══
+  {
+    phrase: "I owe you one.",
+    meaning: "一つ借りができたね・ありがとう",
+    tip: "助けてもらった時に「今度お礼するね」というニュアンスで使います。「You owe me one.（借りができたね）」とも言えます。",
+    w: ["あなたに貸します", "お金を返して"],
+  },
+  {
+    phrase: "No hard feelings.",
+    meaning: "悪く思わないでね・わだかまりなしで",
+    tip: "関係を良く保ちたい時に使う大人なフレーズ。断った後や意見が分かれた後に「気にしないでね」と関係を修復する時に使います。",
+    w: ["とても怒っています", "気持ちが固いです"],
+  },
+  {
+    phrase: "My pleasure.",
+    meaning: "こちらこそ・喜んで",
+    tip: "「Thank you」への返答として「You're welcome」より温かみがあります。「それが私の喜びです」というニュアンスで、相手に感謝されるのも嬉しいという姿勢が伝わります。",
+    w: ["私の苦しみです", "大変でした"],
+  },
+  {
+    phrase: "I appreciate it.",
+    meaning: "ありがとうございます（感謝しています）",
+    tip: "「Thank you」より少し丁寧で心のこもった感謝表現。ビジネスメールや少しフォーマルな場面でも自然に使えます。",
+    w: ["全然嬉しくないです", "必要ありません"],
+  },
+  {
+    phrase: "Don't mention it.",
+    meaning: "どういたしまして・気にしないで",
+    tip: "お礼に対する謙虚な返し方。「わざわざ言うほどのことじゃない」というニュアンスで、相手への親しみが感じられます。",
+    w: ["必ず話してください", "もっと感謝して"],
   },
 ];
 
@@ -481,11 +511,11 @@ function ChoiceBtn({
   selected: boolean; revealed: boolean; disabled: boolean;
   onSelect: () => void;
 }) {
-  let ring = 'border-gray-200 bg-white text-gray-800';
+  let ring = 'border-gray-200 bg-white text-gray-900';
   if (revealed) {
     if (isAnswer)      ring = 'border-emerald-500 bg-emerald-50 text-emerald-900';
-    else if (selected) ring = 'border-red-400 bg-red-50 text-red-800';
-    else               ring = 'border-gray-100 bg-gray-50 text-gray-300';
+    else if (selected) ring = 'border-red-400 bg-red-50 text-red-900';
+    else               ring = 'border-gray-100 bg-gray-50 text-gray-400';
   }
 
   return (
@@ -552,10 +582,10 @@ export function DailyPractice() {
 
       {/* ── スコアバー ── */}
       <div className="flex items-center justify-between mb-4 px-1">
-        <span className="text-xs font-bold text-gray-700">
-          {total > 0 ? `${correct}/${total} (${pct}%)` : '🎧 発音チャンク練習'}
+        <span className="text-xs font-bold text-gray-800">
+          {total > 0 ? `${correct}/${total} (${pct}%)` : '💬 ネイティブ日常フレーズ'}
         </span>
-        <span className="text-xs font-bold text-gray-700">
+        <span className="text-xs font-bold text-gray-800">
           {idx + 1} / {deck.length}
         </span>
       </div>
@@ -576,8 +606,8 @@ export function DailyPractice() {
           </button>
         </div>
         <div className="px-5 pb-4">
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-            正しい意味を選んでください
+          <p className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
+            正しい日本語訳を選んでください
           </p>
         </div>
       </div>
@@ -597,22 +627,25 @@ export function DailyPractice() {
         ))}
       </div>
 
-      {/* ── 発音のコツ（回答後に表示） ── */}
+      {/* ── 使い方・ニュアンス解説（回答後に表示） ── */}
       {revealed && (
-        <div className="rounded-2xl border-2 border-violet-400 bg-violet-50 p-4 mb-5 space-y-2 shadow-sm">
+        <div className="rounded-2xl border-2 border-sky-400 bg-sky-50 p-4 mb-5 space-y-2 shadow-sm">
           <div className="flex items-center gap-2">
-            <span className="text-lg">🎯</span>
-            <p className="text-xs font-black text-violet-800 uppercase tracking-widest">
-              発音のコツ
+            <span className="text-lg">💡</span>
+            <p className="text-xs font-black text-sky-900 uppercase tracking-widest">
+              使い方・ニュアンス
             </p>
           </div>
+          <p className="text-xs font-black text-gray-900 bg-white/70 rounded-xl px-3 py-2 border border-sky-200">
+            &ldquo;{item.phrase}&rdquo; ＝ <span className="text-sky-900">{item.meaning}</span>
+          </p>
           <p className="text-sm font-bold text-gray-900 leading-relaxed">
-            {item.pronunciationTip}
+            {item.tip}
           </p>
           <div className="pt-1">
             <button
               onClick={() => speak(item.phrase)}
-              className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full bg-violet-700 text-white active:scale-95 transition-transform"
+              className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full bg-sky-700 text-white active:scale-95 transition-transform"
             >
               🔊 もう一度聞く
             </button>
@@ -626,7 +659,7 @@ export function DailyPractice() {
           onClick={handleNext}
           className="w-full py-3.5 rounded-2xl font-black text-base bg-gray-900 text-white active:scale-[0.98] transition-all shadow-md"
         >
-          次のチャンクへ →
+          次のフレーズへ →
         </button>
       )}
     </div>
