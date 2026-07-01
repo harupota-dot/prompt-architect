@@ -209,9 +209,11 @@ const FOOD_DB: FoodItem[] = [
   { name: 'ベビーチーズ',                        baseGrams:  15, baseKcal:  50 },
   { name: 'みそ汁',                              baseGrams: 150, baseKcal:  40 },
   { name: '麦飯',                                baseGrams: 150, baseKcal: 230 },
+  { name: '目玉焼き',                            baseGrams:  60, baseKcal: 110 },
   { name: 'もやし',                              baseGrams: 100, baseKcal:  14 },
   { name: '焼きのり',                            baseGrams:   3, baseKcal:   6 },
   { name: 'ヨーグルト（無糖）',                  baseGrams: 100, baseKcal:  62 },
+  { name: '４つ入りチーズ（１個）',              baseGrams:  15, baseKcal:  50 },
   { name: 'りんご',                              baseGrams: 150, baseKcal:  85 },
   { name: 'レタス',                              baseGrams:  50, baseKcal:   6 },
   // 自由入力プレースホルダー
