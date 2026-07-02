@@ -1,18 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { MusicLearning } from './MusicLearning';
-import { IPALearning   } from './IPALearning';
-import { DailyPractice } from './DailyPractice';
-import { ToeicRoad     } from './ToeicRoad';
+import { MusicLearning   } from './MusicLearning';
+import { IPALearning     } from './IPALearning';
+import { DailyPractice  } from './DailyPractice';
+import { StoryDialogue  } from './StoryDialogue';
 
-type Subject = 'music' | 'ipa' | 'practice' | 'toeic';
+type Subject = 'music' | 'ipa' | 'practice' | 'story';
 
 const SUBJECTS: { id: Subject; icon: string; label: string; sub: string; color: string }[] = [
-  { id: 'music',    icon: '🎵', label: '音符・コード',  sub: '五線譜の読み方', color: 'bg-indigo-600' },
-  { id: 'ipa',      icon: '🗣️', label: '発音記号 IPA', sub: '洋楽発音特訓',   color: 'bg-violet-600' },
-  { id: 'practice', icon: '💬', label: 'Practice',    sub: '日常英会話',      color: 'bg-blue-600'   },
-  { id: 'toeic',    icon: '📝', label: 'TOEIC Road',  sub: '900点への道',     color: 'bg-rose-600'   },
+  { id: 'music',    icon: '🎵', label: '音符・コード',  sub: '五線譜の読み方',   color: 'bg-indigo-600' },
+  { id: 'ipa',      icon: '🗣️', label: '発音記号 IPA', sub: '洋楽発音特訓',     color: 'bg-violet-600' },
+  { id: 'practice', icon: '💬', label: 'フレーズ練習', sub: '日常英語75選',      color: 'bg-blue-600'   },
+  { id: 'story',    icon: '🎭', label: 'ストーリー対話', sub: '2択・日常/ハワイ', color: 'bg-rose-600'   },
 ];
 
 export function LearningHub() {
@@ -45,7 +45,7 @@ export function LearningHub() {
         {subject === 'music'    && <MusicLearning />}
         {subject === 'ipa'      && <IPALearning />}
         {subject === 'practice' && <DailyPractice />}
-        {subject === 'toeic'    && <ToeicRoad />}
+        {subject === 'story'    && <StoryDialogue />}
       </div>
     </>
   );
