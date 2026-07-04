@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 // ─── 都市定義 ─────────────────────────────────────────────────────
 const CITIES = {
@@ -123,18 +123,35 @@ function Skeleton() {
 // ─── メインコンポーネント ─────────────────────────────────────────
 export function CityWeatherWidget() {
   const [city,    setCity]    = useState<CityKey>('gotemba');
+  const [retry,   setRetry]   = useState(0);
   const [data,    setData]    = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(false);
 
-  const load = useCallback(async (c: CityKey) => {
-    setLoading(true); setError(false);
-    try   { setData(await fetchWeather(c)); }
-    catch { setError(true); }
-    finally { setLoading(false); }
-  }, []);
+  useEffect(() => {
+    // cancelled フラグで古いフェッチ結果が後から届いてもStateを上書きしない（レースコンディション防止）
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    setData(null); // 都市切替時に旧データを即クリア → 旧都市のデータが一瞬映ることを防ぐ
 
-  useEffect(() => { load(city); }, [city, load]);
+    fetchWeather(city)
+      .then(result => {
+        if (!cancelled) {
+          setData(result);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError(true);
+          setLoading(false);
+        }
+      });
+
+    // クリーンアップ: 都市が再度変わった時点で前のフェッチ結果を無効化
+    return () => { cancelled = true; };
+  }, [city, retry]); // city と retry を依存配列に指定
 
   if (loading) return <Skeleton />;
   if (error) {
@@ -142,7 +159,7 @@ export function CityWeatherWidget() {
       <div className="rounded-3xl bg-slate-800 text-white p-6 text-center space-y-3 shadow-lg">
         <p className="text-4xl">📡</p>
         <p className="text-base font-bold">天気データを取得できませんでした</p>
-        <button onClick={() => load(city)}
+        <button onClick={() => { delete cache[city]; setRetry(r => r + 1); }}
           className="px-5 py-2.5 rounded-xl bg-white text-slate-900 text-sm font-black active:scale-95 transition-transform">
           再試行
         </button>
@@ -254,7 +271,7 @@ export function CityWeatherWidget() {
                   <span className={`text-sm font-black ${isToday ? 'text-white' : 'text-gray-900'}`}>
                     {isToday ? '今日' : `${day.wday}曜`}
                   </span>
-                  <span className={`text-xs font-bold ml-1 ${isToday ? 'text-gray-300' : 'text-gray-500'}`}>
+                  <span className={`text-xs font-bold ml-1 ${isToday ? 'text-gray-200' : 'text-gray-700'}`}>
                     {day.date}
                   </span>
                 </div>
@@ -269,7 +286,7 @@ export function CityWeatherWidget() {
                   <span className={`text-sm font-black ${isToday ? 'text-blue-300' : 'text-blue-600'}`}>
                     {day.min}°
                   </span>
-                  <span className={`text-xs ${isToday ? 'text-gray-500' : 'text-gray-300'}`}>—</span>
+                  <span className={`text-xs font-bold ${isToday ? 'text-gray-400' : 'text-gray-500'}`}>—</span>
                   <span className={`text-sm font-black ${isToday ? 'text-orange-300' : 'text-orange-600'}`}>
                     {day.max}°
                   </span>
@@ -280,7 +297,7 @@ export function CityWeatherWidget() {
         </div>
 
         {/* 更新時刻 */}
-        <p className="text-gray-400 text-[10px] font-bold text-right mt-3">
+        <p className="text-gray-700 text-[10px] font-bold text-right mt-3">
           {new Date(d.fetchedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} 更新 · Open-Meteo
         </p>
       </div>
