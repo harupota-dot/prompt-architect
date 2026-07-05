@@ -46,6 +46,8 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+const LS_MEMO = 'story-memorized-v1';
+
 // ═══════════════════════════════════════════════════════════════════
 // ☀️ DAILY COURSE — 朝から夜まで（50問）
 // ═══════════════════════════════════════════════════════════════════
@@ -796,6 +798,8 @@ const HAWAII_DATA: DialogueItem[] = [
   },
 ];
 
+const ALL_REVIEW: DialogueItem[] = [...DAILY_DATA, ...HAWAII_DATA];
+
 const COURSES: { id: CourseId; icon: string; title: string; sub: string; color: string; count: number }[] = [
   { id: 'daily',  icon: '☀️', title: '朝から夜まで\n日常会話コース', sub: '目覚めから就寝まで10シーン・50問', color: 'from-amber-400 to-orange-500', count: DAILY_DATA.length  },
   { id: 'hawaii', icon: '🌴', title: 'ハワイ旅行\nホテル滞在コース', sub: '空港からチェックアウトまで8シーン・40問',  color: 'from-sky-400 to-cyan-500',   count: HAWAII_DATA.length },
@@ -809,7 +813,29 @@ const COURSE_DATA: Record<CourseId, DialogueItem[]> = {
 // ═══════════════════════════════════════════════════════════════════
 // Main Component
 // ═══════════════════════════════════════════════════════════════════
+type Mode   = 'study' | 'review';
+type Filter = 'all'   | 'needs';
+
 export function StoryDialogue() {
+  const [mode,     setMode]     = useState<Mode>('study');
+  const [filter,   setFilter]   = useState<Filter>('all');
+  const [memorized, setMemorized] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set<string>();
+    try {
+      const stored = localStorage.getItem(LS_MEMO);
+      return stored ? new Set<string>(JSON.parse(stored) as string[]) : new Set<string>();
+    } catch { return new Set<string>(); }
+  });
+
+  const toggleMemo = useCallback((key: string) => {
+    setMemorized(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      localStorage.setItem(LS_MEMO, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
   const [course,   setCourse]   = useState<CourseId | null>(null);
   const [deck,     setDeck]     = useState<DialogueItem[]>([]);
   const [idx,      setIdx]      = useState(0);
@@ -871,28 +897,159 @@ export function StoryDialogue() {
 
   const pct = total > 0 ? Math.round(correct / total * 100) : 0;
 
-  // ══ コース選択画面 ══
+  // ══ コース選択画面 / 復習画面 ══
   if (!course) {
+    const reviewItems = filter === 'needs'
+      ? ALL_REVIEW.filter(it => !memorized.has(it.prompt.en))
+      : ALL_REVIEW;
+    const memoCount = memorized.size;
+
     return (
-      <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto space-y-4">
-        <div className="text-center py-4">
-          <p className="text-xl font-black text-gray-900">🗣️ ストーリー対話特訓</p>
-          <p className="text-xs font-bold text-gray-700 mt-1">コースを選んでスタート！</p>
+      <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
+
+        {/* ── 学習 / 復習 モードタブ ── */}
+        <div className="flex bg-gray-100 rounded-2xl p-1 mb-4">
+          {([['study', '📖 学習する'], ['review', '✅ 復習する']] as [Mode, string][]).map(([m, label]) => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-black transition-all ${
+                mode === m
+                  ? 'bg-gray-900 text-white shadow-md'
+                  : 'text-gray-700'
+              }`}>
+              {label}
+              {m === 'review' && (
+                <span className={`ml-1.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                  mode === 'review' ? 'bg-white/20 text-white' : 'bg-gray-300 text-gray-700'
+                }`}>
+                  {memoCount}/{ALL_REVIEW.length}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
-        {COURSES.map(c => (
-          <button key={c.id} onClick={() => startCourse(c.id)}
-            className={`w-full bg-gradient-to-br ${c.color} rounded-3xl p-6 text-left text-white shadow-lg active:scale-[0.97] transition-all`}>
-            <span className="text-4xl">{c.icon}</span>
-            <p className="text-xl font-black mt-2 leading-tight whitespace-pre-line">{c.title}</p>
-            <p className="text-sm font-bold opacity-80 mt-1">{c.sub}</p>
-            <div className="mt-3 inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-black">
-              全{c.count}問 → スタート ▶
+
+        {mode === 'study' ? (
+          /* ── 学習モード: コース選択 ── */
+          <div className="space-y-4">
+            <div className="text-center py-2">
+              <p className="text-xl font-black text-gray-900">🗣️ ストーリー対話特訓</p>
+              <p className="text-xs font-bold text-gray-700 mt-1">コースを選んでスタート！</p>
             </div>
-          </button>
-        ))}
-        <p className="text-center text-[10px] font-bold text-gray-600 pt-2">
-          ストーリーの流れに沿って順番に出題。1周終わると自動でシャッフルして再出題されます。
-        </p>
+            {COURSES.map(c => (
+              <button key={c.id} onClick={() => startCourse(c.id)}
+                className={`w-full bg-gradient-to-br ${c.color} rounded-3xl p-6 text-left text-white shadow-lg active:scale-[0.97] transition-all`}>
+                <span className="text-4xl">{c.icon}</span>
+                <p className="text-xl font-black mt-2 leading-tight whitespace-pre-line">{c.title}</p>
+                <p className="text-sm font-bold opacity-80 mt-1">{c.sub}</p>
+                <div className="mt-3 inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-black">
+                  全{c.count}問 → スタート ▶
+                </div>
+              </button>
+            ))}
+            <p className="text-center text-[10px] font-bold text-gray-600 pt-2">
+              ストーリーの流れに沿って順番に出題。1周終わると自動でシャッフルして再出題されます。
+            </p>
+          </div>
+        ) : (
+          /* ── 復習モード ── */
+          <div className="space-y-3">
+            {/* フィルター */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-gray-800 flex-1">
+                全{ALL_REVIEW.length}問中 覚えた: {memoCount}問
+              </span>
+              <div className="flex bg-gray-100 rounded-xl p-0.5">
+                {([['all', 'すべて表示'], ['needs', '要復習のみ']] as [Filter, string][]).map(([f, label]) => (
+                  <button key={f} onClick={() => setFilter(f)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                      filter === f ? 'bg-gray-900 text-white shadow' : 'text-gray-700'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {reviewItems.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-4xl mb-3">🎉</p>
+                <p className="text-base font-black text-gray-900">全問覚えました！</p>
+                <p className="text-xs font-bold text-gray-700 mt-1">「すべて表示」で復習できます</p>
+              </div>
+            )}
+
+            {reviewItems.map((it) => {
+              const key = it.prompt.en;
+              const isMemo = memorized.has(key);
+              return (
+                <div key={key}
+                  className={`rounded-2xl border-2 overflow-hidden transition-all ${
+                    isMemo ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white'
+                  }`}>
+
+                  {/* シーン */}
+                  <div className="px-4 pt-3 pb-1">
+                    <span className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-[10px] font-black text-gray-800 mb-2">
+                      {it.situation}
+                    </span>
+
+                    {/* 投げかけ */}
+                    <div className="bg-gray-900 rounded-xl p-3 mb-2">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">相手の発言</p>
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm font-black text-white leading-snug">&ldquo;{it.prompt.en}&rdquo;</p>
+                          <p className="text-xs font-bold text-gray-300 mt-0.5">{it.prompt.ja}</p>
+                        </div>
+                        <SpeakBtn text={it.prompt.en} size="xs" />
+                      </div>
+                    </div>
+
+                    {/* 正解返答 */}
+                    <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 mb-2">
+                      <p className="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-1">✅ 正解の返答</p>
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm font-black text-emerald-900 leading-snug">&ldquo;{it[it.correct].en}&rdquo;</p>
+                          <p className="text-xs font-bold text-emerald-700 mt-0.5">{it[it.correct].ja}</p>
+                        </div>
+                        <SpeakBtn text={it[it.correct].en} size="xs" />
+                      </div>
+                    </div>
+
+                    {/* 発音のコツ・解説 */}
+                    <div className="border border-sky-300 bg-sky-50 rounded-xl p-3 mb-3">
+                      <p className="text-[9px] font-black text-sky-800 uppercase tracking-widest mb-1">💡 使い方・発音のコツ</p>
+                      <p className="text-xs font-bold text-gray-900 leading-relaxed">{it.tip}</p>
+                    </div>
+                  </div>
+
+                  {/* 覚えたチェック */}
+                  <button onClick={() => toggleMemo(key)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 border-t-2 transition-all active:scale-[0.99] ${
+                      isMemo
+                        ? 'border-emerald-400 bg-emerald-100'
+                        : 'border-gray-200 bg-gray-50'
+                    }`}>
+                    <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                      isMemo
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : 'bg-white border-gray-400'
+                    }`}>
+                      {isMemo && <span className="text-sm font-black">✓</span>}
+                    </div>
+                    <span className={`text-sm font-black ${isMemo ? 'text-emerald-800' : 'text-gray-800'}`}>
+                      {isMemo ? '覚えた ✅' : '覚えた？ チェックする'}
+                    </span>
+                    {isMemo && (
+                      <span className="ml-auto text-[10px] font-bold text-emerald-600">タップで解除</span>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
