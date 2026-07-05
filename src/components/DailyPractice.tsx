@@ -30,6 +30,8 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+const LS_MEMO_PHRASES = 'phrase-memorized-v1';
+
 // ─── Dataset (75 ネイティブ日常フレーズ) ──────────────────────────
 const DATA: Item[] = [
   // ══ 挨拶・リアクション ══
@@ -532,7 +534,31 @@ function ChoiceBtn({
 }
 
 // ─── Main ─────────────────────────────────────────────────────────
+type PhraseMode   = 'practice' | 'review';
+type PhraseFilter = 'all' | 'needs';
+
 export function DailyPractice() {
+  // ── モード・フィルター ──
+  const [mode,   setMode]   = useState<PhraseMode>('practice');
+  const [filter, setFilter] = useState<PhraseFilter>('all');
+  const [memorized, setMemorized] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set<string>();
+    try {
+      const stored = localStorage.getItem(LS_MEMO_PHRASES);
+      return stored ? new Set<string>(JSON.parse(stored) as string[]) : new Set<string>();
+    } catch { return new Set<string>(); }
+  });
+
+  const toggleMemo = useCallback((key: string) => {
+    setMemorized(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      localStorage.setItem(LS_MEMO_PHRASES, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
+  // ── 練習モード state ──
   const [deck, setDeck]         = useState<Item[]>(() => shuffle(DATA));
   const [idx, setIdx]           = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -574,11 +600,129 @@ export function DailyPractice() {
   }, [idx, deck.length]);
 
   const pct = total > 0 ? Math.round(correct / total * 100) : 0;
+  const memoCount = memorized.size;
 
+  // ── 復習リスト ──
+  const reviewItems = filter === 'needs'
+    ? DATA.filter(it => !memorized.has(it.phrase))
+    : DATA;
+
+  // ── モードタブ（両モード共通ヘッダー） ──
+  const ModeTabs = (
+    <div className="flex bg-gray-100 rounded-2xl p-1 mb-4">
+      {([['practice', '📖 練習する'], ['review', '✅ 復習する']] as [PhraseMode, string][]).map(([m, label]) => (
+        <button key={m} onClick={() => setMode(m)}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-black transition-all ${
+            mode === m ? 'bg-gray-900 text-white shadow-md' : 'text-gray-700'
+          }`}>
+          {label}
+          {m === 'review' && (
+            <span className={`ml-1.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+              mode === 'review' ? 'bg-white/20 text-white' : 'bg-gray-300 text-gray-700'
+            }`}>
+              {memoCount}/{DATA.length}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+
+  // ══ 復習モード ══
+  if (mode === 'review') {
+    return (
+      <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
+        {ModeTabs}
+
+        {/* フィルター */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs font-black text-gray-800 flex-1">
+            全{DATA.length}フレーズ・覚えた: {memoCount}個
+          </span>
+          <div className="flex bg-gray-100 rounded-xl p-0.5">
+            {([['all', 'すべて表示'], ['needs', '要復習のみ']] as [PhraseFilter, string][]).map(([f, label]) => (
+              <button key={f} onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                  filter === f ? 'bg-gray-900 text-white shadow' : 'text-gray-700'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {reviewItems.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-4xl mb-3">🎉</p>
+            <p className="text-base font-black text-gray-900">全フレーズを覚えました！</p>
+            <p className="text-xs font-bold text-gray-700 mt-1">「すべて表示」で復習できます</p>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {reviewItems.map(it => {
+            const isMemo = memorized.has(it.phrase);
+            return (
+              <div key={it.phrase}
+                className={`rounded-2xl border-2 overflow-hidden transition-all ${
+                  isMemo ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white'
+                }`}>
+
+                <div className="px-4 pt-4 pb-3">
+                  {/* 英語フレーズ + TTS */}
+                  <div className="flex items-start gap-2 mb-1">
+                    <p className="text-xl font-black text-gray-900 leading-snug flex-1">
+                      &ldquo;{it.phrase}&rdquo;
+                    </p>
+                    <button
+                      onClick={() => speak(it.phrase)}
+                      className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 active:scale-90 transition-all text-base"
+                      aria-label="発音を聞く"
+                    >🔊</button>
+                  </div>
+
+                  {/* 日本語の意味 */}
+                  <p className="text-base font-black text-gray-800 mb-3">{it.meaning}</p>
+
+                  {/* 使い方・ニュアンス解説 */}
+                  <div className="border border-sky-300 bg-sky-50 rounded-xl p-3">
+                    <p className="text-[9px] font-black text-sky-800 uppercase tracking-widest mb-1">💡 使い方・ニュアンス</p>
+                    <p className="text-xs font-bold text-gray-900 leading-relaxed">{it.tip}</p>
+                  </div>
+                </div>
+
+                {/* 覚えたチェック */}
+                <button onClick={() => toggleMemo(it.phrase)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 border-t-2 transition-all active:scale-[0.99] ${
+                    isMemo ? 'border-emerald-400 bg-emerald-100' : 'border-gray-200 bg-gray-50'
+                  }`}>
+                  <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                    isMemo ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-gray-400'
+                  }`}>
+                    {isMemo && <span className="text-sm font-black">✓</span>}
+                  </div>
+                  <span className={`text-sm font-black ${isMemo ? 'text-emerald-800' : 'text-gray-800'}`}>
+                    {isMemo ? '覚えた ✅' : '覚えた？ チェックする'}
+                  </span>
+                  {isMemo && (
+                    <span className="ml-auto text-[10px] font-bold text-emerald-600">タップで解除</span>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ══ 練習モード ══
   return (
     <div className={`min-h-screen px-4 pt-2 pb-[120px] max-w-md mx-auto transition-colors duration-200 ${
       flash === 'ok' ? 'bg-emerald-50' : flash === 'ng' ? 'bg-red-50' : 'bg-white'
     }`}>
+
+      {ModeTabs}
 
       {/* ── スコアバー ── */}
       <div className="flex items-center justify-between mb-4 px-1">
@@ -593,11 +737,9 @@ export function DailyPractice() {
       {/* ── 問題カード ── */}
       <div className="bg-gray-900 rounded-2xl overflow-hidden mb-5 shadow-lg">
         <div className="px-5 pt-5 pb-4">
-          {/* フレーズ */}
           <p className="text-2xl font-black text-white leading-snug mb-3 tracking-wide">
             &ldquo;{item.phrase}&rdquo;
           </p>
-          {/* TTS ボタン */}
           <button
             onClick={() => speak(item.phrase)}
             className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full bg-white/20 text-white active:scale-95 transition-transform"
