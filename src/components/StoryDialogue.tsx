@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 
 // ─── TTS ──────────────────────────────────────────────────────────
 function speak(text: string) {
@@ -14,29 +14,29 @@ function speak(text: string) {
 
 function SpeakBtn({ text, size = 'sm' }: { text: string; size?: 'sm' | 'xs' }) {
   return (
-    <button
-      onClick={e => { e.stopPropagation(); speak(text); }}
+    <button onClick={e => { e.stopPropagation(); speak(text); }}
       className={`flex-shrink-0 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 active:scale-90 transition-all ${
         size === 'sm' ? 'w-8 h-8 text-base' : 'w-6 h-6 text-xs'
-      }`}
-      aria-label="発音を聞く"
-    >🔊</button>
+      }`} aria-label="発音を聞く">🔊</button>
   );
 }
 
 // ─── Types ────────────────────────────────────────────────────────
 interface DialogueItem {
-  situation: string;
   prompt: { en: string; ja: string };
   correct: 'A' | 'B';
   A: { en: string; ja: string };
   B: { en: string; ja: string };
   tip: string;
 }
-
+interface Chapter { id: string; icon: string; title: string; items: DialogueItem[]; }
 type CourseId = 'daily' | 'hawaii';
+type Screen   = 'course' | 'chapters' | 'dialogue' | 'chapter-end' | 'minitest' | 'test-results';
+type Mode     = 'study' | 'review';
+type Filter   = 'all' | 'needs';
+interface CourseData { id: CourseId; icon: string; title: string; sub: string; color: string; chapters: Chapter[]; }
 
-// ─── Shuffle ──────────────────────────────────────────────────────
+const LS_MEMO = 'story-memorized-v1';
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -46,784 +46,545 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-const LS_MEMO = 'story-memorized-v1';
-
 // ═══════════════════════════════════════════════════════════════════
-// ☀️ DAILY COURSE — 朝から夜まで（50問）
+// ☀️ DAILY COURSE
 // ═══════════════════════════════════════════════════════════════════
-const DAILY_DATA: DialogueItem[] = [
-  // ── 朝の目覚め ──
-  {
-    situation: '☀️ 朝の目覚め',
-    prompt: { en: "Good morning! Did you sleep well?", ja: "おはよう！よく眠れた？" },
-    correct: 'A',
-    A: { en: "Yeah, I slept like a log.", ja: "うん、ぐっすり眠れたよ。" },
-    B: { en: "Good night, see you tomorrow.", ja: "おやすみ、また明日。" },
-    tip: '「slept like a log（丸太のように眠った）」は「ぐっすり眠った」の定番イディオム。like a log の log は「丸太」で、動かない丸太のように熟睡したことを表します。',
-  },
-  {
-    situation: '☀️ 朝の目覚め',
-    prompt: { en: "Time to get up! You're going to be late!", ja: "起きる時間よ！遅刻するよ！" },
-    correct: 'A',
-    A: { en: "Five more minutes, please!", ja: "あと5分だけ！" },
-    B: { en: "I'll go to bed now.", ja: "今から寝ます。" },
-    tip: '「Five more minutes」は日常でよく聞くフレーズ。"more" を使うことで「追加でもう〜」というニュアンスになります。Five の fi と more の m がリンクして「ファイヴモア」と一息で発音されます。',
-  },
-  {
-    situation: '☀️ 朝の目覚め',
-    prompt: { en: "How did you sleep?", ja: "眠れた？" },
-    correct: 'A',
-    A: { en: "Not great. I kept waking up.", ja: "あまりよくなかった。何度も目が覚めて。" },
-    B: { en: "I'm heading out now.", ja: "今から外出します。" },
-    tip: '「kept -ing」は「何度も〜し続けた」という繰り返しのニュアンス。I kept waking up で「何度も目が覚め続けた」という状態を表します。kept は keep の過去形。',
-  },
-  {
-    situation: '☀️ 朝の目覚め',
-    prompt: { en: "Are you up yet?", ja: "もう起きてる？" },
-    correct: 'A',
-    A: { en: "Yeah, just getting ready.", ja: "うん、今準備してるよ。" },
-    B: { en: "I'll go to sleep now.", ja: "今から寝ます。" },
-    tip: '「yet」を疑問文で使うと「もう〜した？」という確認の意味。Are you up yet? の yet は「もう」。getting ready は「準備中」で、現在進行形が自然な口語表現です。',
-  },
-  {
-    situation: '☀️ 朝の目覚め',
-    prompt: { en: "Coffee's ready!", ja: "コーヒーが入ったよ！" },
-    correct: 'A',
-    A: { en: "Oh, thank you! I really need it.", ja: "ありがとう！本当に助かる。" },
-    B: { en: "I'm not thirsty at all.", ja: "全然のどが渇いてないよ。" },
-    tip: '「I really need it」の really は強調の副詞。「本当に必要だ」という感謝と本音が伝わります。Coffee の ff が s の前でリンクして「コフィーズ」と発音します。',
-  },
-  // ── 朝食 ──
-  {
-    situation: '🍳 朝食',
-    prompt: { en: "What do you want for breakfast?", ja: "朝食は何がいい？" },
-    correct: 'A',
-    A: { en: "Just toast and coffee for me.", ja: "トーストとコーヒーだけでいいよ。" },
-    B: { en: "I'm heading out right now.", ja: "今すぐ出かけます。" },
-    tip: '「Just 〜 for me」は「私は〜だけでいい」という軽い断りのニュアンス。「for me」をつけることで「私の場合は」という個人の好みを表せます。とても便利な口語表現です。',
-  },
-  {
-    situation: '🍳 朝食',
-    prompt: { en: "Breakfast is getting cold!", ja: "朝食が冷めちゃうよ！" },
-    correct: 'A',
-    A: { en: "I'll be right there!", ja: "今すぐ行く！" },
-    B: { en: "I'll have lunch instead.", ja: "代わりにランチを食べます。" },
-    tip: '「I\'ll be right there!」の right は「すぐに・ちょうど」という強調の副詞。「right now（今すぐ）」と同じ用法です。there と here がリンクして「アイルビーライッデア」と流れます。',
-  },
-  {
-    situation: '🍳 朝食',
-    prompt: { en: "Do you want eggs?", ja: "卵はいる？" },
-    correct: 'A',
-    A: { en: "Yes, please! Scrambled, if you don't mind.", ja: "はい！スクランブルエッグでお願いします。" },
-    B: { en: "I'm not hungry at all.", ja: "全然お腹空いてない。" },
-    tip: '「if you don\'t mind（よければ・もしよかったら）」は依頼や注文を柔らかくする丁寧な表現。「don\'t mind」の d と m がリンキングして「ドントゥマインド」と聞こえます。',
-  },
-  {
-    situation: '🍳 朝食',
-    prompt: { en: "Did you eat breakfast?", ja: "朝食は食べた？" },
-    correct: 'A',
-    A: { en: "I skipped it. I was running late.", ja: "抜かした。遅刻しそうだったから。" },
-    B: { en: "Let me sleep a little more.", ja: "もう少し寝かせて。" },
-    tip: '「running late（遅刻しそう）」は「時間が間に合わない」状態のよく使われる表現。「I was running late」はフラッピングで running の ng と late の l がつながり「ランニンレイト」のように発音されます。',
-  },
-  {
-    situation: '🍳 朝食',
-    prompt: { en: "Try this! I made pancakes.", ja: "食べてみて！パンケーキ作ったよ。" },
-    correct: 'A',
-    A: { en: "They look amazing! Thank you!", ja: "すごくおいしそう！ありがとう！" },
-    B: { en: "No thanks, I already had dinner.", ja: "いや、もう夕食食べたから。" },
-    tip: '「They look amazing!」の look は「見た目が〜だ」という感覚動詞。taste（味）、smell（匂い）、look（見た目）のように五感を表す動詞は補語に形容詞をとります。',
-  },
-  // ── 通勤 ──
-  {
-    situation: '🚃 通勤',
-    prompt: { en: "You look tired this morning.", ja: "今朝は疲れた顔してるね。" },
-    correct: 'A',
-    A: { en: "Yeah, the train was packed.", ja: "うん、電車がすごく混んでたから。" },
-    B: { en: "Good evening! Have a nice day.", ja: "こんばんは！良い一日を。" },
-    tip: '「packed（満員の・ぎゅうぎゅうの）」は電車・バスの混雑を表す定番単語。「packed train」は満員電車のこと。pack は「詰め込む」という動詞から来ています。',
-  },
-  {
-    situation: '🚃 通勤',
-    prompt: { en: "Are you taking the train?", ja: "電車で行くの？" },
-    correct: 'A',
-    A: { en: "Yeah, the 8:15 one.", ja: "うん、8時15分のに乗る。" },
-    B: { en: "I already arrived.", ja: "もう到着しました。" },
-    tip: '「the 8:15 one」の one は前に出た名詞（train）の代わり。「the 8:15 train」と言わずに one で受けるのが自然な口語。時刻の読み方は「エイトフィフティーン」が一般的です。',
-  },
-  {
-    situation: '🚃 通勤',
-    prompt: { en: "We're running behind schedule.", ja: "スケジュールより遅れているね。" },
-    correct: 'A',
-    A: { en: "Don't worry, we'll make it.", ja: "大丈夫、間に合うよ。" },
-    B: { en: "Goodnight, everyone!", ja: "みなさん、おやすみなさい！" },
-    tip: '「make it（間に合う・やり遂げる）」は非常に便利な句動詞。「間に合う」「参加できる」「成功する」など文脈で意味が変わります。"we\'ll make it" で「何とかなるよ」という前向きな表現に。',
-  },
-  {
-    situation: '🚃 通勤',
-    prompt: { en: "Excuse me, is this seat taken?", ja: "すみません、この席は空いていますか？" },
-    correct: 'A',
-    A: { en: "No, go ahead.", ja: "空いてます、どうぞ。" },
-    B: { en: "Yes, please sit down.", ja: "はい、どうぞ座ってください。" },
-    tip: '「Is this seat taken?」は席が埋まっているかを確認する定番フレーズ。「No, go ahead」の no は「空いてない（人はいない）→どうぞ」という意味。肯定・否定が日本語と逆になる点に注意！',
-  },
-  {
-    situation: '🚃 通勤',
-    prompt: { en: "The train is delayed again.", ja: "また電車が遅延してる。" },
-    correct: 'A',
-    A: { en: "Ugh, not again...", ja: "またか、もう…" },
-    B: { en: "Perfect! Right on time.", ja: "完璧！ちょうどいい時間だ。" },
-    tip: '「Not again...」は「またか・勘弁してよ」といううんざりした気持ちを表す慣用的な表現。Ugh（アッ）は不満や嫌悪を表す感嘆詞で、文字通りのため息の音です。',
-  },
-  // ── 職場 ──
-  {
-    situation: '🏢 職場・学校',
-    prompt: { en: "Good morning, everyone!", ja: "みなさん、おはようございます！" },
-    correct: 'A',
-    A: { en: "Morning! Ready for the meeting?", ja: "おはよう！会議の準備できてる？" },
-    B: { en: "Good night! See you tomorrow.", ja: "おやすみ！また明日。" },
-    tip: '「Morning!」は "Good morning!" の省略形で、職場でよく使われるカジュアルな挨拶。"Ready for 〜?" は「〜の準備はできてる？」という確認フレーズ。ready の d がフラッピングして「レリ」のように聞こえます。',
-  },
-  {
-    situation: '🏢 職場・学校',
-    prompt: { en: "Can you help me with this?", ja: "これ手伝ってくれる？" },
-    correct: 'A',
-    A: { en: "Sure, what do you need?", ja: "もちろん、何が必要？" },
-    B: { en: "I'm heading home for the day.", ja: "今日はもう帰ります。" },
-    tip: '「What do you need?」は「何が必要ですか？」という自然な助けの申し出。"what" の wh は「ワット」ではなく「ワッ(ト)」のように語末の t が弱くなります。',
-  },
-  {
-    situation: '🏢 職場・学校',
-    prompt: { en: "The meeting starts in 5 minutes.", ja: "会議があと5分で始まるよ。" },
-    correct: 'A',
-    A: { en: "I'll be right there.", ja: "すぐ行きます。" },
-    B: { en: "See you next week.", ja: "また来週。" },
-    tip: '「in 5 minutes（5分後に）」の in は「〜後に」という未来を指す前置詞。「I\'ll be right there」の right は「ちょうど・今すぐ」を強調する副詞。be there で「そこに行く」というニュアンスです。',
-  },
-  {
-    situation: '🏢 職場・学校',
-    prompt: { en: "Great work on that presentation!", ja: "あのプレゼン、素晴らしかったよ！" },
-    correct: 'A',
-    A: { en: "Thank you! I'm glad it went well.", ja: "ありがとう！うまくいってよかった。" },
-    B: { en: "It was all your fault.", ja: "全部あなたのせいです。" },
-    tip: '「I\'m glad it went well」は「うまくいってよかった」という安堵と喜びの表現。"went well" は go well の過去形で、「順調に進んだ」という意味。日本語の「うまくいった」にぴったり対応します。',
-  },
-  {
-    situation: '🏢 職場・学校',
-    prompt: { en: "Can we push the deadline?", ja: "締め切りを延ばせる？" },
-    correct: 'A',
-    A: { en: "Let me check the schedule.", ja: "スケジュールを確認させて。" },
-    B: { en: "I already finished everything.", ja: "もう全部終わりました。" },
-    tip: '「push the deadline（締め切りを押し延ばす）」の push は「後ろに押す＝延期する」というビジネス口語表現。「Let me 〜」は「〜させてください」という柔らかい依頼。check の ck と the が繋がって「チェッキャ」のように聞こえます。',
-  },
-  // ── 昼食 ──
-  {
-    situation: '🍱 昼食',
-    prompt: { en: "What do you want for lunch?", ja: "ランチは何がいい？" },
-    correct: 'A',
-    A: { en: "I'm down for anything.", ja: "何でもいいよ。" },
-    B: { en: "I'm already full, thanks.", ja: "もうお腹いっぱいだよ。" },
-    tip: '「I\'m down for anything」の down for は「〜に乗り気・〜でいい」という口語表現。"I\'m in for anything" も似た表現。「何でもOK」という柔軟さをノリよく伝えられます。',
-  },
-  {
-    situation: '🍱 昼食',
-    prompt: { en: "Have you eaten yet?", ja: "もう食べた？" },
-    correct: 'A',
-    A: { en: "Not yet. Want to grab lunch together?", ja: "まだ。一緒にランチしない？" },
-    B: { en: "I'm cooking dinner right now.", ja: "今夕食を作っています。" },
-    tip: '「grab lunch（ランチをさっと食べる）」の grab は「素早く取る」という意味から、「さっとランチを済ませる」という口語フレーズに。grab a coffee（コーヒーをちょっと飲む）なども同様の使い方です。',
-  },
-  {
-    situation: '🍱 昼食',
-    prompt: { en: "This place is packed.", ja: "ここ混んでるね。" },
-    correct: 'A',
-    A: { en: "Yeah, let's try somewhere else.", ja: "そうだね、別のところにしよう。" },
-    B: { en: "Good morning! Welcome.", ja: "おはようございます！いらっしゃいませ。" },
-    tip: '「somewhere else（どこか別の場所）」は else を使って「他の〜」を表す表現。somewhere else、someone else、something else のように else は「他の」という意味を追加します。',
-  },
-  {
-    situation: '🍱 昼食',
-    prompt: { en: "Do you want dessert?", ja: "デザートはどう？" },
-    correct: 'A',
-    A: { en: "I'll pass. I'm watching my sugar intake.", ja: "遠慮しとく。糖分を控えてるから。" },
-    B: { en: "I'm starving! Let's order more!", ja: "お腹ペコペコ！もっと頼もう！" },
-    tip: '「I\'ll pass（遠慮します・パスします）」は断る時の定番フレーズ。「watching my 〜（〜に気をつけている）」は健康管理の文脈でよく使います。watching my weight（体重管理）、watching my budget（予算管理）なども同様。',
-  },
-  {
-    situation: '🍱 昼食',
-    prompt: { en: "How's your food?", ja: "料理はどう？" },
-    correct: 'A',
-    A: { en: "It's delicious! Really hitting the spot.", ja: "おいしい！ちょうど食べたかったやつ。" },
-    B: { en: "I haven't ordered yet.", ja: "まだ注文してないです。" },
-    tip: '「hitting the spot（ちょうど欲しかったものを満たす）」は食べ物や飲み物が「ちょうどいい！」「これが食べたかった！」という感覚を表すイディオム。spot の t がフラッピングして「スパリン」のように聞こえます。',
-  },
-  // ── 午後 ──
-  {
-    situation: '🌤️ 午後',
-    prompt: { en: "I have so much work to do.", ja: "やること多すぎる〜。" },
-    correct: 'A',
-    A: { en: "Hang in there! You've got this.", ja: "頑張って！あなたならできる。" },
-    B: { en: "Great job! You're all done.", ja: "お疲れ様！もう終わりだよ。" },
-    tip: '「You\'ve got this」は「あなたならできる」という現代英語の励まし表現。got の t がフラッピングして「ガリス」のように聞こえます。「Hang in there（そこにしがみついて＝頑張って）」も合わせて覚えておきましょう。',
-  },
-  {
-    situation: '🌤️ 午後',
-    prompt: { en: "Do you have a minute?", ja: "少し時間ある？" },
-    correct: 'A',
-    A: { en: "Sure, what's up?", ja: "もちろん、どうしたの？" },
-    B: { en: "I'm sleeping right now.", ja: "今寝てます。" },
-    tip: '「Do you have a minute?（少し時間ある？）」は何かを相談・確認したい時の前置き。「what\'s up?」は「どうしたの？/何があったの？」という定番の聞き方。what\'s の ts と up がリンクして「ワッサップ」と聞こえます。',
-  },
-  {
-    situation: '🌤️ 午後',
-    prompt: { en: "Let's take a short break.", ja: "少し休憩しよう。" },
-    correct: 'A',
-    A: { en: "Great idea. I could use one.", ja: "いい考え。休みたかったんだ。" },
-    B: { en: "I'm asleep. Wake me up later.", ja: "寝てます。後で起こして。" },
-    tip: '「I could use 〜（〜があるといいな）」は欲しいものや状況を柔らかく表す表現。I could use a break（休憩したい）、I could use a coffee（コーヒーが飲みたい）のように使います。直接的に言うより丁寧な印象に。',
-  },
-  {
-    situation: '🌤️ 午後',
-    prompt: { en: "Can you send me that file?", ja: "あのファイル送ってもらえる？" },
-    correct: 'A',
-    A: { en: "Sure, I'll send it now.", ja: "もちろん、今すぐ送ります。" },
-    B: { en: "I've never seen that file.", ja: "そのファイル見たことない。" },
-    tip: '「I\'ll send it now」の it は前に出た the file を指す代名詞。"I\'ll" は "I will" の短縮形で、会話では必ずこちらを使います。send it の t と n がリンクして「センディット」のように流れます。',
-  },
-  {
-    situation: '🌤️ 午後',
-    prompt: { en: "I'm heading out for coffee. Want anything?", ja: "コーヒー買いに行くけど、何かいる？" },
-    correct: 'A',
-    A: { en: "A latte would be great, thanks!", ja: "ラテがいい！ありがとう！" },
-    B: { en: "I'm going home early today.", ja: "今日は早退します。" },
-    tip: '「Would be great（〜してもらえたら嬉しい）」は would を使うことで丁寧さが増す表現。"That would be great!" も受け取った時の感謝として定番。latte の tt がフラッピングして「ラリ」のように聞こえます。',
-  },
-  // ── 帰宅前 ──
-  {
-    situation: '🏠 帰宅前',
-    prompt: { en: "I'm heading home now.", ja: "もう帰るよ。" },
-    correct: 'A',
-    A: { en: "Get home safe!", ja: "気をつけて帰ってね！" },
-    B: { en: "Welcome! Come on in.", ja: "いらっしゃい！入って。" },
-    tip: '「Get home safe」は別れ際の定番フレーズ。「safe（安全に）」は副詞的に使っていて "safely" の口語版。"Safe travels!" や "Drive safe!" も同様のパターン。get と home がリンクして「ゲッホーム」のように発音されます。',
-  },
-  {
-    situation: '🏠 帰宅前',
-    prompt: { en: "Long day, huh?", ja: "長い一日だったね？" },
-    correct: 'A',
-    A: { en: "You're telling me. I'm exhausted.", ja: "本当だよ。もうクタクタ。" },
-    B: { en: "The day just started!", ja: "まだ一日が始まったばかりだよ。" },
-    tip: '「You\'re telling me（言わなくてもわかってるよ）」は相手の言葉に「そうそう！まったくだよ！」と強く同意する表現。"Tell me about it" と同じ意味でとても口語的。huh は驚きや確認を求める発音記号的な発音です。',
-  },
-  {
-    situation: '🏠 帰宅前',
-    prompt: { en: "Want to grab a drink after work?", ja: "仕事の後、一杯どう？" },
-    correct: 'A',
-    A: { en: "Sounds good! I could use one.", ja: "いいね！一杯やりたかった。" },
-    B: { en: "I'm going to bed right now.", ja: "今すぐ寝ます。" },
-    tip: '「Sounds good!」は提案への賛成の定番フレーズ。"Sounds great!" "Sounds fun!" と形容詞を変えて使えます。"grab a drink（一杯やる）" の grab は「さっと取る→さくっと飲む」というカジュアルなニュアンスです。',
-  },
-  {
-    situation: '🏠 帰宅前',
-    prompt: { en: "See you tomorrow!", ja: "また明日！" },
-    correct: 'A',
-    A: { en: "See you! Have a good evening!", ja: "またね！良い夜を！" },
-    B: { en: "Good morning! Have a great day!", ja: "おはよう！良い一日を！" },
-    tip: '「Have a good evening」は別れの挨拶の定番。morning（朝）、afternoon（昼）、evening（夜）と時間帯に応じて使い分けましょう。"See you!" の you の y がリンクして「シーヤ!」のように聞こえます。',
-  },
-  {
-    situation: '🏠 帰宅前',
-    prompt: { en: "Are you done for today?", ja: "今日はもう終わり？" },
-    correct: 'A',
-    A: { en: "Yeah, finally! Packing up now.", ja: "そう、やっと！今片付けてるよ。" },
-    B: { en: "I just got here!", ja: "今ここに来たばかりです！" },
-    tip: '「Finally!（やっと！）」は待ちに待った状況への安堵感の表現。Packing up は「荷物をまとめる・片付ける」という意味。"done for today" は「今日の分は終わった」という表現で仕事の終わりに使います。',
-  },
-  // ── 夕食 ──
-  {
-    situation: '🍽️ 夕食',
-    prompt: { en: "What's for dinner?", ja: "夕食は何？" },
-    correct: 'A',
-    A: { en: "I was thinking pasta tonight.", ja: "今夜はパスタにしようと思ってた。" },
-    B: { en: "Breakfast is almost ready!", ja: "朝食がもうすぐ出来ます！" },
-    tip: '「I was thinking 〜（〜しようと思ってた）」の was thinking は過去進行形で「心の中で考えていた」というニュアンス。直接「パスタにしよう」と言うより柔らかい提案の言い方です。',
-  },
-  {
-    situation: '🍽️ 夕食',
-    prompt: { en: "Do you want to eat out?", ja: "外食する？" },
-    correct: 'A',
-    A: { en: "Sure! What are you feeling?", ja: "いいよ！何が食べたい？" },
-    B: { en: "I already had a big lunch.", ja: "ランチをたくさん食べたから。" },
-    tip: '「What are you feeling?（何が食べたい気分？）」はレストランを選ぶ時の定番フレーズ。feel は「〜の気分だ」という意味でも使います。"I\'m feeling Italian.（イタリアン気分）" のような言い方も自然。',
-  },
-  {
-    situation: '🍽️ 夕食',
-    prompt: { en: "This is delicious!", ja: "これおいしい！" },
-    correct: 'A',
-    A: { en: "Thank you! It's my mom's recipe.", ja: "ありがとう！お母さんのレシピなんだ。" },
-    B: { en: "I haven't tried it yet.", ja: "まだ試してません。" },
-    tip: '「It\'s my mom\'s recipe」の所有格（\'s）は料理のルーツを伝える自然な言い方。"my mom\'s" の m\'s と recipe の r がリンクして「マムズレシピ」と一息で発音されます。',
-  },
-  {
-    situation: '🍽️ 夕食',
-    prompt: { en: "Save room for dessert!", ja: "デザートのためにお腹を空けておいて！" },
-    correct: 'A',
-    A: { en: "Oh, I'll definitely make room!", ja: "もちろん、絶対食べる！" },
-    B: { en: "I'm still fast asleep.", ja: "まだぐっすり寝ています。" },
-    tip: '「Save room（お腹に場所を残す）」は食事中に「まだデザートがある！」と伝える表現。"make room" も同様。room には「物理的な部屋」以外に「スペース・余地」という意味があります。',
-  },
-  {
-    situation: '🍽️ 夕食',
-    prompt: { en: "Can you pass the salt?", ja: "塩を取ってもらえる？" },
-    correct: 'A',
-    A: { en: "Sure, here you go.", ja: "どうぞ。" },
-    B: { en: "It's in the refrigerator.", ja: "冷蔵庫に入ってます。" },
-    tip: '「Here you go（はい、どうぞ）」は物を手渡す時の定番フレーズ。"Here you are" も同じ意味。go の g と you の y がリンクして「ヒアヤゴー」のように発音されます。日本語の「はい」にぴったり対応。',
-  },
-  // ── 夜のくつろぎ ──
-  {
-    situation: '🛋️ 夜のくつろぎ',
-    prompt: { en: "What should we watch?", ja: "何を見ようか？" },
-    correct: 'A',
-    A: { en: "How about that new show everyone's talking about?", ja: "みんなが話してる新しいドラマはどう？" },
-    B: { en: "Time to wake up and start the day!", ja: "起きて一日を始める時間だよ！" },
-    tip: '「everyone\'s talking about」は「みんなが話題にしている」という現在進行形の関係節。"that show everyone\'s talking about" で「みんなが話題にしているあのドラマ」という意味になります。',
-  },
-  {
-    situation: '🛋️ 夜のくつろぎ',
-    prompt: { en: "I can't believe that ending!", ja: "あのエンディングは信じられない！" },
-    correct: 'A',
-    A: { en: "Right? I didn't see that coming at all!", ja: "でしょ！全然予想できなかった！" },
-    B: { en: "Good morning! It's a new day.", ja: "おはよう！新しい一日が始まるよ。" },
-    tip: '「I didn\'t see that coming（予想できなかった）」は「先が見えなかった」というイディオム。予期しない出来事への驚きを表す定番表現。"Right?（でしょ？）" は同意を求める/示す最短フレーズ。',
-  },
-  {
-    situation: '🛋️ 夜のくつろぎ',
-    prompt: { en: "Do you want some tea?", ja: "お茶はいる？" },
-    correct: 'A',
-    A: { en: "Yes, please. That sounds lovely.", ja: "ぜひ。それは嬉しいな。" },
-    B: { en: "I'm on my way to work.", ja: "仕事に向かっています。" },
-    tip: '「That sounds lovely（それは素敵だね・嬉しいな）」の sounds は感覚動詞で「〜のように聞こえる→〜な感じがする」という意味。lovely は「素敵な・愛らしい」という意味で、イギリス英語ではよく使われます。',
-  },
-  {
-    situation: '🛋️ 夜のくつろぎ',
-    prompt: { en: "How was your day overall?", ja: "今日一日、全体的にどうだった？" },
-    correct: 'A',
-    A: { en: "Busy but good. How about yours?", ja: "忙しかったけど良かった。あなたは？" },
-    B: { en: "It hasn't started yet!", ja: "まだ始まってないよ！" },
-    tip: '「Busy but good（忙しかったけど良かった）」は充実した一日を簡潔に表す定番の返し方。"How about yours?（あなたは？）" で会話を相手に返すのが自然な会話の流れです。',
-  },
-  {
-    situation: '🛋️ 夜のくつろぎ',
-    prompt: { en: "Let's just relax tonight.", ja: "今夜はゆっくりしようよ。" },
-    correct: 'A',
-    A: { en: "Sounds perfect. I'm exhausted.", ja: "最高だね。もうクタクタ。" },
-    B: { en: "Let's go running then!", ja: "じゃあランニングしよう！" },
-    tip: '「Sounds perfect（最高だね）」は提案への熱烈な賛同。"Sounds + 形容詞" は相手の言葉への反応として非常によく使われるパターン。exhausted（へとへとの）は tired より強い疲労感を表します。',
-  },
-  // ── 就寝 ──
-  {
-    situation: '🌙 就寝',
-    prompt: { en: "I'm going to bed. Night!", ja: "寝るね。おやすみ！" },
-    correct: 'A',
-    A: { en: "Good night! Sleep well.", ja: "おやすみ！ゆっくり休んでね。" },
-    B: { en: "Good morning! Rise and shine.", ja: "おはよう！起きる時間だよ。" },
-    tip: '「Sleep well（よく眠って）」は別れの「おやすみ」に添える定番フレーズ。well は「良く・十分に」という副詞。"Sweet dreams!（良い夢を！）" も合わせて覚えておきましょう。',
-  },
-  {
-    situation: '🌙 就寝',
-    prompt: { en: "I can't sleep.", ja: "眠れない。" },
-    correct: 'A',
-    A: { en: "Try some deep breathing. It usually helps.", ja: "腹式呼吸を試してみて。大体効くよ。" },
-    B: { en: "You should eat more.", ja: "もっと食べたほうがいいよ。" },
-    tip: '「deep breathing（深呼吸）」は健康・リラックスの文脈でよく使われる単語。"It usually helps" の usually（たいてい・普通は）は「必ず」ではなく「多くの場合」というニュアンス。',
-  },
-  {
-    situation: '🌙 就寝',
-    prompt: { en: "Don't forget to set your alarm.", ja: "アラームのセットを忘れずに。" },
-    correct: 'A',
-    A: { en: "Already done. Thanks for reminding me.", ja: "もうやったよ。気づかせてくれてありがとう。" },
-    B: { en: "I'll stay up all night.", ja: "徹夜します。" },
-    tip: '「Thanks for reminding me（気づかせてくれてありがとう）」は reminder（リマインダー）に感謝する丁寧な表現。"Don\'t forget to 〜" と "Remember to 〜" は同じ意味で使えます。',
-  },
-  {
-    situation: '🌙 就寝',
-    prompt: { en: "I'm so tired. What a day.", ja: "疲れた〜。今日はキツかったな。" },
-    correct: 'A',
-    A: { en: "I know, right? Get some rest.", ja: "わかる！しっかり休んで。" },
-    B: { en: "The day just started!", ja: "まだ一日が始まったばかりだよ！" },
-    tip: '「What a day!（なんて一日だ！）」は良い意味にも悪い意味にも使える感嘆表現。「I know, right?（わかる！でしょ！）」は相手への強い共感を示す口語フレーズで、アメリカ英語で特によく耳にします。',
-  },
-  {
-    situation: '🌙 就寝',
-    prompt: { en: "Sleep well!", ja: "ゆっくり眠ってね！" },
-    correct: 'A',
-    A: { en: "You too! See you in the morning.", ja: "あなたもね！また朝に。" },
-    B: { en: "Good morning! I'm ready.", ja: "おはよう！準備できてるよ。" },
-    tip: '「You too!（あなたもね！）」は相手の挨拶やお礼を相手に返す最短の返し方。"See you in the morning" は「朝にまた会おう」という意味で、家族や同居人との就寝前の挨拶として自然です。',
-  },
-];
-
-// ═══════════════════════════════════════════════════════════════════
-// 🌴 HAWAII COURSE — ハワイ旅行・ホテル滞在（40問）
-// ═══════════════════════════════════════════════════════════════════
-const HAWAII_DATA: DialogueItem[] = [
-  // ── 空港・到着 ──
-  {
-    situation: '✈️ 空港・入国審査',
-    prompt: { en: "What's the purpose of your visit?", ja: "訪問の目的は何ですか？" },
-    correct: 'A',
-    A: { en: "Just vacation.", ja: "観光です。" },
-    B: { en: "Check, please.", ja: "お会計をお願いします。" },
-    tip: '「Just vacation」は "For vacation." や "Tourism." と同じく入国審査の定番回答。other options: business（仕事）、visiting family（家族の訪問）。短く明確に答えるのがコツです。',
-  },
-  {
-    situation: '✈️ 空港・入国審査',
-    prompt: { en: "How long will you be staying?", ja: "どれくらい滞在されますか？" },
-    correct: 'A',
-    A: { en: "About a week.", ja: "約1週間です。" },
-    B: { en: "I'm checking out now.", ja: "今チェックアウトします。" },
-    tip: '「About a week（約1週間）」の about は「約・だいたい」という意味の前置詞。期間の答え方: a week（1週間）、10 days（10日間）、two weeks（2週間）のように言えます。',
-  },
-  {
-    situation: '✈️ 空港・入国審査',
-    prompt: { en: "Do you have anything to declare?", ja: "申告するものはありますか？" },
-    correct: 'A',
-    A: { en: "No, nothing to declare.", ja: "いいえ、申告するものはありません。" },
-    B: { en: "Room service, please.", ja: "ルームサービスをお願いします。" },
-    tip: '「Nothing to declare（申告なし）」は税関審査の定番フレーズ。declare は「申告する・宣言する」という意味。申告が必要なものは food（食品）、cash over $10,000（1万ドル以上の現金）などです。',
-  },
-  {
-    situation: '✈️ 空港・入国審査',
-    prompt: { en: "Can I see your passport, please?", ja: "パスポートを見せていただけますか？" },
-    correct: 'A',
-    A: { en: "Sure, here you go.", ja: "はい、どうぞ。" },
-    B: { en: "I'd like to check in.", ja: "チェックインをしたいです。" },
-    tip: '「Here you go（はい、どうぞ）」は物を渡す時の定番フレーズ。"Here you are." も同じ意味。パスポートを渡す、商品を渡すなど日常的に使える万能フレーズです。',
-  },
-  {
-    situation: '✈️ 空港・入国審査',
-    prompt: { en: "Welcome to Hawaii! Enjoy your stay.", ja: "ハワイへようこそ！良い滞在を。" },
-    correct: 'A',
-    A: { en: "Thank you! I'm so excited to be here!", ja: "ありがとうございます！来られて本当に嬉しいです！" },
-    B: { en: "Check please. I'm in a hurry.", ja: "お会計を。急いでいます。" },
-    tip: '「I\'m so excited to be here!（ここに来られて本当にワクワクしています！）」は旅先での喜びを伝える自然な表現。excited の d がフラッピングして「エクサイリッド」のように聞こえます。',
-  },
-  // ── タクシー・交通 ──
-  {
-    situation: '🚕 タクシー・交通',
-    prompt: { en: "Where to, sir?", ja: "どちらまで？" },
-    correct: 'A',
-    A: { en: "To the BrightonStar Hotel, please.", ja: "ブライトンスターホテルまでお願いします。" },
-    B: { en: "Here is your change.", ja: "おつりです。" },
-    tip: '「Where to?」はタクシーで必ず聞かれる短縮形。「Where would you like to go?」の省略。目的地を言う時は "To the 〜, please" が定番。please を添えると丁寧な印象になります。',
-  },
-  {
-    situation: '🚕 タクシー・交通',
-    prompt: { en: "How far is it to Waikiki?", ja: "ワイキキまでどのくらいかかりますか？" },
-    correct: 'A',
-    A: { en: "About 20 minutes from here.", ja: "ここから約20分です。" },
-    B: { en: "Go straight and turn left.", ja: "まっすぐ行って左に曲がってください。" },
-    tip: '「About 20 minutes from here」は距離を時間で答える自然な言い方。"it takes about 〜" も同じ意味。日本語でも「〜分くらい」と言うのと同じ感覚です。',
-  },
-  {
-    situation: '🚕 タクシー・交通',
-    prompt: { en: "Can you turn on the meter?", ja: "メーターをつけてもらえますか？" },
-    correct: 'A',
-    A: { en: "Of course, sir.", ja: "もちろんです。" },
-    B: { en: "Cash or card?", ja: "現金ですかカードですか？" },
-    tip: '「Of course（もちろんです）」は快諾を示す丁寧な返事。"Certainly"（かしこまりました）より口語的。sir（お客様・様）はタクシーなどサービス業で男性客への敬称として使われます。',
-  },
-  {
-    situation: '🚕 タクシー・交通',
-    prompt: { en: "Here we are! BrightonStar Hotel.", ja: "到着です！ブライトンスターホテルです。" },
-    correct: 'A',
-    A: { en: "How much do I owe you?", ja: "いくらですか？" },
-    B: { en: "Here is your menu.", ja: "こちらメニューです。" },
-    tip: '「How much do I owe you?（いくらですか？/おいくらですか？）」の owe は「（お金を）借りている」という意味。直訳は「いくら借りていますか？」ですが「おいくらになりますか？」として使えます。',
-  },
-  {
-    situation: '🚕 タクシー・交通',
-    prompt: { en: "Keep the change.", ja: "おつりはいりません。" },
-    correct: 'A',
-    A: { en: "Thank you so much! Have a great stay!", ja: "ありがとうございます！良いご滞在を！" },
-    B: { en: "I'll be right back with more.", ja: "もっと持ってすぐ戻ります。" },
-    tip: '「Keep the change（おつりはいりません・チップです）」はアメリカでのチップ文化を表すフレーズ。change は「おつり」の意味。change の ch と keep がリンクして「チェンジ」と一息で発音されます。',
-  },
-  // ── ホテルチェックイン ──
-  {
-    situation: '🏨 ホテル・チェックイン',
-    prompt: { en: "Do you have a reservation?", ja: "ご予約はありますか？" },
-    correct: 'A',
-    A: { en: "Yes, under the name Tanaka.", ja: "はい、田中という名前で。" },
-    B: { en: "I'd like to check out.", ja: "チェックアウトをしたいです。" },
-    tip: '「Under the name 〜（〜という名前で）」は予約を確認する時の定番フレーズ。reservationの r と under がリンクして「リザーベイションアンダー」と流れます。My name is の代わりによく使われます。',
-  },
-  {
-    situation: '🏨 ホテル・チェックイン',
-    prompt: { en: "Can I see your ID?", ja: "身分証明書を見せてもらえますか？" },
-    correct: 'A',
-    A: { en: "Sure, here's my passport.", ja: "はい、パスポートです。" },
-    B: { en: "Keep the change.", ja: "おつりはいりません。" },
-    tip: '「here\'s my passport（こちらがパスポートです）」の here\'s は "here is" の短縮形。物を渡す時に "Here you go" か "Here\'s my 〜" のどちらかが使えます。ID はアメリカ英語でパスポートや運転免許証を指します。',
-  },
-  {
-    situation: '🏨 ホテル・チェックイン',
-    prompt: { en: "Would you prefer a king or two queens?", ja: "キングとクイーン2台、どちらがよろしいですか？" },
-    correct: 'A',
-    A: { en: "A king bed, please.", ja: "キングベッドをお願いします。" },
-    B: { en: "I'll take the lunch menu.", ja: "ランチメニューにします。" },
-    tip: '「A king bed, please」のように "please" を文末につけると丁寧さが増します。queen は「クイーンサイズのベッド」を指すホテル用語。"Would you prefer A or B?" は二択の丁寧な質問形式です。',
-  },
-  {
-    situation: '🏨 ホテル・チェックイン',
-    prompt: { en: "Here's your room key.", ja: "お部屋のカギです。" },
-    correct: 'A',
-    A: { en: "Thank you! What floor is my room on?", ja: "ありがとうございます！何階ですか？" },
-    B: { en: "Can I get the check?", ja: "お会計をいただけますか？" },
-    tip: '「What floor is my room on?（何階ですか？）」は on を使って「〜の上（階）に」を表現します。"Which floor?" だけでも通じますが、より自然なのは "What floor is 〜 on?" の形です。',
-  },
-  {
-    situation: '🏨 ホテル・チェックイン',
-    prompt: { en: "Enjoy your stay!", ja: "良いご滞在を！" },
-    correct: 'A',
-    A: { en: "Thank you! I'm sure I will.", ja: "ありがとうございます！きっと楽しみます。" },
-    B: { en: "I'll have the steak, please.", ja: "ステーキをいただきます。" },
-    tip: '「I\'m sure I will（きっとそうなると思います）」は相手の願いや期待に応えるポジティブな返し。"I\'m sure" は "I\'m certain" より口語的な確信の表現。ホテルの挨拶への自然な返し方です。',
-  },
-  // ── レストラン ──
-  {
-    situation: '🍴 レストラン',
-    prompt: { en: "Are you ready to order?", ja: "ご注文はお決まりですか？" },
-    correct: 'A',
-    A: { en: "Yes, I'll have the fish tacos, please.", ja: "はい、フィッシュタコスをいただきます。" },
-    B: { en: "I'm checking out tomorrow.", ja: "明日チェックアウトします。" },
-    tip: '「I\'ll have 〜（〜をいただきます）」はレストランでの注文の定番フレーズ。"I want" より丁寧な言い方。"I\'d like 〜" はさらに丁寧。have の h が弱まって「アイルハヴ→アイラヴ」のように聞こえることも。',
-  },
-  {
-    situation: '🍴 レストラン',
-    prompt: { en: "How would you like your steak?", ja: "ステーキの焼き加減はいかがなさいますか？" },
-    correct: 'A',
-    A: { en: "Medium rare, please.", ja: "ミディアムレアでお願いします。" },
-    B: { en: "Extra towels, please.", ja: "タオルを余分にください。" },
-    tip: '焼き加減の表現: rare（レア）、medium rare（ミディアムレア）、medium（ミディアム）、medium well（ミディアムウェル）、well done（ウェルダン）。Please を最後につけるだけで丁寧に聞こえます。',
-  },
-  {
-    situation: '🍴 レストラン',
-    prompt: { en: "Can I get you anything else?", ja: "他に何かお持ちしましょうか？" },
-    correct: 'A',
-    A: { en: "Just the check, please.", ja: "お会計だけお願いします。" },
-    B: { en: "I'm late for my flight.", ja: "フライトに遅れそうです。" },
-    tip: '「Just the check, please（お会計だけお願いします）」のチェックを求める定番フレーズ。"Can I get the bill?" も同じ意味（billはイギリス英語でも使われます）。Just を使うことで「それだけ」という限定の意味を出します。',
-  },
-  {
-    situation: '🍴 レストラン',
-    prompt: { en: "Is everything okay with your meal?", ja: "お食事はいかがですか？" },
-    correct: 'A',
-    A: { en: "It's wonderful! Compliments to the chef.", ja: "素晴らしいです！シェフに褒め言葉を。" },
-    B: { en: "I'd like a wake-up call at 7.", ja: "7時にモーニングコールをお願いします。" },
-    tip: '「Compliments to the chef!（シェフに拍手・敬意を！）」は料理を褒める最高の言葉。直訳「シェフへの称賛を伝えてください」という意味。wonderful の der がリンクして「ワンダフル」と発音します。',
-  },
-  {
-    situation: '🍴 レストラン',
-    prompt: { en: "Would you like to see the dessert menu?", ja: "デザートメニューをご覧になりますか？" },
-    correct: 'A',
-    A: { en: "Why not? What do you recommend?", ja: "いいですね！何がおすすめですか？" },
-    B: { en: "Two adults and one child, please.", ja: "大人2名と子供1名でお願いします。" },
-    tip: '「Why not?（いいじゃないですか！/もちろんですよ！）」は提案への軽い同意。「What do you recommend?（何がおすすめ？）」も合わせて覚えると、レストランでのやり取りがスムーズになります。',
-  },
-  // ── ビーチ ──
-  {
-    situation: '🏖️ ビーチ',
-    prompt: { en: "Can I rent a surfboard?", ja: "サーフボードを借りられますか？" },
-    correct: 'A',
-    A: { en: "Sure! Have you surfed before?", ja: "もちろん！サーフィンの経験はありますか？" },
-    B: { en: "Check please.", ja: "お会計をお願いします。" },
-    tip: '「Have you 〜 before?（以前に〜したことがありますか？）」は経験を確認する現在完了形。before（以前に）をつけることで「過去の経験」を聞いていることが明確になります。',
-  },
-  {
-    situation: '🏖️ ビーチ',
-    prompt: { en: "Could you take a photo for us?", ja: "写真を撮っていただけますか？" },
-    correct: 'A',
-    A: { en: "Of course! Say cheese!", ja: "もちろん！はい、チーズ！" },
-    B: { en: "Turn left, then right.", ja: "左に曲がって、それから右に。" },
-    tip: '「Say cheese!（はいチーズ！）」は写真を撮る時の定番掛け声。cheese と言う時に口角が上がって笑顔になるから生まれた表現。海外では "Say cheese!" "1,2,3!" などいくつかのパターンがあります。',
-  },
-  {
-    situation: '🏖️ ビーチ',
-    prompt: { en: "The waves look amazing today!", ja: "今日は波がすごい！" },
-    correct: 'A',
-    A: { en: "I know! It's perfect weather.", ja: "そうだね！最高の天気だね。" },
-    B: { en: "I'm checking out today.", ja: "今日チェックアウトします。" },
-    tip: '「I know!（わかる！/そうだよね！）」は相手への強い共感の定番表現。"Perfect weather（完璧な天気）" の perfect はネイティブが大好きな最大級の褒め言葉。weather の th は舌を歯に当てて「ウェザー」と発音します。',
-  },
-  {
-    situation: '🏖️ ビーチ',
-    prompt: { en: "Watch out for the jellyfish!", ja: "クラゲに気をつけて！" },
-    correct: 'A',
-    A: { en: "Oh no! Thanks for the warning!", ja: "えー！警告してくれてありがとう！" },
-    B: { en: "Excellent service, thank you!", ja: "素晴らしいサービスをありがとう！" },
-    tip: '「Watch out for 〜（〜に気をつけて）」は危険を知らせる警告表現。"Be careful of 〜" と同じ意味。Thanks for the warning の warning は「警告」。Watch out! だけでも「危ない！」という緊急の警告になります。',
-  },
-  {
-    situation: '🏖️ ビーチ',
-    prompt: { en: "Would you like some sunscreen?", ja: "日焼け止めはいりますか？" },
-    correct: 'A',
-    A: { en: "Yes, please! I burn easily.", ja: "ぜひ！すぐ日焼けするので。" },
-    B: { en: "I'll take a taxi, thank you.", ja: "タクシーで行きます、ありがとう。" },
-    tip: '「I burn easily（すぐ日焼けする）」の burn は「日焼けする」という意味でも使います。easily（簡単に・すぐに）を加えることで「焼けやすい体質」というニュアンスが出ます。',
-  },
-  // ── ショッピング ──
-  {
-    situation: '🛍️ ショッピング',
-    prompt: { en: "Can I help you find something?", ja: "何かお探しですか？" },
-    correct: 'A',
-    A: { en: "Yes, I'm looking for a souvenir.", ja: "はい、お土産を探しています。" },
-    B: { en: "I've already checked in.", ja: "もうチェックインしました。" },
-    tip: '「I\'m looking for 〜（〜を探しています）」は店での定番フレーズ。look for は「〜を探す」という句動詞。souvenir（お土産）は「スーバニア」のように発音します。フランス語起源の単語です。',
-  },
-  {
-    situation: '🛍️ ショッピング',
-    prompt: { en: "Do you have this in a smaller size?", ja: "これの小さいサイズはありますか？" },
-    correct: 'A',
-    A: { en: "Let me check in the back.", ja: "バックヤードを確認してきます。" },
-    B: { en: "I'll have the salad, please.", ja: "サラダをいただきます。" },
-    tip: '「Let me check in the back（バックヤードを確認してきます）」の back は「バックヤード・倉庫」のこと。Let me は「〜させてください」という申し出の表現。in the back で「奥の方・倉庫」を指します。',
-  },
-  {
-    situation: '🛍️ ショッピング',
-    prompt: { en: "Cash or card?", ja: "現金かカードか、どちらになさいますか？" },
-    correct: 'A',
-    A: { en: "Card, please.", ja: "カードでお願いします。" },
-    B: { en: "Window seat, please.", ja: "窓際の席をお願いします。" },
-    tip: '「Card, please（カードで）」は支払い方法を答える最シンプルな言い方。"I\'ll pay by card" や "Can I use a card?" も同じ場面で使えます。アメリカではクレジット・デビットカードが一般的です。',
-  },
-  {
-    situation: '🛍️ ショッピング',
-    prompt: { en: "Would you like it gift-wrapped?", ja: "ギフト包装はご希望ですか？" },
-    correct: 'A',
-    A: { en: "Yes, please! It's for my family.", ja: "はい！家族へのプレゼントです。" },
-    B: { en: "Extra towels, please.", ja: "タオルを余分にください。" },
-    tip: '「Gift-wrapped（ギフト包装された）」は形容詞として使われる複合語。"for my family" の for は「〜のため」という目的を表す前置詞。ギフト購入時に gift wrap / gift wrapping と言うだけで伝わります。',
-  },
-  {
-    situation: '🛍️ ショッピング',
-    prompt: { en: "Have a nice day!", ja: "良い一日を！" },
-    correct: 'A',
-    A: { en: "You too! Thanks for your help.", ja: "あなたもね！助けてくれてありがとう。" },
-    B: { en: "Just the check, please.", ja: "お会計だけお願いします。" },
-    tip: '「Thanks for your help（助けてくれてありがとう）」は店員さんへのお礼の定番フレーズ。"You too!" は相手の言葉をそのままお返しする最短の返し。"Have a nice day!" に "You too!" だけで完璧な会話になります。',
-  },
-  // ── アクティビティ ──
-  {
-    situation: '🤿 アクティビティ',
-    prompt: { en: "Have you ever snorkeled before?", ja: "シュノーケリングをしたことはありますか？" },
-    correct: 'A',
-    A: { en: "Yes, but I'm still a beginner.", ja: "はい、でもまだ初心者です。" },
-    B: { en: "Medium, please.", ja: "ミディアムでお願いします。" },
-    tip: '「I\'m still a beginner（まだ初心者です）」の still は「まだ」という継続を示す副詞。have you ever 〜? は「今まで〜したことがありますか？」という経験を聞く現在完了形の疑問文です。',
-  },
-  {
-    situation: '🤿 アクティビティ',
-    prompt: { en: "Is this your first time in Hawaii?", ja: "ハワイは初めてですか？" },
-    correct: 'A',
-    A: { en: "Yes! I've always dreamed of coming here.", ja: "はい！ずっと来たかったんです。" },
-    B: { en: "I'll have coffee, please.", ja: "コーヒーをいただきます。" },
-    tip: '「I\'ve always dreamed of 〜（ずっと〜を夢見ていました）」の dreamed of は「〜を夢見る」。現在完了形（have dreamed）で「ずっと前から今まで」という継続の感情を表せます。旅先での会話に最適です。',
-  },
-  {
-    situation: '🤿 アクティビティ',
-    prompt: { en: "Are you enjoying the luau?", ja: "ルアウパーティーは楽しんでますか？" },
-    correct: 'A',
-    A: { en: "It's incredible! The food and music are amazing.", ja: "素晴らしい！食事も音楽も最高です。" },
-    B: { en: "Check-in is at 3 PM.", ja: "チェックインは午後3時です。" },
-    tip: '「It\'s incredible!（信じられないくらい素晴らしい！）」は amazing、wonderful、fantastic の仲間。luau（ルアウ）はハワイの伝統的な宴会・パーティーのこと。旅先で褒める言葉を増やすと会話が弾みます。',
-  },
-  {
-    situation: '🤿 アクティビティ',
-    prompt: { en: "Watch your step!", ja: "足元に気をつけて！" },
-    correct: 'A',
-    A: { en: "Thanks! I almost didn't see that.", ja: "ありがとう！危うく気づかなかったよ。" },
-    B: { en: "I'll be right there.", ja: "すぐ行きます。" },
-    tip: '「I almost didn\'t see that（危うく気づかなかった）」の almost（ほとんど・危うく〜するところだった）は「あと少しで〜だった」という惜しい状況を表します。Watch your step = Look where you\'re going（足元を見て）。',
-  },
-  {
-    situation: '🤿 アクティビティ',
-    prompt: { en: "What time does the tour start?", ja: "ツアーは何時に出発しますか？" },
-    correct: 'A',
-    A: { en: "It departs at 9 AM sharp.", ja: "午前9時きっかりに出発します。" },
-    B: { en: "Just the check, please.", ja: "お会計だけお願いします。" },
-    tip: '「at 9 AM sharp（9時きっかりに）」の sharp は「ちょうど・きっかり」を意味する副詞。"on the dot" も同じ意味。depart（出発する）はより正式な言葉。leave も同じ場面で使えます。',
-  },
-  // ── チェックアウト ──
-  {
-    situation: '🏨 ホテル・チェックアウト',
-    prompt: { en: "I'd like to check out, please.", ja: "チェックアウトをお願いします。" },
-    correct: 'A',
-    A: { en: "Of course. Can I have your room number?", ja: "かしこまりました。お部屋番号をいただけますか？" },
-    B: { en: "Wake-up call at 7, please.", ja: "7時にモーニングコールをお願いします。" },
-    tip: '「I\'d like to 〜（〜したいのですが）」の I\'d like to は "I want to" の丁寧な言い方。ホテルやレストランなどサービス業で使うと好印象。"Can I have your room number?" の can は許可ではなく「〜をもらえますか？」という依頼の用法です。',
-  },
-  {
-    situation: '🏨 ホテル・チェックアウト',
-    prompt: { en: "Did you enjoy your stay?", ja: "ご滞在はいかがでしたか？" },
-    correct: 'A',
-    A: { en: "Absolutely! It was fantastic.", ja: "もちろんです！素晴らしかったです。" },
-    B: { en: "Window seat, please.", ja: "窓際の席をお願いします。" },
-    tip: '「Absolutely!（もちろんです！/まさに！）」は強い肯定・同意を示す表現。"Certainly" "Definitely" "Of course" と同じ場面で使えます。fantastic（素晴らしい）はよく使われる感情豊かな形容詞です。',
-  },
-  {
-    situation: '🏨 ホテル・チェックアウト',
-    prompt: { en: "Would you like to review your bill?", ja: "明細をご確認されますか？" },
-    correct: 'A',
-    A: { en: "Yes, please.", ja: "はい、お願いします。" },
-    B: { en: "Turn left at the traffic light.", ja: "信号を左に曲がってください。" },
-    tip: '「Yes, please（はい、お願いします）」は最シンプルかつ丁寧な返事。review（確認する・見直す）はホテルの会計確認でよく使われます。bill（明細書・請求書）は check とも言います。',
-  },
-  {
-    situation: '🏨 ホテル・チェックアウト',
-    prompt: { en: "We hope to see you again!", ja: "またのお越しをお待ちしております！" },
-    correct: 'A',
-    A: { en: "Definitely! I'll be back for sure.", ja: "絶対また来ます！必ず戻ってきます。" },
-    B: { en: "Just a moment, please.", ja: "少々お待ちください。" },
-    tip: '「I\'ll be back for sure（必ず戻ってきます）」は「ターミネーター」の "I\'ll be back" をもじった形でも有名。for sure（確実に・絶対に）はカジュアルな強調表現。certainly や definitely の口語版です。',
-  },
-  {
-    situation: '🏨 ホテル・チェックアウト',
-    prompt: { en: "Safe travels!", ja: "良いご旅行を！" },
-    correct: 'A',
-    A: { en: "Thank you! I had the best time.", ja: "ありがとうございます！最高の時間でした。" },
-    B: { en: "Can I get a wake-up call?", ja: "モーニングコールをお願いできますか？" },
-    tip: '「I had the best time!（最高の時間でした！）」は旅行の締めくくりにぴったりの表現。"the best" を使うことで「これまでで最高の」という最上級のニュアンスが出ます。Safe travels は旅立つ人への別れの言葉です。',
-  },
-];
-
-const ALL_REVIEW: DialogueItem[] = [...DAILY_DATA, ...HAWAII_DATA];
-
-const COURSES: { id: CourseId; icon: string; title: string; sub: string; color: string; count: number }[] = [
-  { id: 'daily',  icon: '☀️', title: '朝から夜まで\n日常会話コース', sub: '目覚めから就寝まで10シーン・50問', color: 'from-amber-400 to-orange-500', count: DAILY_DATA.length  },
-  { id: 'hawaii', icon: '🌴', title: 'ハワイ旅行\nホテル滞在コース', sub: '空港からチェックアウトまで8シーン・40問',  color: 'from-sky-400 to-cyan-500',   count: HAWAII_DATA.length },
-];
-
-const COURSE_DATA: Record<CourseId, DialogueItem[]> = {
-  daily:  DAILY_DATA,
-  hawaii: HAWAII_DATA,
+const DAILY_COURSE: CourseData = {
+  id: 'daily', icon: '☀️',
+  title: '朝から夜まで完全密着コース',
+  sub: '7チャプター・起床から就寝まで',
+  color: 'from-amber-400 to-orange-500',
+  chapters: [
+    {
+      id: 'daily-ch1', icon: '⏰', title: '起床から洗面所',
+      items: [
+        { prompt: { en: "Your alarm has been going off for ten minutes.", ja: "アラームが10分も鳴り続けてるよ。" }, correct: 'A',
+          A: { en: "Sorry, I'll get up right now.", ja: "ごめん、今すぐ起きる。" },
+          B: { en: "I already turned it off.", ja: "もう止めたよ。" },
+          tip: '「has been going off」は現在完了進行形で「ずっと鳴り続けている」。go off はアラームが「鳴る」という意味。right now（今すぐ）と get up（起きる）は朝の定番フレーズ。' },
+        { prompt: { en: "Good morning! Did you sleep well?", ja: "おはよう！よく眠れた？" }, correct: 'A',
+          A: { en: "Yeah, I slept like a log.", ja: "うん、ぐっすり眠れたよ。" },
+          B: { en: "Not yet, I'm going back to sleep.", ja: "まだ。もう一度寝るよ。" },
+          tip: '「slept like a log（丸太のように眠った）」は深く熟睡したことを表すイディオム。丸太のように動かずぐっすり眠る様子から来ています。対義語は "I couldn\'t sleep a wink"（まったく眠れなかった）。' },
+        { prompt: { en: "The bathroom is free now.", ja: "洗面所、今空いてるよ。" }, correct: 'A',
+          A: { en: "Great, I'll be quick.", ja: "よかった、すぐ終わらせるね。" },
+          B: { en: "I just came out of there.", ja: "今出てきたところだよ。" },
+          tip: '「I\'ll be quick（すぐ終わらせます）」は急ぐことを示す表現。free（空いている）は「無料」以外に「使っていない・空き状態」という意味もあります。The bathroom is free = 洗面所は空いている。' },
+        { prompt: { en: "Can I borrow your hair dryer?", ja: "ヘアドライヤー貸してもらえる？" }, correct: 'A',
+          A: { en: "Sure, it's on the shelf.", ja: "もちろん、棚の上にあるよ。" },
+          B: { en: "I'm using it right now.", ja: "今使ってるよ。" },
+          tip: '「borrow（借りる）」と「lend（貸す）」の使い分けが重要。"Can I borrow ~?"（借りてもいい？）は自分がお願いする側。"on the shelf"（棚の上に）の on は表面接触を示す前置詞。' },
+        { prompt: { en: "Did you forget to buy toothpaste again?", ja: "また歯磨き粉買うの忘れた？" }, correct: 'A',
+          A: { en: "Oh no. I'll pick some up on the way home.", ja: "あ、忘れてた。帰りに買ってくるね。" },
+          B: { en: "I never use toothpaste.", ja: "歯磨き粉は使わないよ。" },
+          tip: '「pick some up（ついでに買ってくる）」の pick up は「立ち寄って買う」という慣用句。"on the way home"（帰り道に）と組み合わせると非常に自然な英語になります。' },
+        { prompt: { en: "You're going to be late if you don't hurry.", ja: "急がないと遅れるよ。" }, correct: 'A',
+          A: { en: "I know! I'm almost ready.", ja: "わかってる！もう少しで準備できる。" },
+          B: { en: "I don't need to go anywhere today.", ja: "今日はどこも行かないよ。" },
+          tip: '「almost ready（もう少しで準備完了）」の almost は「ほとんど・あと少し」。"I\'m almost done"（もうすぐ終わる）など almost は日常で頻出する副詞です。' },
+        { prompt: { en: "Do you want me to start the coffee?", ja: "コーヒー淹れようか？" }, correct: 'A',
+          A: { en: "Yes please! That would be amazing.", ja: "ぜひ！最高だね。" },
+          B: { en: "I already drank the whole pot.", ja: "もうポット全部飲んだよ。" },
+          tip: '「Do you want me to ~?」（〜しようか？）は相手への申し出の定番フレーズ。"That would be amazing"（それは最高）は感謝混じりの喜びの表現。よりカジュアルに "That\'d be great!" とも言えます。' },
+      ],
+    },
+    {
+      id: 'daily-ch2', icon: '🍳', title: '朝食の準備と食事',
+      items: [
+        { prompt: { en: "What do you want for breakfast?", ja: "朝ごはん何がいい？" }, correct: 'A',
+          A: { en: "Toast and eggs would be perfect.", ja: "トーストと卵が完璧だな。" },
+          B: { en: "I already ate three hours ago.", ja: "3時間前にもう食べたよ。" },
+          tip: '「would be perfect（完璧だろうな）」の would は柔らかい仮定の表現。直接 "I want toast" より少し上品に聞こえます。朝食の定番: cereal（シリアル）、pancakes（パンケーキ）、oatmeal（オートミール）。' },
+        { prompt: { en: "The coffee is ready.", ja: "コーヒーできたよ。" }, correct: 'A',
+          A: { en: "Perfect timing! Thank you.", ja: "ちょうどいいタイミング！ありがとう。" },
+          B: { en: "I don't drink coffee.", ja: "コーヒーは飲まないよ。" },
+          tip: '「Perfect timing!（ちょうどいい！）」は何かがジャストタイミングで来た時の定番リアクション。"You have great timing!"（タイミングいいね！）とも言えます。' },
+        { prompt: { en: "How do you like your eggs?", ja: "卵はどんな風に食べたい？" }, correct: 'A',
+          A: { en: "Sunny side up, please.", ja: "目玉焼き（片面焼き）でお願い。" },
+          B: { en: "I like my eggs frozen.", ja: "冷凍した卵が好きだよ。" },
+          tip: '卵の調理法: sunny side up（片面焼き）、over easy（両面焼き半熟）、scrambled（スクランブル）、boiled（ゆで卵）。"How do you like ~?"（どんな風が好き？）は好みを聞く丁寧な表現。' },
+        { prompt: { en: "Can you pass the butter?", ja: "バター取ってくれる？" }, correct: 'A',
+          A: { en: "Sure, here you go.", ja: "もちろん、はい、どうぞ。" },
+          B: { en: "I put it away already.", ja: "もう片付けちゃったよ。" },
+          tip: '「here you go（はい、どうぞ）」は物を渡す時の定番フレーズ。"Here you are." も同じ意味。食卓での "Can you pass the ~?"（〜取ってくれる？）は日常でよく使います。' },
+        { prompt: { en: "This tastes really good!", ja: "これ本当においしい！" }, correct: 'A',
+          A: { en: "I'm glad you like it! I tried a new recipe.", ja: "気に入ってくれて嬉しい！新しいレシピを試したんだ。" },
+          B: { en: "I know, I eat it every day.", ja: "知ってる、毎日食べてるから。" },
+          tip: '「I\'m glad you like it!（気に入ってくれて嬉しい！）」は料理を褒められた時の自然な返し。tried（try の過去形）で「挑戦した」というニュアンスが出ます。' },
+        { prompt: { en: "Are you finished eating?", ja: "もう食べ終わった？" }, correct: 'A',
+          A: { en: "Almost. Just finishing up my coffee.", ja: "ほぼ。コーヒーを飲み終えるところ。" },
+          B: { en: "I haven't started yet.", ja: "まだ始めてもいないよ。" },
+          tip: '「finishing up（仕上げている・終わらせているところ）」の finish up は「完全に終わらせる」ニュアンス。"Just finishing up"で「あともうちょっと」という感じ。Almost（ほとんど）も重要な副詞。' },
+        { prompt: { en: "I'll do the dishes.", ja: "食器洗いは私がやるよ。" }, correct: 'A',
+          A: { en: "Thank you! I'll wipe the table then.", ja: "ありがとう！じゃあテーブル拭くね。" },
+          B: { en: "No, I'll do them myself.", ja: "いや、自分でやるよ。" },
+          tip: '「do the dishes（食器を洗う）」の dishes は「皿洗い全般」を指す表現。"I\'ll wipe the table"（テーブルを拭く）の wipe は「拭く」。家事を自然に分担する会話フレーズです。' },
+      ],
+    },
+    {
+      id: 'daily-ch3', icon: '👔', title: '身支度と外出',
+      items: [
+        { prompt: { en: "What should I wear today?", ja: "今日、何着ればいいかな？" }, correct: 'A',
+          A: { en: "It's supposed to be warm. A light jacket should be fine.", ja: "暖かくなる予定だよ。軽いジャケットでいいんじゃない。" },
+          B: { en: "I'm wearing the same thing as yesterday.", ja: "昨日と同じ服着てるよ。" },
+          tip: '「It\'s supposed to ~（〜の予定・見込み）」は天気予報などで「〜らしい」という時に使う。"A light jacket should be fine"の should は「〜でいいはず」という推量を示します。' },
+        { prompt: { en: "Have you seen my keys anywhere?", ja: "どこかに私の鍵見なかった？" }, correct: 'A',
+          A: { en: "I think I saw them on the kitchen counter.", ja: "キッチンのカウンターにあったと思うよ。" },
+          B: { en: "I don't have any keys.", ja: "鍵は持ってないよ。" },
+          tip: '「Have you seen ~?（〜を見なかった？）」は現在完了で「最近見た？」という確認。"on the kitchen counter"（キッチンカウンターに）の on は「表面の上に」という意味。' },
+        { prompt: { en: "Don't forget to take your umbrella.", ja: "傘を持って行くの忘れないで。" }, correct: 'A',
+          A: { en: "Good call. It looks like it might rain later.", ja: "いい指摘ね。後で雨が降りそうだよね。" },
+          B: { en: "I never use umbrellas.", ja: "傘は絶対使わないよ。" },
+          tip: '「Good call!（いい判断！）」は相手の提案や判断を褒める口語表現。"it looks like it might rain"の might は「〜かもしれない」という低い可能性を表します。' },
+        { prompt: { en: "How do I look?", ja: "どう？（格好はどう？）" }, correct: 'A',
+          A: { en: "You look great! Very professional.", ja: "すごくいいよ！とてもプロらしく見える。" },
+          B: { en: "I can't see you right now.", ja: "今あなたが見えないよ。" },
+          tip: '「How do I look?」は外見・服装を確認する定番フレーズ。"You look + 形容詞"（〜に見える）という形も重要。professional（プロらしい）、sharp（かっこいい）、amazing（すごい）など。' },
+        { prompt: { en: "Do you have everything?", ja: "忘れ物ない？（全部持った？）" }, correct: 'A',
+          A: { en: "I think so. Phone, wallet, keys — all good.", ja: "たぶん大丈夫。スマホ、財布、鍵 — 全部OK。" },
+          B: { en: "I don't need anything.", ja: "何も必要ないよ。" },
+          tip: '「Do you have everything?（全部ある？）」は出かける前の確認フレーズ。"Phone, wallet, keys"は外出時の三種の神器。"all good（全部OK）"はシンプルで使いやすい確認フレーズ。' },
+        { prompt: { en: "I'm heading out now.", ja: "行ってきます。" }, correct: 'A',
+          A: { en: "Have a good day! See you tonight.", ja: "いい一日を！今夜また会おう。" },
+          B: { en: "Where are you going?", ja: "どこに行くの？" },
+          tip: '「I\'m heading out（出かけます）」の head out は「出発する」という意味。日本語の「行ってきます」に最も近い表現。"Have a good day!"（いい一日を！）は朝の別れ際の定番挨拶。' },
+        { prompt: { en: "Text me when you get there safely.", ja: "安全に着いたらメッセージして。" }, correct: 'A',
+          A: { en: "Will do! Take care.", ja: "わかった！気をつけてね。" },
+          B: { en: "I never text anyone.", ja: "誰にもメッセージしないよ。" },
+          tip: '「Will do!（了解！やります！）」は依頼を快く受け入れる短い返事。"I will do it"の短縮で、"Sure!" よりやる気が伝わる表現。"when you get there safely"の safely（安全に）が気遣いを示します。' },
+      ],
+    },
+    {
+      id: 'daily-ch4', icon: '🚃', title: '移動中と午前中',
+      items: [
+        { prompt: { en: "The train is packed today.", ja: "今日、電車がすごく混んでるね。" }, correct: 'A',
+          A: { en: "I know, I can barely move.", ja: "ほんとに、ほとんど動けないよ。" },
+          B: { en: "I love crowded trains.", ja: "混んだ電車が大好き。" },
+          tip: '「packed（ぎゅうぎゅう詰めの）」は「満員の」を表す口語表現。"I can barely move"の barely は「かろうじて〜しかできない」。barely + 動詞のセットで覚えましょう。' },
+        { prompt: { en: "Did you see the news this morning?", ja: "今朝のニュース見た？" }, correct: 'A',
+          A: { en: "No, I didn't have time. What happened?", ja: "見てない、時間なかったよ。何があったの？" },
+          B: { en: "I don't watch the news.", ja: "ニュースは見ないよ。" },
+          tip: '「What happened?（何があったの？）」は出来事を聞く際の自然な返し。see（目に入った）vs watch（意図的に見る）の区別も重要。"I didn\'t have time"（時間がなかった）も頻出表現。' },
+        { prompt: { en: "My stop is coming up.", ja: "もうすぐ私の降りる駅だよ。" }, correct: 'A',
+          A: { en: "Oh already? Time flies.", ja: "もうそんな時間？あっという間だね。" },
+          B: { en: "Stay on the train longer.", ja: "もっと乗り続けて。" },
+          tip: '「coming up（もうすぐ来る）」は near in time という意味。"Time flies（時間が飛ぶように過ぎる）"は時間があっという間だった時の定番フレーズ。比喩的な慣用句として覚えましょう。' },
+        { prompt: { en: "Can we go over the plan for the meeting?", ja: "会議の計画を確認しておこうか？" }, correct: 'A',
+          A: { en: "Sure. Let's run through it quickly.", ja: "いいよ。さっと確認しよう。" },
+          B: { en: "I forgot there was a meeting.", ja: "会議があったの忘れてた。" },
+          tip: '「go over（確認する・おさらいする）」は情報を見直す時のフレーズ。"run through it"（ざっと確認する）はより速く軽く確認するニュアンス。どちらもビジネスでよく使います。' },
+        { prompt: { en: "The coffee machine is broken again.", ja: "またコーヒーマシンが壊れてる。" }, correct: 'A',
+          A: { en: "Oh no, not again. I'll put in a repair request.", ja: "またか、嫌だな。修理依頼を出しておくよ。" },
+          B: { en: "I fixed it yesterday.", ja: "昨日直したよ。" },
+          tip: '「Oh no, not again!（またか！）」は同じことが繰り返された時の嘆き表現。"put in a repair request"（修理依頼を出す）の put in は「提出する・申し込む」。' },
+        { prompt: { en: "Do you have a moment?", ja: "ちょっとよろしいですか？" }, correct: 'A',
+          A: { en: "Sure, what's up?", ja: "もちろん、どうしたの？" },
+          B: { en: "No, I'm leaving right now.", ja: "ダメ、今すぐ出るから。" },
+          tip: '「Do you have a moment?（少しお時間ありますか？）」は相手の時間を借りる丁寧な確認フレーズ。"What\'s up?（どうしたの？）"はカジュアルな返し。ビジネスでは "What can I help you with?" も自然。' },
+        { prompt: { en: "Good morning! Ready for today?", ja: "おはよう！今日の準備はいい？" }, correct: 'A',
+          A: { en: "Morning! Yeah, I've got a full schedule.", ja: "おはよう！うん、スケジュールぎっしりだよ。" },
+          B: { en: "I'm still sleeping.", ja: "まだ寝てるよ。" },
+          tip: '「I\'ve got a full schedule（スケジュールがぎっしり）」の got は have got の口語表現。"I have a lot on my plate today"（今日は手一杯）とも言えます。full（いっぱいの）は日常でよく使う形容詞。' },
+      ],
+    },
+    {
+      id: 'daily-ch5', icon: '🍱', title: '昼食',
+      items: [
+        { prompt: { en: "Where should we go for lunch?", ja: "ランチどこに行こうか？" }, correct: 'A',
+          A: { en: "There's a new ramen place nearby. Want to try it?", ja: "近くに新しいラーメン屋があるよ。試してみる？" },
+          B: { en: "I already ate at my desk.", ja: "もうデスクで食べちゃった。" },
+          tip: '「Want to try it?（試してみる？）」は提案の自然な言い方。"There\'s a + 名詞 + nearby"（近くに〜があるよ）も使いやすい表現。try（試す）は食べ物・場所への挑戦全般に使えます。' },
+        { prompt: { en: "What are you having?", ja: "何を食べるの？" }, correct: 'A',
+          A: { en: "I'm thinking the daily special. What about you?", ja: "日替わりランチにしようかな。あなたは？" },
+          B: { en: "I'm not eating today.", ja: "今日は食べない。" },
+          tip: '「I\'m thinking ~（〜にしようかな）」は考え中・検討中を表す表現。"What about you?"（あなたは？）で会話を相手に返す技術も大切。the daily special = 日替わりランチ。' },
+        { prompt: { en: "Can I get the lunch set with extra rice?", ja: "ランチセットにライスの追加はできますか？" }, correct: 'A',
+          A: { en: "Of course! Would you like small or large?", ja: "もちろんです！小盛りと大盛りどちらにしますか？" },
+          B: { en: "Rice is not included.", ja: "ライスは含まれていません。" },
+          tip: '「Can I get ~?（〜をもらえますか？）」は注文の定番表現。extra（追加の）は頼む時によく使う形容詞。"Would you like small or large?"のような2択で誘導する返しは接客でよく見られます。' },
+        { prompt: { en: "This is really good!", ja: "これ本当においしい！" }, correct: 'A',
+          A: { en: "Right? I come here all the time.", ja: "でしょ？いつも来てるんだ。" },
+          B: { en: "I don't taste anything.", ja: "何も味がしない。" },
+          tip: '「Right?（でしょ？）」は共感・同意を強く求める表現。"I come here all the time"（いつもここに来てる）の all the time は「いつも・しょっちゅう」の強調表現。' },
+        { prompt: { en: "Split the bill or separate checks?", ja: "割り勘にする？それとも別々に？" }, correct: 'A',
+          A: { en: "Let's split it. It'll be easier.", ja: "割り勘にしよう。その方が楽だよ。" },
+          B: { en: "I don't have any money.", ja: "お金を持ってないよ。" },
+          tip: '「split the bill（割り勘）」は代金を分けること。"separate checks"（別々の会計）はレストランで支払いを別にすること。"It\'ll be easier"（その方が楽）の It\'ll は "It will" の短縮形。' },
+        { prompt: { en: "I'm stuffed.", ja: "お腹いっぱいだよ。" }, correct: 'A',
+          A: { en: "Same. That was a huge portion.", ja: "私も。量が多かったよね。" },
+          B: { en: "You should eat more.", ja: "もっと食べたらいいよ。" },
+          tip: '「I\'m stuffed（お腹がいっぱい）」は "I\'m full" より強い「もう無理」な満腹感。"a huge portion"（ものすごく多い量）の portion は「一人前・盛り」。Same.（私も）は短い共感表現。' },
+        { prompt: { en: "Want to grab dessert?", ja: "デザートも食べる？" }, correct: 'A',
+          A: { en: "Why not! Just a little though.", ja: "いいね！でもちょっとだけ。" },
+          B: { en: "I'm on a strict diet.", ja: "厳格なダイエット中なんだ。" },
+          tip: '「grab（つかむ）」は「ちょっと食べる・飲む」というカジュアル動詞。"grab lunch / coffee / a bite"などの形で使います。"Why not!（いいじゃない！）"は断る理由がないのでOKという軽い賛成。' },
+      ],
+    },
+    {
+      id: 'daily-ch6', icon: '🛒', title: '午後から帰宅',
+      items: [
+        { prompt: { en: "I need to stop by the grocery store.", ja: "スーパーに寄っていかないと。" }, correct: 'A',
+          A: { en: "I'll come with you. I need a few things too.", ja: "一緒に行くよ。私もいくつか必要なものがある。" },
+          B: { en: "You don't need to eat.", ja: "食べる必要ないよ。" },
+          tip: '「stop by（立ち寄る）」は目的地の途中でちょっと寄ること。"grocery store"（食料品店・スーパー）はアメリカ英語での言い方。"a few things"（いくつかのもの）も買い物文脈で頻出。' },
+        { prompt: { en: "This is on sale.", ja: "これ、セールだよ。" }, correct: 'A',
+          A: { en: "Oh nice! Let's grab a few extra.", ja: "いいね！多めに買っておこう。" },
+          B: { en: "I don't buy sale items.", ja: "セール品は買わないよ。" },
+          tip: '「on sale（セール中）」と "for sale（売りに出ている）"は違う意味。on sale = 割引セール中。for sale = 売り物として出ている状態。"grab a few extra"（多めに取る）のgrabはカジュアルに「取る」こと。' },
+        { prompt: { en: "Should we get anything for dinner?", ja: "夕食に何か買っていく？" }, correct: 'A',
+          A: { en: "How about pasta? It's quick and easy.", ja: "パスタはどう？早くて簡単だよ。" },
+          B: { en: "We're skipping dinner tonight.", ja: "今夜は夕食なしだよ。" },
+          tip: '「How about ~?（〜はどう？）」は提案の定番フレーズ。"quick and easy"（早くて簡単）は料理の説明でよく使われるセット表現。What about ~? も同じ使い方ができます。' },
+        { prompt: { en: "I'm heading home now.", ja: "今から帰るよ。" }, correct: 'A',
+          A: { en: "Great, I'll see you soon.", ja: "よかった、すぐ会えるね。" },
+          B: { en: "Don't come home.", ja: "帰ってこないで。" },
+          tip: '「heading home（家に向かっている）」の head は方向に向かって動くことを表す動詞。"I\'ll see you soon"（すぐに会えるね）は近い将来に会う時の言葉。soon = in a short time。' },
+        { prompt: { en: "I'm home!", ja: "ただいま！" }, correct: 'A',
+          A: { en: "Welcome back! How was your day?", ja: "おかえり！今日はどうだった？" },
+          B: { en: "You were gone for a long time.", ja: "長い時間いなかったね。" },
+          tip: '「I\'m home!（ただいま！）」は帰宅の定番フレーズ。返答の "Welcome back!（おかえり！）"はどんな帰宅にも使える温かい表現。"How was your day?"（今日はどうだった？）で自然に会話が続きます。' },
+        { prompt: { en: "I'm exhausted. It was a long day.", ja: "疲れたよ。長い一日だったね。" }, correct: 'A',
+          A: { en: "Sit down and relax. Dinner will be ready soon.", ja: "座って休んで。もうすぐ夕食できるよ。" },
+          B: { en: "It was only 8 hours.", ja: "たった8時間だったじゃない。" },
+          tip: '「exhausted（ぐったり疲れた）」は "tired" より強い疲労感。"Sit down and relax"（座って休んで）は帰宅した相手への思いやり。"be ready"（準備できる）は料理完成の定番表現。' },
+        { prompt: { en: "Do you need anything from the kitchen?", ja: "キッチンから何か持ってくる？" }, correct: 'A',
+          A: { en: "Some water would be great, thanks.", ja: "水をもらえると助かる、ありがとう。" },
+          B: { en: "Stay out of my kitchen.", ja: "私のキッチンには入らないで。" },
+          tip: '「Some water would be great（水をもらえると助かる）」の would be great は「〜だと嬉しい・助かる」という丁寧な依頼。"Do you need anything from ~?"は相手に何か持ってくる申し出をする便利な一言。' },
+      ],
+    },
+    {
+      id: 'daily-ch7', icon: '🛁', title: '夕食から就寝',
+      items: [
+        { prompt: { en: "Dinner smells amazing!", ja: "夕食、すごくいい匂い！" }, correct: 'A',
+          A: { en: "I've been cooking for an hour. Hope you like it.", ja: "1時間作ってたんだ。気に入ってくれるといいな。" },
+          B: { en: "I can't smell anything.", ja: "何も匂わないよ。" },
+          tip: '「smells amazing（すごくいい匂い）」の smell は感覚動詞なので進行形にしません。"Hope you like it"（気に入ってくれるといいな）は "I hope you like it" の省略形。料理を振る舞う時の自然な一言。' },
+        { prompt: { en: "What's on TV tonight?", ja: "今夜のテレビ何がある？" }, correct: 'A',
+          A: { en: "There's a documentary I've been wanting to watch.", ja: "ずっと見たかったドキュメンタリーがあるよ。" },
+          B: { en: "I don't own a TV.", ja: "テレビは持ってないよ。" },
+          tip: '「What\'s on TV?（テレビで何やってる？）」は英語の定番フレーズ。"I\'ve been wanting to watch"の現在完了進行形は「ずっと〜したかった」という継続した気持ちを表します。' },
+        { prompt: { en: "Who wants to do the dishes?", ja: "食器洗い、誰かやってくれる？" }, correct: 'A',
+          A: { en: "I'll do it. You cooked, so I'll clean up.", ja: "私がやるよ。あなたが料理してくれたから、私が片付けるね。" },
+          B: { en: "Not me. I'm busy.", ja: "私じゃない。忙しいよ。" },
+          tip: '「You cooked, so I\'ll clean up」（料理してくれたから片付ける）は家事分担の自然な交換条件の表現。"clean up"（片付ける）は皿洗いだけでなく部屋全体の掃除にも使います。' },
+        { prompt: { en: "The bath is ready.", ja: "お風呂が沸いてるよ。" }, correct: 'A',
+          A: { en: "Thank you! I'll hop in.", ja: "ありがとう！すぐ入るね。" },
+          B: { en: "I showered this morning.", ja: "今朝シャワー浴びたよ。" },
+          tip: '「hop in（さっと入る）」の hop は「ぴょんと跳ぶ」が原義ですが、「さっと入る」というカジュアルな意味で使われます。"The bath is ready"は「お風呂が沸いた」に対応する自然な英語表現。' },
+        { prompt: { en: "Are you going to stay up late?", ja: "夜更かしする？" }, correct: 'A',
+          A: { en: "Probably not. I'm already sleepy.", ja: "たぶんしない。もう眠いよ。" },
+          B: { en: "I never sleep at night.", ja: "夜は絶対寝ないよ。" },
+          tip: '「stay up late（夜更かしする）」の stay up は「起きたままでいる」こと。"probably not"（たぶんしない）は柔らかい否定表現。definitely not より確実性が低く、"まあそうなるかな"というニュアンス。' },
+        { prompt: { en: "Don't forget to set your alarm.", ja: "アラームのセットを忘れずに。" }, correct: 'A',
+          A: { en: "Already done! Goodnight.", ja: "もうやったよ！おやすみ。" },
+          B: { en: "I'll stay up all night instead.", ja: "代わりに徹夜するよ。" },
+          tip: '「Already done!（もうやったよ！）」は「もう済んでる」という簡潔な返し。done（完了した）は非常に便利な形容詞。set an alarm = アラームをセットする。Don\'t forget to ~ = 〜を忘れないで。' },
+        { prompt: { en: "Sleep well!", ja: "ゆっくり眠ってね！" }, correct: 'A',
+          A: { en: "You too! See you in the morning.", ja: "あなたもね！また朝に。" },
+          B: { en: "Sleep is for the weak.", ja: "睡眠は弱い人のためにある。" },
+          tip: '「You too!（あなたもね！）」は相手の言葉を相手にそのまま返す最短フレーズ。"See you in the morning"（朝にまた会おう）は同居している場合の就寝前の挨拶。Sleep well! = おやすみなさい。' },
+      ],
+    },
+  ],
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// 🌴 HAWAII COURSE
+// ═══════════════════════════════════════════════════════════════════
+const HAWAII_COURSE: CourseData = {
+  id: 'hawaii', icon: '🌴',
+  title: 'ハワイ旅行 完全シミュレーションコース',
+  sub: '7チャプター・空港からチェックアウトまで',
+  color: 'from-sky-400 to-cyan-500',
+  chapters: [
+    {
+      id: 'hawaii-ch1', icon: '✈️', title: '空港到着・入国審査',
+      items: [
+        { prompt: { en: "Passport, please.", ja: "パスポートをお願いします。" }, correct: 'A',
+          A: { en: "Here you go.", ja: "はい、どうぞ。" },
+          B: { en: "I left it at home.", ja: "家に置いてきました。" },
+          tip: '「Here you go（はい、どうぞ）」は物を渡す時の定番フレーズ。"Here you are." も同じ意味。入国審査でのやり取りは短く明確に答えるのがポイントです。' },
+        { prompt: { en: "What's the purpose of your visit?", ja: "訪問の目的は何ですか？" }, correct: 'A',
+          A: { en: "Sightseeing. Just a vacation.", ja: "観光です。休暇で来ました。" },
+          B: { en: "I'm here to work illegally.", ja: "不法就労に来ました。" },
+          tip: '「Sightseeing（観光）」と "vacation（休暇）" はどちらも観光目的の定番回答。"Just a vacation"の Just で「ただの〜です」と軽く簡潔に答えるコツ。他: business（仕事）、visiting family（家族訪問）。' },
+        { prompt: { en: "How long will you be staying?", ja: "どれくらい滞在されますか？" }, correct: 'A',
+          A: { en: "About a week.", ja: "約1週間です。" },
+          B: { en: "Forever. I'm never leaving.", ja: "永遠に。もう帰りません。" },
+          tip: '「About a week（約1週間）」の about は「約・おおよそ」。数字に自信がなくても about をつければOK。期間の言い方: a few days（数日）、ten days（10日）、two weeks（2週間）。' },
+        { prompt: { en: "Do you have anything to declare?", ja: "申告するものはありますか？" }, correct: 'A',
+          A: { en: "No, nothing to declare.", ja: "いいえ、申告するものはありません。" },
+          B: { en: "Yes, everything in my bag.", ja: "はい、バッグの中のものすべて。" },
+          tip: '「nothing to declare（申告なし）」は税関の定番フレーズ。declare = 申告する・宣言する。申告が必要なもの: food items（食品）、over $10,000 in cash（現金1万ドル以上）。' },
+        { prompt: { en: "Please look at the camera.", ja: "カメラを見てください。" }, correct: 'A',
+          A: { en: "Of course. Like this?", ja: "はい。こんな感じでいいですか？" },
+          B: { en: "I'm camera shy.", ja: "カメラが苦手なんです。" },
+          tip: '「Of course.（もちろんです）」は丁寧にお願いに従う自然な返し。"Like this?"（こんな感じ？）は確認を求める表現。入国審査では指示に従い簡潔に答えるのが基本です。' },
+        { prompt: { en: "Is this your first time visiting Hawaii?", ja: "ハワイは初めての訪問ですか？" }, correct: 'A',
+          A: { en: "Yes! I've always dreamed of coming here.", ja: "はい！ずっと来たかったんです。" },
+          B: { en: "I live here already.", ja: "もうここに住んでいます。" },
+          tip: '「I\'ve always dreamed of coming here（ずっと来たかった）」の "dream of" は「〜を夢見る」。現在完了形で「ずっと前から今まで夢に思っていた」という気持ちを表現します。' },
+        { prompt: { en: "Welcome to Hawaii! Enjoy your stay.", ja: "ハワイへようこそ！良い滞在を。" }, correct: 'A',
+          A: { en: "Thank you so much! We're so excited.", ja: "ありがとうございます！とてもワクワクしています。" },
+          B: { en: "I've been here the whole time.", ja: "ずっとここにいましたけど。" },
+          tip: '「We\'re so excited（とてもワクワクしています）」の excited は「興奮・ワクワク」。"so" をつけると「とても」という強調。感謝と喜びを伝えることで入国審査が温かい雰囲気で終わります。' },
+      ],
+    },
+    {
+      id: 'hawaii-ch2', icon: '🚕', title: 'ホテルへの移動',
+      items: [
+        { prompt: { en: "Excuse me, are you available?", ja: "すみません、乗れますか？（空車ですか？）" }, correct: 'A',
+          A: { en: "Yes! Where are you heading?", ja: "はい！どちらへ向かいますか？" },
+          B: { en: "I'm off duty.", ja: "業務外です。" },
+          tip: '「available（利用可能な）」はタクシーや人が「空いている・利用できる」状態を表す形容詞。"Where are you heading?"（どちらへ？）の head は「〜に向かう」動詞。"Where to?" も同じ意味の短縮形。' },
+        { prompt: { en: "To the BrightonStar Hotel, please.", ja: "ブライトンスターホテルまでお願いします。" }, correct: 'A',
+          A: { en: "Got it. That's about 30 minutes from here.", ja: "了解です。ここから約30分です。" },
+          B: { en: "I don't know that hotel.", ja: "そのホテルは知りません。" },
+          tip: '「Got it（了解）」はドライバーが目的地を理解したという返事。"That\'s about 30 minutes from here"の about は「約〜」。タクシーで行き先を言う時は "To ~, please" が最もシンプルで自然。' },
+        { prompt: { en: "Could you put the AC on? It's really hot.", ja: "エアコンをつけてもらえますか？すごく暑いです。" }, correct: 'A',
+          A: { en: "Sure, no problem.", ja: "はい、もちろんです。" },
+          B: { en: "The AC is already broken.", ja: "エアコンはもう壊れています。" },
+          tip: '「put the AC on（エアコンをつける）」の put on は「（機器を）オンにする・つける」。AC = air conditioning（エアコン）。"Could you ~?"（〜していただけますか？）は丁寧な依頼表現。' },
+        { prompt: { en: "Could you drop me off at the front entrance?", ja: "正面玄関で降ろしてもらえますか？" }, correct: 'A',
+          A: { en: "Of course! We're almost there.", ja: "もちろんです！もうすぐ着きますよ。" },
+          B: { en: "The front entrance is blocked.", ja: "正面玄関は封鎖されています。" },
+          tip: '「drop me off（降ろす）」はタクシーや車から降りる時の定番フレーズ。"We\'re almost there"（もうすぐ着く）の almost は「あと少し」。drop off の逆は pick up（乗せる）。' },
+        { prompt: { en: "Is there much traffic at this time of day?", ja: "この時間帯は交通量が多いですか？" }, correct: 'A',
+          A: { en: "It varies. Rush hour can be pretty bad.", ja: "時によりますね。ラッシュアワーはかなりひどいです。" },
+          B: { en: "I don't drive on busy roads.", ja: "混んだ道は走りません。" },
+          tip: '「It varies（時によります）」の vary は「変化する・様々」。"pretty bad"（かなりひどい）の pretty は「かなり」という副詞。traffic（交通量）は不可算名詞なので a lot of traffic と言います。' },
+        { prompt: { en: "How much is the fare?", ja: "料金はいくらですか？" }, correct: 'A',
+          A: { en: "That'll be $28.50, please.", ja: "28ドル50セントになります。" },
+          B: { en: "Taxis are free in Hawaii.", ja: "ハワイではタクシーは無料です。" },
+          tip: '「That\'ll be ~（〜になります）」は金額を伝える時の丁寧な表現。"That\'ll" = "That will" の短縮形。料金を聞く時は "How much is the fare?" か "What\'s the total?" が自然。fare = 運賃。' },
+        { prompt: { en: "Keep the change.", ja: "おつりはいりません（取っておいて）。" }, correct: 'A',
+          A: { en: "Thank you so much! Have a wonderful stay.", ja: "ありがとうございます！素晴らしい滞在を。" },
+          B: { en: "I need all my change back.", ja: "おつりは全部返してください。" },
+          tip: '「Keep the change（おつりはいらない）」はチップを渡す時の定番フレーズ。アメリカでは運転手へのチップは料金の15〜20%が目安。driver\'s reply: "Thank you so much!"が自然。' },
+      ],
+    },
+    {
+      id: 'hawaii-ch3', icon: '🏨', title: 'ホテルチェックイン',
+      items: [
+        { prompt: { en: "Welcome! Do you have a reservation?", ja: "いらっしゃいませ！ご予約はありますか？" }, correct: 'A',
+          A: { en: "Yes, I have a reservation under Tanaka.", ja: "はい、田中の名前で予約しています。" },
+          B: { en: "No, I just showed up.", ja: "いいえ、ふらっと来ました。" },
+          tip: '「reservation under ~（〜の名前で予約）」の under は「〜という名前で」という意味。"I have a reservation"（予約があります）はホテルで必ず使う表現。under + 名字が最も自然。' },
+        { prompt: { en: "Can I see your passport and credit card?", ja: "パスポートとクレジットカードを拝見できますか？" }, correct: 'A',
+          A: { en: "Sure, here they are.", ja: "はい、どうぞ。" },
+          B: { en: "I only have cash.", ja: "現金しか持っていません。" },
+          tip: '「here they are（はい、こちらです）」は複数のものを渡す時の表現。1つの場合は "here it is"。パスポートとクレジットカードの2つなので "they" を使います。' },
+        { prompt: { en: "We have you booked for three nights, is that right?", ja: "3泊のご予約ですね、よろしかったでしょうか？" }, correct: 'A',
+          A: { en: "Yes, that's correct. From the 10th to the 13th.", ja: "はい、その通りです。10日から13日まで。" },
+          B: { en: "I want to stay forever.", ja: "永遠に泊まりたいです。" },
+          tip: '「that\'s correct（その通りです）」は確認への同意表現。"From the 10th to the 13th"はチェックイン・チェックアウト日を伝える標準的な形式。Is that right? = よろしかったでしょうか？という確認。' },
+        { prompt: { en: "Would you prefer a room with an ocean view?", ja: "オーシャンビューのお部屋はいかがですか？" }, correct: 'A',
+          A: { en: "Absolutely! If it's available, please.", ja: "ぜひ！空いていればお願いします。" },
+          B: { en: "I don't like looking at the ocean.", ja: "海を見るのは好きじゃないです。" },
+          tip: '「Absolutely!（ぜひ！もちろん！）」は強い肯定の表現。"If it\'s available"（空いていれば）は条件付きで依頼する丁寧な言い方。ocean view（海の見える眺め）は旅行での重要キーワード。' },
+        { prompt: { en: "Is there anything special for your stay?", ja: "滞在中に特別なご要望はありますか？" }, correct: 'A',
+          A: { en: "Could we get extra towels? We have two people.", ja: "タオルを多めにもらえますか？2人なので。" },
+          B: { en: "I want room service every hour.", ja: "1時間ごとにルームサービスをお願いします。" },
+          tip: '「extra towels（追加のタオル）」の extra は「追加の・余分の」。"We have two people"（2人です）は理由を自然に添える方法。ホテルスタッフへのお願いは "Could we get ~?"が丁寧。' },
+        { prompt: { en: "Checkout is at 11 AM. Is that okay?", ja: "チェックアウトは午前11時です。よろしいですか？" }, correct: 'A',
+          A: { en: "That works for us. Thank you.", ja: "問題ありません。ありがとうございます。" },
+          B: { en: "I never check out. I'll live here.", ja: "チェックアウトはしません。ここに住みます。" },
+          tip: '「That works for us（私たちには問題ありません）」の "That works" は「それで大丈夫・都合がいい」。"for us" で「私たちには」を追加。checkout時間は11時〜12時が一般的です。' },
+        { prompt: { en: "Here's your room key. Your room is 1204.", ja: "お部屋の鍵です。1204号室になります。" }, correct: 'A',
+          A: { en: "Thank you! Could you show me how to get there?", ja: "ありがとうございます！行き方を教えていただけますか？" },
+          B: { en: "I know where it is already.", ja: "場所はもう知っています。" },
+          tip: '「Could you show me how to get there?」はホテルで部屋への道を聞く自然な表現。"show me how to"（〜の方法を見せて）は道順だけでなく操作方法を聞く時にも使えます。' },
+      ],
+    },
+    {
+      id: 'hawaii-ch4', icon: '🍽️', title: 'カフェ・プレートランチ',
+      items: [
+        { prompt: { en: "Welcome in! Table for how many?", ja: "いらっしゃいませ！何名様ですか？" }, correct: 'A',
+          A: { en: "Two, please.", ja: "2名お願いします。" },
+          B: { en: "I'm eating alone but I need five tables.", ja: "1人ですが、テーブル5つ必要です。" },
+          tip: '「Two, please（2名お願いします）」はシンプルかつ明確な答え方。"Table for how many?"（何名様？）の答えは人数 + please だけでOK。"A table for two"（2名用のテーブル）という言い方も使えます。' },
+        { prompt: { en: "Can I get you started with something to drink?", ja: "まずお飲み物はいかがですか？" }, correct: 'A',
+          A: { en: "Yes, I'll have a water and an iced tea.", ja: "はい、お水とアイスティーをください。" },
+          B: { en: "I only drink at home.", ja: "飲み物は家でしか飲みません。" },
+          tip: '「I\'ll have ~（〜をいただきます）」は注文の定番表現。水は "just water"、"still water（炭酸なし）"、"sparkling water（炭酸水）"。"Can I get you started with"は接客でよく使う丁寧なフレーズ。' },
+        { prompt: { en: "What do you recommend?", ja: "おすすめは何ですか？" }, correct: 'A',
+          A: { en: "The plate lunch is very popular here. It comes with rice and mac salad.", ja: "プレートランチがとても人気です。ライスとマカロニサラダがついています。" },
+          B: { en: "I recommend the place next door.", ja: "隣のお店をおすすめします。" },
+          tip: '「What do you recommend?」はレストランでの必須フレーズ。plate lunch（プレートランチ）はハワイの名物料理。"It comes with ~"（〜がついています）は付け合わせを説明する時の表現。mac salad = macaroni salad。' },
+        { prompt: { en: "Can I customize my order?", ja: "注文をカスタマイズできますか？" }, correct: 'A',
+          A: { en: "Of course! What would you like to change?", ja: "もちろんです！何を変えますか？" },
+          B: { en: "The menu is fixed. No changes.", ja: "メニューは固定です。変更はできません。" },
+          tip: '「customize（カスタマイズする）」はファストフードやカフェでの注文変更を指します。"What would you like to change?"の would like to は want to の丁寧な言い方。アメリカの外食文化ではカスタマイズは一般的。' },
+        { prompt: { en: "Is everything all right here?", ja: "お料理はいかがでしょうか？" }, correct: 'A',
+          A: { en: "Everything is great, thank you!", ja: "全部最高です、ありがとう！" },
+          B: { en: "Yes, I'm fine. Stop asking.", ja: "はい、大丈夫です。もう聞かないで。" },
+          tip: '「Is everything all right?（お料理はいかがですか？）」は食事中の店員チェックインフレーズ。"Everything is great"（全部最高）はポジティブな返答の定番。"Is everything okay?" も同じ意味。' },
+        { prompt: { en: "Would you like a dessert menu?", ja: "デザートメニューをご覧になりますか？" }, correct: 'A',
+          A: { en: "Yes please! I heard the haupia is amazing.", ja: "はい！ハウピアが最高と聞いています。" },
+          B: { en: "Dessert is not healthy.", ja: "デザートは健康的ではありません。" },
+          tip: '「I heard ~（〜と聞きました）」は間接情報を伝える表現。haupia（ハウピア）はハワイの伝統的なコナッツプリン。"Would you like ~?"（〜はいかがですか？）は上品な提案フレーズ。' },
+        { prompt: { en: "Can we get the check, please?", ja: "お会計をお願いします。" }, correct: 'A',
+          A: { en: "Of course! I'll bring it right out.", ja: "はい！すぐにお持ちします。" },
+          B: { en: "We don't have checks here.", ja: "当店では小切手はありません。" },
+          tip: '「get the check（お会計）」のcheckはアメリカ英語での「請求書」。イギリス英語では "bill" を使います。"I\'ll bring it right out"の right out = immediately（すぐに）。' },
+      ],
+    },
+    {
+      id: 'hawaii-ch5', icon: '🛍️', title: 'ショッピング',
+      items: [
+        { prompt: { en: "Can I help you find anything?", ja: "何かお探しですか？" }, correct: 'A',
+          A: { en: "Yes! I'm looking for a souvenir for my parents.", ja: "はい！両親へのお土産を探しています。" },
+          B: { en: "I don't need your help.", ja: "お手伝いは不要です。" },
+          tip: '「I\'m looking for ~（〜を探しています）」はショッピングで必須のフレーズ。souvenir（お土産）はフランス語由来の単語。"for my parents"（両親のために）の for は目的・用途を表す前置詞。' },
+        { prompt: { en: "Do you have this in a different size?", ja: "これの違うサイズはありますか？" }, correct: 'A',
+          A: { en: "Let me check in the back for you.", ja: "バックヤードで確認してきます。" },
+          B: { en: "That's the only size we carry.", ja: "それが唯一のサイズです。" },
+          tip: '「in the back（バックヤードに・奥に）」は店の倉庫や在庫を保管している場所のこと。"Let me check"（確認してきます）の let me は「〜させてください」という申し出の表現。' },
+        { prompt: { en: "Can I try this on?", ja: "試着できますか？" }, correct: 'A',
+          A: { en: "Of course! The fitting rooms are right over there.", ja: "もちろんです！試着室はあちらです。" },
+          B: { en: "We don't allow trying on clothes.", ja: "試着はできません。" },
+          tip: '「try ~ on（試着する）」の try on は服や靴を「身につけて試す」こと。fitting room（試着室）はアメリカ英語で、イギリスでは changing room と言います。"right over there"の right は「ちょうど・すぐ」という強調副詞。' },
+        { prompt: { en: "How does it fit?", ja: "サイズはいかがですか？" }, correct: 'A',
+          A: { en: "It's a little tight around the shoulders.", ja: "肩のところが少しきついです。" },
+          B: { en: "I can't put it on.", ja: "着られませんでした。" },
+          tip: '「fit（合う・フィットする）」はサイズ感を表す動詞。"tight（きつい）" ↔ "loose（ゆるい）"。"around the shoulders"（肩のあたりが）のように体の部位には around を使います。"fits perfectly"（ぴったり）も重要表現。' },
+        { prompt: { en: "Do you do tax refunds for tourists?", ja: "観光客向けの税金の払い戻しはありますか？" }, correct: 'A',
+          A: { en: "Yes! You'll need your passport for that.", ja: "はい！そのためにパスポートが必要になります。" },
+          B: { en: "Tourists pay double tax.", ja: "観光客は税金が2倍です。" },
+          tip: '「tax refund（税金の払い戻し・免税）」は旅行者が受けられる制度。"You\'ll need ~"（〜が必要です）の will は将来の見通し。パスポートを提示することが多くの国での免税の条件です。' },
+        { prompt: { en: "I'll take this one.", ja: "これをいただきます（買います）。" }, correct: 'A',
+          A: { en: "Great choice! Will that be cash or card?", ja: "素晴らしいお選びです！現金ですかカードですか？" },
+          B: { en: "You can't buy that.", ja: "それは購入できません。" },
+          tip: '「I\'ll take this one（これにします）」は購入を決めた時の定番フレーズ。"Great choice!"（素晴らしいお選び！）は店員の定番リアクション。"cash or card?"（現金かカードか？）はお会計前の確認フレーズ。' },
+        { prompt: { en: "Would you like it gift-wrapped?", ja: "ギフト包装はご希望ですか？" }, correct: 'A',
+          A: { en: "Yes please! It's a present for someone.", ja: "はい！誰かへのプレゼントです。" },
+          B: { en: "I hate wrapping paper.", ja: "包装紙が嫌いです。" },
+          tip: '「gift-wrapped（ギフト包装された）」の gift-wrap は「プレゼント用に包む」動詞。"for someone"（誰かのために）はプレゼントだと伝える自然な表現。"Could you wrap it as a gift?"とも言えます。' },
+      ],
+    },
+    {
+      id: 'hawaii-ch6', icon: '🍷', title: 'ディナー',
+      items: [
+        { prompt: { en: "Good evening. Do you have a reservation?", ja: "こんばんは。ご予約はございますか？" }, correct: 'A',
+          A: { en: "Yes, it's under Sato. A table for two.", ja: "はい、佐藤の名前です。2名です。" },
+          B: { en: "No, but I'm very hungry.", ja: "ありません。でもとてもお腹が空いています。" },
+          tip: '「A table for two（2名のテーブル）」は予約確認と同時に人数を伝える効率的な表現。"under + 名前"は予約名の表現。ディナーでは予約がある場合、名前と人数をセットで伝えましょう。' },
+        { prompt: { en: "Can I tell you about our specials tonight?", ja: "本日のスペシャルメニューをお伝えしてもよろしいですか？" }, correct: 'A',
+          A: { en: "Please! We'd love to hear.", ja: "ぜひ！聞かせてください。" },
+          B: { en: "We already know everything.", ja: "もう全部知っています。" },
+          tip: '「We\'d love to hear（ぜひ聞きたいです）」の "would love to" は "want to" より丁寧で熱意がある表現。スペシャルメニューはレストランで毎日変わる特別な料理のこと。Please! = ぜひ！という短い同意。' },
+        { prompt: { en: "How would you like your steak cooked?", ja: "ステーキの焼き加減はいかがなさいますか？" }, correct: 'A',
+          A: { en: "Medium rare, please.", ja: "ミディアムレアでお願いします。" },
+          B: { en: "I want it completely burned.", ja: "真っ黒に焦がしてください。" },
+          tip: 'ステーキの焼き加減: rare（レア）→ medium rare（ミディアムレア）→ medium（ミディアム）→ medium well（ミディアムウェル）→ well done（ウェルダン）。"How would you like it cooked?"は焼き加減を聞く定番フレーズ。' },
+        { prompt: { en: "What wine would you recommend with this?", ja: "これに合うワインは何がいいでしょうか？" }, correct: 'A',
+          A: { en: "The Pinot Noir pairs very well with that dish.", ja: "ピノ・ノワールがそのお料理によく合います。" },
+          B: { en: "Wine and food don't go together.", ja: "ワインと食事は合いません。" },
+          tip: '「pair with（〜に合わせる・ペアリングする）」はワインと食事の組み合わせを表す動詞。Pinot Noir（ピノ・ノワール）は代表的な赤ワイン。"What do you recommend with ~?"は丁寧な質問フレーズ。' },
+        { prompt: { en: "Is everything to your liking?", ja: "お料理はお口に合っていますか？" }, correct: 'A',
+          A: { en: "It's wonderful! The steak is perfectly cooked.", ja: "素晴らしいです！ステーキが完璧な焼き加減です。" },
+          B: { en: "I've had better.", ja: "もっとおいしいものを食べたことあります。" },
+          tip: '「to your liking（お気に召して）」はフォーマルな接客表現。"perfectly cooked"（完璧な焼き加減）の perfectly は「理想通りに・完璧に」。料理を褒める表現: delicious, divine, incredible など。' },
+        { prompt: { en: "Would you like to see the dessert menu?", ja: "デザートメニューをご覧になりますか？" }, correct: 'A',
+          A: { en: "Yes, but just a small one. I'm quite full.", ja: "はい、でも少しだけ。かなりお腹いっぱいです。" },
+          B: { en: "I only eat dessert.", ja: "デザートしか食べません。" },
+          tip: '「just a small one（ちょっとだけ）」は遠慮しながらも注文する柔らかい表現。"quite full"（かなりお腹いっぱい）の quite は「かなり」という強調副詞。Would you like to ~? は丁寧な提案フレーズ。' },
+        { prompt: { en: "It was a pleasure serving you this evening.", ja: "本日はお越しいただきありがとうございました。" }, correct: 'A',
+          A: { en: "Thank you! Everything was absolutely wonderful.", ja: "ありがとう！全てが本当に素晴らしかったです。" },
+          B: { en: "The service was slow.", ja: "サービスが遅かったです。" },
+          tip: '「a pleasure serving you（お役に立てて光栄）」は高級レストランでの丁寧なお見送り表現。"absolutely wonderful"（本当に素晴らしい）の absolutely は very より強い強調。旅先での感謝表現を積極的に使いましょう。' },
+      ],
+    },
+    {
+      id: 'hawaii-ch7', icon: '🧳', title: 'チェックアウトと帰国',
+      items: [
+        { prompt: { en: "Good morning! Checking out today?", ja: "おはようございます！本日チェックアウトですか？" }, correct: 'A',
+          A: { en: "Yes, we're leaving this morning.", ja: "はい、今朝出発します。" },
+          B: { en: "No, I'm staying another week.", ja: "いいえ、もう1週間泊まります。" },
+          tip: '「we\'re leaving this morning（今朝出発します）」の leaving は「出発する・離れる」。"this morning"（今朝）は "in the morning" ではなく "this" を使うことに注意。leave = go away from a place。' },
+        { prompt: { en: "Could we store our luggage until our flight?", ja: "フライトまで荷物を預かってもらえますか？" }, correct: 'A',
+          A: { en: "Absolutely! We'll hold it at the front desk.", ja: "もちろんです！フロントで預かります。" },
+          B: { en: "Luggage storage costs extra.", ja: "荷物預かりは追加料金がかかります。" },
+          tip: '「store our luggage（荷物を預ける）」の store は「保管する・預ける」。"hold it at the front desk"の hold は「保持する・保管する」。luggage（荷物）は不可算名詞なので "our luggage"（luggage\'s は使わない）。' },
+        { prompt: { en: "How was your stay overall?", ja: "総じてご滞在はいかがでしたか？" }, correct: 'A',
+          A: { en: "It was absolutely wonderful. We'll definitely be back.", ja: "本当に素晴らしかったです。必ずまた来ます。" },
+          B: { en: "It was just okay.", ja: "まあまあでした。" },
+          tip: '「absolutely wonderful（本当に素晴らしかった）」の absolutely は very の強い強調表現。"We\'ll definitely be back"（必ずまた来ます）の definitely は確信を示す副詞。旅の締めくくりに感謝を伝えましょう。' },
+        { prompt: { en: "Let me call you a cab to the airport.", ja: "空港へのタクシーを呼びましょうか。" }, correct: 'A',
+          A: { en: "That would be wonderful, thank you!", ja: "それは助かります、ありがとう！" },
+          B: { en: "I'll walk to the airport.", ja: "空港まで歩いて行きます。" },
+          tip: '「Let me call you a cab（タクシーを呼びましょう）」の let me は「〜させてください」という申し出。cab（タクシー）は taxi の口語表現。"That would be wonderful"（それは素晴らしい）は申し出を丁寧に受け入れる表現。' },
+        { prompt: { en: "Is there anything we can improve for next time?", ja: "次回のためにご意見はございますか？" }, correct: 'A',
+          A: { en: "Nothing major. You've been incredibly welcoming.", ja: "特にないです。本当に温かく歓迎してくださいました。" },
+          B: { en: "Everything was terrible.", ja: "全部ひどかったです。" },
+          tip: '「nothing major（特に大きな問題はない）」の major は「重大な・主要な」。"incredibly welcoming"（信じられないほど温かい歓迎）の incredibly は非常に強い強調。welcoming は形容詞として使えます。' },
+        { prompt: { en: "Safe travels! Hope to see you again.", ja: "良いご旅行を！またお会いできることを願っています。" }, correct: 'A',
+          A: { en: "Thank you for everything! This was an unforgettable trip.", ja: "全てに感謝します！忘れられない旅行でした。" },
+          B: { en: "I won't miss Hawaii at all.", ja: "ハワイが全然恋しくないです。" },
+          tip: '「Safe travels（安全な旅を）」は旅立つ人への別れの言葉。"unforgettable trip"（忘れられない旅）の unforgettable = un-（否定）+ forgettable（忘れられる）= 忘れられない。旅行の締めくくりにぴったりの言葉。' },
+        { prompt: { en: "Your flight boards in two hours. You're all set!", ja: "搭乗まで2時間です。準備万端ですね！" }, correct: 'A',
+          A: { en: "Perfect. We'll head to the gate now.", ja: "完璧です。今からゲートに向かいます。" },
+          B: { en: "I missed my flight already.", ja: "もうフライトを逃しました。" },
+          tip: '「you\'re all set（準備万端です）」はホテルや店で「準備完了・大丈夫ですよ」と伝える表現。"head to the gate"（ゲートに向かう）の head to は「〜に向かう」。boards（搭乗開始する）も空港で使う重要な動詞。' },
+      ],
+    },
+  ],
+};
+
+// ─── Course map ───────────────────────────────────────────────────
+const ALL_COURSES: Record<CourseId, CourseData> = {
+  daily: DAILY_COURSE,
+  hawaii: HAWAII_COURSE,
+};
+
+// ─── Flatten all items for review mode ───────────────────────────
+interface ReviewEntry { item: DialogueItem; chapterTitle: string; icon: string; }
+function getAllReviewItems(): ReviewEntry[] {
+  const out: ReviewEntry[] = [];
+  for (const c of [DAILY_COURSE, HAWAII_COURSE]) {
+    for (const ch of c.chapters) {
+      for (const item of ch.items) {
+        out.push({ item, chapterTitle: ch.title, icon: ch.icon });
+      }
+    }
+  }
+  return out;
+}
+const ALL_REVIEW_ITEMS = getAllReviewItems();
 
 // ═══════════════════════════════════════════════════════════════════
 // Main Component
 // ═══════════════════════════════════════════════════════════════════
-type Mode   = 'study' | 'review';
-type Filter = 'all'   | 'needs';
-
 export function StoryDialogue() {
-  const [mode,     setMode]     = useState<Mode>('study');
-  const [filter,   setFilter]   = useState<Filter>('all');
+  // ── Navigation ──
+  const [screen,     setScreen]     = useState<Screen>('course');
+  const [courseId,   setCourseId]   = useState<CourseId | null>(null);
+  const [chapterIdx, setChapterIdx] = useState(0);
+
+  // ── Dialogue quiz ──
+  const [dialogueIdx,     setDialogueIdx]     = useState(0);
+  const [chosen,          setChosen]          = useState<'A'|'B'|null>(null);
+  const [flash,           setFlash]           = useState<'ok'|'ng'|null>(null);
+  const [chapterCorrect,  setChapterCorrect]  = useState(0);
+  const [chapterTotal,    setChapterTotal]    = useState(0);
+
+  // ── Mini-test ──
+  const [testItems,   setTestItems]   = useState<DialogueItem[]>([]);
+  const [testIdx,     setTestIdx]     = useState(0);
+  const [testChosen,  setTestChosen]  = useState<'A'|'B'|null>(null);
+  const [testRevealed,setTestRevealed]= useState(false);
+  const [testCorrect, setTestCorrect] = useState(0);
+  const [testWrong,   setTestWrong]   = useState<DialogueItem[]>([]);
+
+  // ── Review mode ──
+  const [mode,      setMode]      = useState<Mode>('study');
+  const [filter,    setFilter]    = useState<Filter>('all');
   const [memorized, setMemorized] = useState<Set<string>>(() => {
     if (typeof window === 'undefined') return new Set<string>();
     try {
-      const stored = localStorage.getItem(LS_MEMO);
-      return stored ? new Set<string>(JSON.parse(stored) as string[]) : new Set<string>();
+      const s = localStorage.getItem(LS_MEMO);
+      return s ? new Set<string>(JSON.parse(s) as string[]) : new Set<string>();
     } catch { return new Set<string>(); }
   });
 
@@ -836,347 +597,546 @@ export function StoryDialogue() {
     });
   }, []);
 
-  const [course,   setCourse]   = useState<CourseId | null>(null);
-  const [deck,     setDeck]     = useState<DialogueItem[]>([]);
-  const [idx,      setIdx]      = useState(0);
-  const [chosen,   setChosen]   = useState<'A'|'B'|null>(null);
-  const [flash,    setFlash]    = useState<'ok'|'ng'|null>(null);
-  const [correct,  setCorrect]  = useState(0);
-  const [total,    setTotal]    = useState(0);
+  // ── Derived ──
+  const course  = courseId ? ALL_COURSES[courseId] : null;
+  const chapter = course ? course.chapters[chapterIdx] : null;
+  const dialogueItem = chapter ? chapter.items[dialogueIdx] : null;
+  const testItem = testItems[testIdx] ?? null;
+  const memoCount = memorized.size;
+  const reviewItems = filter === 'needs'
+    ? ALL_REVIEW_ITEMS.filter(r => !memorized.has(r.item.prompt.en))
+    : ALL_REVIEW_ITEMS;
 
-  const item = deck[idx % deck.length] as DialogueItem | undefined;
+  // ── Handlers ──
+  const goToCourse = useCallback(() => {
+    window.speechSynthesis?.cancel();
+    setScreen('course');
+    setCourseId(null);
+  }, []);
 
-  // 選択したコースのデッキをシャッフルして開始
   const startCourse = useCallback((id: CourseId) => {
-    setDeck(shuffle(COURSE_DATA[id]));
-    setCourse(id);
-    setIdx(0);
+    setCourseId(id);
+    setScreen('chapters');
+  }, []);
+
+  const startChapter = useCallback((chapIdx: number) => {
+    setChapterIdx(chapIdx);
+    setDialogueIdx(0);
     setChosen(null);
     setFlash(null);
-    setCorrect(0);
-    setTotal(0);
+    setChapterCorrect(0);
+    setChapterTotal(0);
+    setScreen('dialogue');
   }, []);
 
-  // リセット時にSpeechSynthesisを止める
-  const resetToMenu = useCallback(() => {
-    window.speechSynthesis?.cancel();
-    setCourse(null);
-    setDeck([]);
-  }, []);
+  const startMiniTest = useCallback((chapIdx: number) => {
+    if (!course) return;
+    setChapterIdx(chapIdx);
+    const items = shuffle(course.chapters[chapIdx].items).slice(0, Math.min(7, course.chapters[chapIdx].items.length));
+    setTestItems(items);
+    setTestIdx(0);
+    setTestChosen(null);
+    setTestRevealed(false);
+    setTestCorrect(0);
+    setTestWrong([]);
+    setScreen('minitest');
+  }, [course]);
 
-  // 選択処理
   const handleChoose = useCallback((choice: 'A'|'B') => {
-    if (chosen || !item) return;
+    if (chosen || !dialogueItem) return;
     setChosen(choice);
-    setTotal(t => t + 1);
-    if (choice === item.correct) {
-      setCorrect(c => c + 1);
-      setFlash('ok');
-    } else {
-      setFlash('ng');
-    }
-  }, [chosen, item]);
+    setChapterTotal(t => t + 1);
+    const ok = choice === dialogueItem.correct;
+    setFlash(ok ? 'ok' : 'ng');
+    if (ok) setChapterCorrect(c => c + 1);
+  }, [chosen, dialogueItem]);
 
-  // 次の問題へ
   const handleNext = useCallback(() => {
     window.speechSynthesis?.cancel();
-    if (idx + 1 >= deck.length) {
-      setDeck(shuffle(deck));
-      setIdx(0);
+    if (!chapter) return;
+    if (dialogueIdx + 1 >= chapter.items.length) {
+      setScreen('chapter-end');
     } else {
-      setIdx(i => i + 1);
+      setDialogueIdx(i => i + 1);
+      setChosen(null);
+      setFlash(null);
     }
-    setChosen(null);
-    setFlash(null);
-  }, [idx, deck]);
+  }, [chapter, dialogueIdx]);
 
-  useEffect(() => {
-    setChosen(null);
-    setFlash(null);
-  }, [idx]);
+  const handleTestChoose = useCallback((choice: 'A'|'B') => {
+    if (testChosen || !testItem) return;
+    setTestChosen(choice);
+    setTestRevealed(true);
+    const ok = choice === testItem.correct;
+    if (ok) setTestCorrect(c => c + 1);
+    else setTestWrong(w => [...w, testItem]);
+  }, [testChosen, testItem]);
 
-  const pct = total > 0 ? Math.round(correct / total * 100) : 0;
+  const handleTestNext = useCallback(() => {
+    window.speechSynthesis?.cancel();
+    if (testIdx + 1 >= testItems.length) {
+      setScreen('test-results');
+    } else {
+      setTestIdx(i => i + 1);
+      setTestChosen(null);
+      setTestRevealed(false);
+    }
+  }, [testIdx, testItems.length]);
 
-  // ══ コース選択画面 / 復習画面 ══
-  if (!course) {
-    const reviewItems = filter === 'needs'
-      ? ALL_REVIEW.filter(it => !memorized.has(it.prompt.en))
-      : ALL_REVIEW;
-    const memoCount = memorized.size;
+  // ══════════════════════════════════════════════════════
+  // REVIEW MODE (shown on course screen when mode=review)
+  // ══════════════════════════════════════════════════════
+  const ModeTabs = (
+    <div className="flex bg-gray-100 rounded-2xl p-1 mb-4">
+      {([['study', '📖 学習する'], ['review', '✅ 復習する']] as [Mode, string][]).map(([m, label]) => (
+        <button key={m} onClick={() => setMode(m as Mode)}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-black transition-all ${
+            mode === m ? 'bg-gray-900 text-white shadow-md' : 'text-gray-700'
+          }`}>
+          {label}
+          {m === 'review' && (
+            <span className={`ml-1.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+              mode === 'review' ? 'bg-white/20 text-white' : 'bg-gray-300 text-gray-700'
+            }`}>{memoCount}/{ALL_REVIEW_ITEMS.length}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
 
-    return (
-      <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
-
-        {/* ── 学習 / 復習 モードタブ ── */}
-        <div className="flex bg-gray-100 rounded-2xl p-1 mb-4">
-          {([['study', '📖 学習する'], ['review', '✅ 復習する']] as [Mode, string][]).map(([m, label]) => (
-            <button key={m} onClick={() => setMode(m)}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-black transition-all ${
-                mode === m
-                  ? 'bg-gray-900 text-white shadow-md'
-                  : 'text-gray-700'
-              }`}>
-              {label}
-              {m === 'review' && (
-                <span className={`ml-1.5 text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-                  mode === 'review' ? 'bg-white/20 text-white' : 'bg-gray-300 text-gray-700'
-                }`}>
-                  {memoCount}/{ALL_REVIEW.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {mode === 'study' ? (
-          /* ── 学習モード: コース選択 ── */
-          <div className="space-y-4">
-            <div className="text-center py-2">
-              <p className="text-xl font-black text-gray-900">🗣️ ストーリー対話特訓</p>
-              <p className="text-xs font-bold text-gray-700 mt-1">コースを選んでスタート！</p>
+  // ══ SCREEN: course ══
+  if (screen === 'course') {
+    if (mode === 'review') {
+      return (
+        <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
+          {ModeTabs}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs font-black text-gray-800 flex-1">全{ALL_REVIEW_ITEMS.length}問・覚えた: {memoCount}問</span>
+            <div className="flex bg-gray-100 rounded-xl p-0.5">
+              {([['all', 'すべて'], ['needs', '要復習']] as [Filter, string][]).map(([f, label]) => (
+                <button key={f} onClick={() => setFilter(f as Filter)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${filter === f ? 'bg-gray-900 text-white shadow' : 'text-gray-700'}`}>
+                  {label}
+                </button>
+              ))}
             </div>
-            {COURSES.map(c => (
-              <button key={c.id} onClick={() => startCourse(c.id)}
-                className={`w-full bg-gradient-to-br ${c.color} rounded-3xl p-6 text-left text-white shadow-lg active:scale-[0.97] transition-all`}>
-                <span className="text-4xl">{c.icon}</span>
-                <p className="text-xl font-black mt-2 leading-tight whitespace-pre-line">{c.title}</p>
-                <p className="text-sm font-bold opacity-80 mt-1">{c.sub}</p>
-                <div className="mt-3 inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-black">
-                  全{c.count}問 → スタート ▶
-                </div>
-              </button>
-            ))}
-            <p className="text-center text-[10px] font-bold text-gray-600 pt-2">
-              ストーリーの流れに沿って順番に出題。1周終わると自動でシャッフルして再出題されます。
-            </p>
           </div>
-        ) : (
-          /* ── 復習モード ── */
-          <div className="space-y-3">
-            {/* フィルター */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-gray-800 flex-1">
-                全{ALL_REVIEW.length}問中 覚えた: {memoCount}問
-              </span>
-              <div className="flex bg-gray-100 rounded-xl p-0.5">
-                {([['all', 'すべて表示'], ['needs', '要復習のみ']] as [Filter, string][]).map(([f, label]) => (
-                  <button key={f} onClick={() => setFilter(f)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                      filter === f ? 'bg-gray-900 text-white shadow' : 'text-gray-700'
-                    }`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+          {reviewItems.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-4xl mb-3">🎉</p>
+              <p className="text-base font-black text-gray-900">全問覚えました！</p>
+              <p className="text-xs font-bold text-gray-700 mt-1">「すべて」で復習できます</p>
             </div>
-
-            {reviewItems.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-4xl mb-3">🎉</p>
-                <p className="text-base font-black text-gray-900">全問覚えました！</p>
-                <p className="text-xs font-bold text-gray-700 mt-1">「すべて表示」で復習できます</p>
-              </div>
-            )}
-
-            {reviewItems.map((it) => {
-              const key = it.prompt.en;
+          )}
+          <div className="space-y-3">
+            {reviewItems.map(({ item, chapterTitle, icon }) => {
+              const key = item.prompt.en;
               const isMemo = memorized.has(key);
               return (
-                <div key={key}
-                  className={`rounded-2xl border-2 overflow-hidden transition-all ${
-                    isMemo ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white'
-                  }`}>
-
-                  {/* シーン */}
+                <div key={key} className={`rounded-2xl border-2 overflow-hidden transition-all ${isMemo ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
                   <div className="px-4 pt-3 pb-1">
-                    <span className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-[10px] font-black text-gray-800 mb-2">
-                      {it.situation}
-                    </span>
-
-                    {/* 投げかけ */}
+                    <span className="inline-block bg-gray-100 rounded-full px-2 py-0.5 text-[10px] font-black text-gray-800 mb-2">{icon} {chapterTitle}</span>
                     <div className="bg-gray-900 rounded-xl p-3 mb-2">
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">相手の発言</p>
                       <div className="flex items-start gap-2">
                         <div className="flex-1">
-                          <p className="text-sm font-black text-white leading-snug">&ldquo;{it.prompt.en}&rdquo;</p>
-                          <p className="text-xs font-bold text-gray-300 mt-0.5">{it.prompt.ja}</p>
+                          <p className="text-sm font-black text-white leading-snug">&ldquo;{item.prompt.en}&rdquo;</p>
+                          <p className="text-xs font-bold text-gray-300 mt-0.5">{item.prompt.ja}</p>
                         </div>
-                        <SpeakBtn text={it.prompt.en} size="xs" />
+                        <SpeakBtn text={item.prompt.en} size="xs" />
                       </div>
                     </div>
-
-                    {/* 正解返答 */}
                     <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 mb-2">
                       <p className="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-1">✅ 正解の返答</p>
                       <div className="flex items-start gap-2">
                         <div className="flex-1">
-                          <p className="text-sm font-black text-emerald-900 leading-snug">&ldquo;{it[it.correct].en}&rdquo;</p>
-                          <p className="text-xs font-bold text-emerald-700 mt-0.5">{it[it.correct].ja}</p>
+                          <p className="text-sm font-black text-emerald-900 leading-snug">&ldquo;{item[item.correct].en}&rdquo;</p>
+                          <p className="text-xs font-bold text-emerald-700 mt-0.5">{item[item.correct].ja}</p>
                         </div>
-                        <SpeakBtn text={it[it.correct].en} size="xs" />
+                        <SpeakBtn text={item[item.correct].en} size="xs" />
                       </div>
                     </div>
-
-                    {/* 発音のコツ・解説 */}
                     <div className="border border-sky-300 bg-sky-50 rounded-xl p-3 mb-3">
                       <p className="text-[9px] font-black text-sky-800 uppercase tracking-widest mb-1">💡 使い方・発音のコツ</p>
-                      <p className="text-xs font-bold text-gray-900 leading-relaxed">{it.tip}</p>
+                      <p className="text-xs font-bold text-gray-900 leading-relaxed">{item.tip}</p>
                     </div>
                   </div>
-
-                  {/* 覚えたチェック */}
                   <button onClick={() => toggleMemo(key)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 border-t-2 transition-all active:scale-[0.99] ${
-                      isMemo
-                        ? 'border-emerald-400 bg-emerald-100'
-                        : 'border-gray-200 bg-gray-50'
-                    }`}>
-                    <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                      isMemo
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : 'bg-white border-gray-400'
-                    }`}>
+                    className={`w-full flex items-center gap-3 px-4 py-3 border-t-2 transition-all active:scale-[0.99] ${isMemo ? 'border-emerald-400 bg-emerald-100' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all ${isMemo ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-gray-400'}`}>
                       {isMemo && <span className="text-sm font-black">✓</span>}
                     </div>
-                    <span className={`text-sm font-black ${isMemo ? 'text-emerald-800' : 'text-gray-800'}`}>
-                      {isMemo ? '覚えた ✅' : '覚えた？ チェックする'}
-                    </span>
-                    {isMemo && (
-                      <span className="ml-auto text-[10px] font-bold text-emerald-600">タップで解除</span>
-                    )}
+                    <span className={`text-sm font-black ${isMemo ? 'text-emerald-800' : 'text-gray-800'}`}>{isMemo ? '覚えた ✅' : '覚えた？ チェックする'}</span>
+                    {isMemo && <span className="ml-auto text-[10px] font-bold text-emerald-600">タップで解除</span>}
                   </button>
                 </div>
               );
             })}
           </div>
+        </div>
+      );
+    }
+
+    // Study mode — course selection
+    return (
+      <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
+        {ModeTabs}
+        <div className="text-center py-3 mb-2">
+          <p className="text-xl font-black text-gray-900">🗣️ ストーリー対話特訓</p>
+          <p className="text-xs font-bold text-gray-700 mt-1">コースを選んでスタート！</p>
+        </div>
+        {[DAILY_COURSE, HAWAII_COURSE].map(c => (
+          <button key={c.id} onClick={() => startCourse(c.id)}
+            className={`w-full bg-gradient-to-br ${c.color} rounded-3xl p-6 text-left text-white shadow-lg active:scale-[0.97] transition-all mb-4`}>
+            <span className="text-4xl">{c.icon}</span>
+            <p className="text-xl font-black mt-2 leading-tight">{c.title}</p>
+            <p className="text-sm font-bold opacity-80 mt-1">{c.sub}</p>
+            <div className="mt-3 inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-black">
+              全{c.chapters.length}チャプター → スタート ▶
+            </div>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  // ══ SCREEN: chapters ══
+  if (screen === 'chapters' && course) {
+    return (
+      <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
+        <div className="flex items-center gap-2 mb-4">
+          <button onClick={goToCourse} className="text-xs font-black text-gray-700 px-3 py-1.5 bg-gray-100 rounded-full active:scale-95 transition-all">← コース選択</button>
+          <p className="font-black text-gray-900 text-sm flex-1 text-center">{course.icon} {course.title.split('コース')[0]}</p>
+          <div className="w-16" />
+        </div>
+        <div className="space-y-3">
+          {course.chapters.map((ch, i) => (
+            <div key={ch.id} className="bg-white border-2 border-gray-200 rounded-2xl overflow-hidden">
+              <div className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-2xl">{ch.icon}</span>
+                  <div>
+                    <p className="text-xs font-black text-gray-500 uppercase tracking-widest">Chapter {i + 1}</p>
+                    <p className="text-base font-black text-gray-900">{ch.title}</p>
+                  </div>
+                  <span className="ml-auto text-xs font-bold text-gray-600">{ch.items.length}問</span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => startChapter(i)}
+                    className="flex-1 py-2 rounded-xl bg-gray-900 text-white text-xs font-black active:scale-[0.98] transition-all">
+                    ▶ 学習する
+                  </button>
+                  <button onClick={() => startMiniTest(i)}
+                    className="flex-1 py-2 rounded-xl bg-amber-500 text-white text-xs font-black active:scale-[0.98] transition-all">
+                    📝 小テスト
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ══ SCREEN: dialogue ══
+  if (screen === 'dialogue' && chapter && dialogueItem) {
+    const isCorrect = chosen !== null && chosen === dialogueItem.correct;
+    const isWrong   = chosen !== null && chosen !== dialogueItem.correct;
+
+    return (
+      <div className={`min-h-screen px-4 pt-2 pb-[120px] max-w-md mx-auto transition-colors duration-200 ${
+        flash === 'ok' ? 'bg-emerald-50' : flash === 'ng' ? 'bg-red-50' : 'bg-white'
+      }`}>
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setScreen('chapters')} className="text-xs font-black text-gray-700 px-3 py-1.5 bg-gray-100 rounded-full active:scale-95 transition-all">← チャプター一覧</button>
+          <p className="text-xs font-bold text-gray-800">{dialogueIdx + 1}/{chapter.items.length}</p>
+        </div>
+        {/* 進捗バー */}
+        <div className="w-full h-1.5 bg-gray-200 rounded-full mb-3">
+          <div className="h-1.5 bg-gray-900 rounded-full transition-all duration-300" style={{ width: `${((dialogueIdx + 1) / chapter.items.length) * 100}%` }} />
+        </div>
+        {/* チャプタータイトル */}
+        <div className="bg-gray-100 rounded-xl px-3 py-1.5 mb-3 inline-flex items-center gap-1.5">
+          <span>{chapter.icon}</span>
+          <p className="text-xs font-black text-gray-800">{chapter.title}</p>
+        </div>
+        {/* 相手の投げかけ */}
+        <div className="bg-gray-900 rounded-2xl p-4 mb-4 shadow-lg">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">相手の発言</p>
+          <div className="flex items-start gap-2 mb-1">
+            <p className="text-xl font-black text-white leading-snug flex-1">&ldquo;{dialogueItem.prompt.en}&rdquo;</p>
+            <SpeakBtn text={dialogueItem.prompt.en} />
+          </div>
+          <p className="text-sm font-bold text-gray-300">{dialogueItem.prompt.ja}</p>
+        </div>
+        {/* 2択 */}
+        <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 px-1">あなたの返答を選んでください</p>
+        <div className="space-y-3 mb-4">
+          {(['A', 'B'] as const).map(key => {
+            const opt = dialogueItem[key];
+            const isThis = chosen === key;
+            const isCorrectOpt = key === dialogueItem.correct;
+            let cardCls = 'border-2 border-gray-200 bg-white';
+            if (chosen) {
+              if (isCorrectOpt)       cardCls = 'border-2 border-emerald-500 bg-emerald-50';
+              else if (isThis)        cardCls = 'border-2 border-red-400 bg-red-50';
+              else                    cardCls = 'border-2 border-gray-100 bg-gray-50 opacity-60';
+            }
+            return (
+              <button key={key} disabled={!!chosen} onClick={() => handleChoose(key)}
+                className={`w-full text-left rounded-2xl p-4 transition-all active:scale-[0.98] ${cardCls}`}>
+                <div className="flex items-start gap-3">
+                  <span className={`w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-sm ${
+                    chosen ? isCorrectOpt ? 'bg-emerald-500 text-white' : isThis ? 'bg-red-400 text-white' : 'bg-gray-200 text-gray-500' : 'bg-indigo-600 text-white'
+                  }`}>
+                    {chosen && isCorrectOpt ? '✅' : chosen && isThis ? '❌' : key}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-black leading-snug ${chosen ? isCorrectOpt ? 'text-emerald-900' : isThis ? 'text-red-900' : 'text-gray-500' : 'text-gray-900'}`}>{opt.en}</p>
+                    <p className={`text-xs font-bold mt-0.5 ${chosen ? isCorrectOpt ? 'text-emerald-700' : isThis ? 'text-red-700' : 'text-gray-400' : 'text-gray-700'}`}>{opt.ja}</p>
+                  </div>
+                  <SpeakBtn text={opt.en} size="xs" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {/* 正誤 + 解説 */}
+        {chosen && (
+          <>
+            <div className={`rounded-2xl p-4 mb-3 border-2 ${isCorrect ? 'border-emerald-400 bg-emerald-50' : 'border-red-400 bg-red-50'}`}>
+              <p className={`text-base font-black mb-1 ${isCorrect ? 'text-emerald-800' : 'text-red-800'}`}>
+                {isCorrect ? '✅ 正解！' : '❌ 不正解'}
+              </p>
+              {isWrong && (
+                <div className="mb-2 flex items-start gap-2 bg-white/70 rounded-xl px-3 py-2 border border-emerald-200">
+                  <p className="text-xs font-black text-emerald-900 flex-1">
+                    正解: &ldquo;{dialogueItem[dialogueItem.correct].en}&rdquo;<br/>
+                    <span className="font-bold text-emerald-700">{dialogueItem[dialogueItem.correct].ja}</span>
+                  </p>
+                  <SpeakBtn text={dialogueItem[dialogueItem.correct].en} size="xs" />
+                </div>
+              )}
+            </div>
+            <div className="rounded-2xl border-2 border-sky-400 bg-sky-50 p-4 mb-4 space-y-2 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💡</span>
+                <p className="text-xs font-black text-sky-900 uppercase tracking-widest">使い方・発音のコツ</p>
+              </div>
+              <p className="text-sm font-bold text-gray-900 leading-relaxed">{dialogueItem.tip}</p>
+              <button onClick={() => speak(dialogueItem[dialogueItem.correct].en)}
+                className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full bg-sky-700 text-white active:scale-95 transition-transform">
+                🔊 正解フレーズをもう一度
+              </button>
+            </div>
+            <button onClick={handleNext}
+              className="w-full py-3.5 rounded-2xl font-black text-base bg-gray-900 text-white active:scale-[0.98] transition-all shadow-md">
+              {dialogueIdx + 1 >= chapter.items.length ? 'チャプター完了 →' : '次の対話へ →'}
+            </button>
+          </>
         )}
       </div>
     );
   }
 
-  if (!item) return null;
-
-  const isCorrect = chosen !== null && chosen === item.correct;
-  const isWrong   = chosen !== null && chosen !== item.correct;
-
-  return (
-    <div className={`min-h-screen px-4 pt-2 pb-[120px] max-w-md mx-auto transition-colors duration-200 ${
-      flash === 'ok' ? 'bg-emerald-50' : flash === 'ng' ? 'bg-red-50' : 'bg-white'
-    }`}>
-
-      {/* ── ヘッダー ── */}
-      <div className="flex items-center justify-between mb-3">
-        <button onClick={resetToMenu}
-          className="text-xs font-black text-gray-700 px-3 py-1.5 bg-gray-100 rounded-full active:scale-95 transition-all">
-          ← コース選択
-        </button>
-        <div className="text-xs font-bold text-gray-800 text-center">
-          {total > 0 ? `${correct}/${total} (${pct}%)` : (course === 'daily' ? '☀️ 日常会話' : '🌴 ハワイ旅行')}
-        </div>
-        <span className="text-xs font-bold text-gray-800">{idx + 1}/{deck.length}</span>
-      </div>
-
-      {/* ── シーン表示 ── */}
-      <div className="bg-gray-100 rounded-xl px-3 py-1.5 mb-3 inline-block">
-        <p className="text-xs font-black text-gray-800">{item.situation}</p>
-      </div>
-
-      {/* ── 相手の投げかけ ── */}
-      <div className="bg-gray-900 rounded-2xl p-4 mb-4 shadow-lg">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">相手の発言</p>
-        <div className="flex items-start gap-2 mb-1">
-          <p className="text-xl font-black text-white leading-snug flex-1">&ldquo;{item.prompt.en}&rdquo;</p>
-          <SpeakBtn text={item.prompt.en} />
-        </div>
-        <p className="text-sm font-bold text-gray-300">{item.prompt.ja}</p>
-      </div>
-
-      {/* ── 2択ボタン ── */}
-      <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 px-1">
-        あなたの返答を選んでください
-      </p>
-      <div className="space-y-3 mb-4">
-        {(['A', 'B'] as const).map(key => {
-          const opt = item[key];
-          const isThis    = chosen === key;
-          const isCorrectOpt = key === item.correct;
-          let cardCls = 'border-2 border-gray-200 bg-white';
-          if (chosen) {
-            if (isCorrectOpt)       cardCls = 'border-2 border-emerald-500 bg-emerald-50';
-            else if (isThis)        cardCls = 'border-2 border-red-400 bg-red-50';
-            else                    cardCls = 'border-2 border-gray-100 bg-gray-50 opacity-60';
-          }
-          return (
-            <button key={key} disabled={!!chosen} onClick={() => handleChoose(key)}
-              className={`w-full text-left rounded-2xl p-4 transition-all active:scale-[0.98] ${cardCls}`}>
-              <div className="flex items-start gap-3">
-                <span className={`w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-sm ${
-                  chosen
-                    ? isCorrectOpt ? 'bg-emerald-500 text-white' : isThis ? 'bg-red-400 text-white' : 'bg-gray-200 text-gray-500'
-                    : 'bg-indigo-600 text-white'
-                }`}>
-                  {chosen && isCorrectOpt ? '✅' : chosen && isThis ? '❌' : key}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-black leading-snug ${
-                    chosen
-                      ? isCorrectOpt ? 'text-emerald-900' : isThis ? 'text-red-900' : 'text-gray-500'
-                      : 'text-gray-900'
-                  }`}>{opt.en}</p>
-                  <p className={`text-xs font-bold mt-0.5 ${
-                    chosen
-                      ? isCorrectOpt ? 'text-emerald-700' : isThis ? 'text-red-700' : 'text-gray-400'
-                      : 'text-gray-700'
-                  }`}>{opt.ja}</p>
-                </div>
-                <SpeakBtn text={opt.en} size="xs" />
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── 正誤 + 解説（回答後） ── */}
-      {chosen && (
-        <>
-          <div className={`rounded-2xl p-4 mb-3 border-2 ${
-            isCorrect
-              ? 'border-emerald-400 bg-emerald-50'
-              : 'border-red-400 bg-red-50'
-          }`}>
-            <p className={`text-base font-black mb-1 ${isCorrect ? 'text-emerald-800' : 'text-red-800'}`}>
-              {isCorrect ? '✅ 正解！' : '❌ 不正解'}
-            </p>
-            {isWrong && (
-              <div className="mb-2 flex items-start gap-2 bg-white/70 rounded-xl px-3 py-2 border border-emerald-200">
-                <p className="text-xs font-black text-emerald-900 flex-1">
-                  正解: &ldquo;{item[item.correct].en}&rdquo;<br/>
-                  <span className="font-bold text-emerald-700">{item[item.correct].ja}</span>
-                </p>
-                <SpeakBtn text={item[item.correct].en} size="xs" />
-              </div>
-            )}
-          </div>
-
-          {/* 発音のコツ・使い方解説 */}
-          <div className="rounded-2xl border-2 border-sky-400 bg-sky-50 p-4 mb-4 space-y-2 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💡</span>
-              <p className="text-xs font-black text-sky-900 uppercase tracking-widest">使い方・発音のコツ</p>
+  // ══ SCREEN: chapter-end ══
+  if (screen === 'chapter-end' && course && chapter) {
+    const pct = chapterTotal > 0 ? Math.round(chapterCorrect / chapterTotal * 100) : 0;
+    const isLastChapter = chapterIdx >= course.chapters.length - 1;
+    return (
+      <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
+        <div className="text-center py-8">
+          <p className="text-5xl mb-3">🎉</p>
+          <p className="text-2xl font-black text-gray-900">チャプター完了！</p>
+          <p className="text-base font-bold text-gray-700 mt-1">{chapter.icon} {chapter.title}</p>
+          <div className="mt-4 inline-flex items-center gap-3 bg-gray-100 rounded-2xl px-6 py-3">
+            <div className="text-center">
+              <p className="text-3xl font-black text-gray-900">{pct}%</p>
+              <p className="text-xs font-bold text-gray-700">{chapterCorrect}/{chapterTotal} 正解</p>
             </div>
-            <p className="text-sm font-bold text-gray-900 leading-relaxed">{item.tip}</p>
-            <button onClick={() => speak(item[item.correct].en)}
-              className="flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-full bg-sky-700 text-white active:scale-95 transition-transform">
-              🔊 正解フレーズをもう一度
-            </button>
+            <div className="w-px h-10 bg-gray-300" />
+            <div className="text-center">
+              <p className="text-3xl font-black text-gray-900">{chapter.items.length}</p>
+              <p className="text-xs font-bold text-gray-700">問出題</p>
+            </div>
           </div>
-
-          <button onClick={handleNext}
-            className="w-full py-3.5 rounded-2xl font-black text-base bg-gray-900 text-white active:scale-[0.98] transition-all shadow-md">
-            次の対話へ →
+        </div>
+        <div className="space-y-3">
+          <button onClick={() => startMiniTest(chapterIdx)}
+            className="w-full py-4 rounded-2xl font-black text-base bg-amber-500 text-white active:scale-[0.98] transition-all shadow-md">
+            📝 小テストに挑戦する（{Math.min(7, chapter.items.length)}問）
           </button>
-        </>
-      )}
-    </div>
-  );
+          {!isLastChapter && (
+            <button onClick={() => startChapter(chapterIdx + 1)}
+              className="w-full py-3.5 rounded-2xl font-black text-base bg-gray-900 text-white active:scale-[0.98] transition-all shadow-md">
+              次のチャプターへ →
+            </button>
+          )}
+          <button onClick={() => setScreen('chapters')}
+            className="w-full py-3 rounded-2xl font-bold text-sm bg-gray-100 text-gray-800 active:scale-[0.98] transition-all">
+            チャプター一覧に戻る
+          </button>
+          <button onClick={goToCourse}
+            className="w-full py-3 rounded-2xl font-bold text-sm bg-gray-100 text-gray-800 active:scale-[0.98] transition-all">
+            コース選択に戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ══ SCREEN: minitest ══
+  if (screen === 'minitest' && testItem) {
+    const isCorrectTest = testChosen !== null && testChosen === testItem.correct;
+    const isWrongTest   = testChosen !== null && testChosen !== testItem.correct;
+    return (
+      <div className={`min-h-screen px-4 pt-2 pb-[120px] max-w-md mx-auto transition-colors duration-200 ${
+        testChosen ? (isCorrectTest ? 'bg-emerald-50' : 'bg-red-50') : 'bg-white'
+      }`}>
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setScreen('chapters')} className="text-xs font-black text-gray-700 px-3 py-1.5 bg-gray-100 rounded-full active:scale-95 transition-all">← チャプター一覧</button>
+          <p className="text-xs font-bold text-gray-800">📝 小テスト {testIdx + 1}/{testItems.length}</p>
+        </div>
+        <div className="w-full h-1.5 bg-gray-200 rounded-full mb-3">
+          <div className="h-1.5 bg-amber-500 rounded-full transition-all duration-300" style={{ width: `${((testIdx + 1) / testItems.length) * 100}%` }} />
+        </div>
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-xl px-3 py-1.5 mb-3 inline-flex items-center gap-1.5">
+          <span className="text-xs font-black text-amber-800">🔒 実践テスト中 — 日本語訳は非表示</span>
+        </div>
+        {/* 投げかけ（英語のみ） */}
+        <div className="bg-gray-900 rounded-2xl p-4 mb-4 shadow-lg">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">相手の発言（英語のみ）</p>
+          <div className="flex items-start gap-2">
+            <p className="text-xl font-black text-white leading-snug flex-1">&ldquo;{testItem.prompt.en}&rdquo;</p>
+            <SpeakBtn text={testItem.prompt.en} />
+          </div>
+          {testRevealed && <p className="text-sm font-bold text-gray-300 mt-2">{testItem.prompt.ja}</p>}
+        </div>
+        {/* 2択（英語のみ） */}
+        {!testRevealed && (
+          <p className="text-[10px] font-black text-gray-700 uppercase tracking-widest mb-2 px-1">正しい返答を英語で選んでください</p>
+        )}
+        <div className="space-y-3 mb-4">
+          {(['A', 'B'] as const).map(key => {
+            const opt = testItem[key];
+            const isThis = testChosen === key;
+            const isCorrectOpt = key === testItem.correct;
+            let cardCls = 'border-2 border-gray-200 bg-white';
+            if (testChosen) {
+              if (isCorrectOpt)       cardCls = 'border-2 border-emerald-500 bg-emerald-50';
+              else if (isThis)        cardCls = 'border-2 border-red-400 bg-red-50';
+              else                    cardCls = 'border-2 border-gray-100 bg-gray-50 opacity-60';
+            }
+            return (
+              <button key={key} disabled={!!testChosen} onClick={() => handleTestChoose(key)}
+                className={`w-full text-left rounded-2xl p-4 transition-all active:scale-[0.98] ${cardCls}`}>
+                <div className="flex items-start gap-3">
+                  <span className={`w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center font-black text-sm ${
+                    testChosen ? isCorrectOpt ? 'bg-emerald-500 text-white' : isThis ? 'bg-red-400 text-white' : 'bg-gray-200 text-gray-500' : 'bg-indigo-600 text-white'
+                  }`}>
+                    {testChosen && isCorrectOpt ? '✅' : testChosen && isThis ? '❌' : key}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-black leading-snug ${testChosen ? isCorrectOpt ? 'text-emerald-900' : isThis ? 'text-red-900' : 'text-gray-500' : 'text-gray-900'}`}>{opt.en}</p>
+                    {testRevealed && <p className={`text-xs font-bold mt-0.5 ${isCorrectOpt ? 'text-emerald-700' : isThis ? 'text-red-700' : 'text-gray-400'}`}>{opt.ja}</p>}
+                  </div>
+                  <SpeakBtn text={opt.en} size="xs" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {/* 正誤 + tip */}
+        {testRevealed && (
+          <>
+            <div className={`rounded-2xl p-3 mb-3 border-2 ${isCorrectTest ? 'border-emerald-400 bg-emerald-50' : 'border-red-400 bg-red-50'}`}>
+              <p className={`text-base font-black ${isCorrectTest ? 'text-emerald-800' : 'text-red-800'}`}>
+                {isCorrectTest ? '✅ 正解！' : `❌ 不正解 — 正解: ${testItem[testItem.correct].en}`}
+              </p>
+            </div>
+            <div className="rounded-2xl border-2 border-sky-400 bg-sky-50 p-3 mb-4">
+              <p className="text-xs font-black text-sky-900 uppercase tracking-widest mb-1">💡 使い方・発音のコツ</p>
+              <p className="text-xs font-bold text-gray-900 leading-relaxed">{testItem.tip}</p>
+            </div>
+            <button onClick={handleTestNext}
+              className="w-full py-3.5 rounded-2xl font-black text-base bg-gray-900 text-white active:scale-[0.98] transition-all shadow-md">
+              {testIdx + 1 >= testItems.length ? '結果を見る →' : '次の問題へ →'}
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ══ SCREEN: test-results ══
+  if (screen === 'test-results') {
+    const pct = testItems.length > 0 ? Math.round(testCorrect / testItems.length * 100) : 0;
+    const grade = pct >= 90 ? { label: '🏆 完璧！', color: 'text-emerald-700' }
+                : pct >= 70 ? { label: '😊 よくできました！', color: 'text-blue-700' }
+                : pct >= 50 ? { label: '📚 もう少し！', color: 'text-amber-700' }
+                : { label: '💪 復習しよう！', color: 'text-red-700' };
+    return (
+      <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
+        <div className="text-center py-8">
+          <p className="text-5xl mb-3">📊</p>
+          <p className="text-2xl font-black text-gray-900">テスト結果</p>
+          <p className={`text-base font-black mt-1 ${grade.color}`}>{grade.label}</p>
+          <div className="mt-4 inline-flex items-center gap-3 bg-gray-100 rounded-2xl px-6 py-3">
+            <div className="text-center">
+              <p className="text-3xl font-black text-gray-900">{pct}%</p>
+              <p className="text-xs font-bold text-gray-700">{testCorrect}/{testItems.length} 正解</p>
+            </div>
+          </div>
+        </div>
+        {testWrong.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm font-black text-gray-900 mb-2">❌ 間違えた問題 — 復習しよう</p>
+            <div className="space-y-2">
+              {testWrong.map(item => {
+                const key = item.prompt.en;
+                const isMemo = memorized.has(key);
+                return (
+                  <div key={key} className="bg-red-50 border-2 border-red-200 rounded-2xl p-3">
+                    <div className="flex items-start gap-2 mb-2">
+                      <div className="flex-1">
+                        <p className="text-sm font-black text-gray-900">&ldquo;{item.prompt.en}&rdquo;</p>
+                        <p className="text-xs font-bold text-gray-700">{item.prompt.ja}</p>
+                        <p className="text-xs font-black text-emerald-800 mt-1">正解: &ldquo;{item[item.correct].en}&rdquo;</p>
+                      </div>
+                      <SpeakBtn text={item[item.correct].en} size="xs" />
+                    </div>
+                    <button onClick={() => { if (isMemo) toggleMemo(key); }}
+                      className={`w-full py-2 rounded-xl text-xs font-black transition-all ${
+                        isMemo ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-gray-900 text-white active:scale-95'
+                      }`}>
+                      {isMemo ? '✓ 要復習マーク済み' : '📌 要復習にマーク'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div className="space-y-3">
+          <button onClick={() => startMiniTest(chapterIdx)}
+            className="w-full py-3.5 rounded-2xl font-black text-base bg-amber-500 text-white active:scale-[0.98] transition-all shadow-md">
+            🔄 もう一度テストする
+          </button>
+          <button onClick={() => startChapter(chapterIdx)}
+            className="w-full py-3.5 rounded-2xl font-black text-base bg-gray-900 text-white active:scale-[0.98] transition-all shadow-md">
+            📖 このチャプターを再学習
+          </button>
+          <button onClick={() => setScreen('chapters')}
+            className="w-full py-3 rounded-2xl font-bold text-sm bg-gray-100 text-gray-800 active:scale-[0.98] transition-all">
+            チャプター一覧に戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
