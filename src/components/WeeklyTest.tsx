@@ -6,11 +6,20 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 interface ToeicItem { en: string; answer: string; wrongs: [string, string]; }
 interface TestItem  { level: number; en: string; answer: string; choices: string[]; }
 interface Result    { level: number; correct: boolean; }
-interface RunRecord { date: string; score: number; correct: number; player: string; }
+interface RunRecord { date: string; score: number; correct: number; }
 
-const LS_KEY     = 'weekly-test-v1';
-const TIME_LIMIT = 8;   // seconds per question
+interface UserProfile { name: string; history: RunRecord[]; }
+type UserIdx = 0 | 1 | 2;
+
+const LS_KEY   = 'weekly-test-v3';
+const TIME_LIMIT = 8;
 const Q_COUNT    = 30;
+
+const DEFAULT_USERS: [UserProfile, UserProfile, UserProfile] = [
+  { name: 'User 1', history: [] },
+  { name: 'User 2', history: [] },
+  { name: 'User 3', history: [] },
+];
 
 // ─── Vocabulary banks ──────────────────────────────────────────────
 const L1: ToeicItem[] = [
@@ -163,21 +172,19 @@ const L5: ToeicItem[] = [
   { en:'caveat',       answer:'警告・但し書き',   wrongs:['承認','保証'] },
   { en:'contentious',  answer:'論争を引き起こす', wrongs:['一致した','歓迎された'] },
   { en:'dearth',       answer:'不足',             wrongs:['過剰','余剰'] },
-  { en:'endemic',      answer:'特定地域に固有の', wrongs:['世界的な','一時的な'] },
+  { en:'expedite',     answer:'促進・迅速化する', wrongs:['遅延させる','中止する'] },
   { en:'extrapolate',  answer:'推定・外挿する',   wrongs:['精密測定する','縮小する'] },
   { en:'foresight',    answer:'先見の明',         wrongs:['後知恵','近視眼的判断'] },
-  { en:'heuristic',    answer:'経験則による',     wrongs:['理論的な','数式的な'] },
   { en:'impede',       answer:'妨げる',           wrongs:['促進する','加速させる'] },
   { en:'inherent',     answer:'本質的な',         wrongs:['付加的な','一時的な'] },
   { en:'intangible',   answer:'無形の',           wrongs:['有形の','物理的な'] },
   { en:'holistic',     answer:'総合的な',         wrongs:['部分的な','表面的な'] },
   { en:'conjecture',   answer:'推測・憶測',       wrongs:['証拠','確認'] },
+  { en:'endemic',      answer:'特定地域に固有の', wrongs:['世界的な','一時的な'] },
 ];
 
 const BANKS: [number, ToeicItem[]][] = [[1,L1],[2,L2],[3,L3],[4,L4],[5,L5]];
-const LEVEL_LABELS: Record<number,string> = {
-  1:'〜300',2:'〜500',3:'〜700',4:'〜800',5:'900+',
-};
+const LEVEL_LABELS: Record<number,string> = { 1:'〜300',2:'〜500',3:'〜700',4:'〜800',5:'900+' };
 
 // ─── Helpers ───────────────────────────────────────────────────────
 function shuffle<T>(arr: T[]): T[] {
@@ -190,20 +197,18 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function buildTest(): TestItem[] {
-  const perLevel = Math.floor(Q_COUNT / BANKS.length); // 6 each
+  const perLevel = Math.floor(Q_COUNT / BANKS.length);
   const items: TestItem[] = [];
   for (const [level, bank] of BANKS) {
     const picked = shuffle(bank).slice(0, perLevel);
     for (const item of picked) {
-      const choices = shuffle([item.answer, ...item.wrongs]);
-      items.push({ level, en: item.en, answer: item.answer, choices });
+      items.push({ level, en: item.en, answer: item.answer, choices: shuffle([item.answer, ...item.wrongs]) });
     }
   }
   return shuffle(items);
 }
 
 function estimateScore(results: Result[]): number {
-  // Weighted by level
   const weights: Record<number,number> = { 1:8, 2:12, 3:15, 4:18, 5:20 };
   const maxWeighted = BANKS.reduce((s,[lv]) => s + Math.floor(Q_COUNT/BANKS.length) * weights[lv], 0);
   const earned = results.filter(r => r.correct).reduce((s,r) => s + weights[r.level], 0);
@@ -221,70 +226,86 @@ function TimerRing({ timeLeft }: { timeLeft: number }) {
     <svg width="56" height="56" viewBox="0 0 56 56">
       <circle cx="28" cy="28" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
       <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="4"
-        strokeDasharray={circ} strokeDashoffset={circ - dash}
-        strokeLinecap="round"
-        style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%', transition: 'stroke-dashoffset 0.25s linear, stroke 0.25s' }} />
+        strokeDasharray={circ} strokeDashoffset={circ - dash} strokeLinecap="round"
+        style={{ transform:'rotate(-90deg)', transformOrigin:'50% 50%', transition:'stroke-dashoffset 0.25s linear, stroke 0.25s' }} />
       <text x="28" y="33" textAnchor="middle" fontSize="14" fontWeight="bold" fill={color}>{timeLeft}</text>
     </svg>
   );
 }
 
+// ─── Score mini-chart ──────────────────────────────────────────────
+function ScoreChart({ history }: { history: RunRecord[] }) {
+  if (history.length < 2) return null;
+  const recent = [...history].reverse().slice(0, 8);
+  const max = Math.max(...recent.map(r => r.score));
+  const min = Math.min(...recent.map(r => r.score));
+  const range = Math.max(max - min, 100);
+  return (
+    <div className="flex items-end gap-1 h-16 mt-1 px-1">
+      {recent.map((r, i) => {
+        const heightPct = ((r.score - min) / range) * 70 + 30;
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+            <span className="text-[8px] font-black text-indigo-700">{r.score}</span>
+            <div className="w-full bg-indigo-500 rounded-t" style={{ height: `${heightPct}%` }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main component ────────────────────────────────────────────────
 export function WeeklyTest() {
-  const isMonday = new Date().getDay() === 1;
+  const [users,        setUsers]        = useState<[UserProfile, UserProfile, UserProfile]>(DEFAULT_USERS);
+  const [selectedUser, setSelectedUser] = useState<UserIdx>(0);
+  const [historyUser,  setHistoryUser]  = useState<UserIdx>(0);
+  const [showHistory,  setShowHistory]  = useState(false);
+  const [editingName,  setEditingName]  = useState(false);
+  const [nameInput,    setNameInput]    = useState('');
 
-  const [phase, setPhase] = useState<'gate'|'name'|'test'|'result'>('gate');
-  const [playerName, setPlayerName] = useState('');
-  const [savedName, setSavedName] = useState('');
-  const [forceOpen, setForceOpen] = useState(false);
-  const [debugTaps, setDebugTaps] = useState(0);
-
-  const [questions, setQuestions] = useState<TestItem[]>([]);
-  const [qIdx, setQIdx]           = useState(0);
-  const [results, setResults]     = useState<Result[]>([]);
-  const [timeLeft, setTimeLeft]   = useState(TIME_LIMIT);
-  const [flash, setFlash]         = useState<'correct'|'wrong'|null>(null);
-  const [answered, setAnswered]   = useState(false);
-  const [history, setHistory]     = useState<RunRecord[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
+  const [phase,    setPhase]    = useState<'gate'|'test'|'result'>('gate');
+  const [questions,setQuestions]= useState<TestItem[]>([]);
+  const [qIdx,     setQIdx]     = useState(0);
+  const [results,  setResults]  = useState<Result[]>([]);
+  const [timeLeft, setTimeLeft] = useState(TIME_LIMIT);
+  const [flash,    setFlash]    = useState<'correct'|'wrong'|null>(null);
+  const [answered, setAnswered] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load saved name + history on mount
+  // Load from localStorage on mount
   useEffect(() => {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const data = JSON.parse(raw) as { name?: string; history?: RunRecord[] };
-      if (data.name)    { setSavedName(data.name); setPlayerName(data.name); }
-      if (data.history) setHistory(data.history);
-    }
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const data = JSON.parse(raw) as { users?: [UserProfile, UserProfile, UserProfile] };
+        if (data.users && Array.isArray(data.users) && data.users.length === 3) {
+          setUsers(data.users as [UserProfile, UserProfile, UserProfile]);
+        }
+      }
+    } catch { /* ignore */ }
   }, []);
 
-  const saveName = useCallback((n: string) => {
-    setSavedName(n);
-    const raw = localStorage.getItem(LS_KEY);
-    const data = raw ? JSON.parse(raw) : {};
-    localStorage.setItem(LS_KEY, JSON.stringify({ ...data, name: n }));
+  const saveUsers = useCallback((updated: [UserProfile, UserProfile, UserProfile]) => {
+    setUsers(updated);
+    localStorage.setItem(LS_KEY, JSON.stringify({ users: updated }));
   }, []);
 
-  const saveHistory = useCallback((rec: RunRecord, prev: RunRecord[]) => {
-    const next = [rec, ...prev].slice(0, 20);
-    setHistory(next);
-    const raw = localStorage.getItem(LS_KEY);
-    const data = raw ? JSON.parse(raw) : {};
-    localStorage.setItem(LS_KEY, JSON.stringify({ ...data, history: next }));
-  }, []);
+  const handleNameSave = useCallback(() => {
+    const updated: [UserProfile, UserProfile, UserProfile] = [
+      ...users.map((u, i) => i === selectedUser ? { ...u, name: nameInput || u.name } : u)
+    ] as [UserProfile, UserProfile, UserProfile];
+    saveUsers(updated);
+    setEditingName(false);
+  }, [users, selectedUser, nameInput, saveUsers]);
 
   // Timer tick
   useEffect(() => {
     if (phase !== 'test' || answered) return;
     timerRef.current = setInterval(() => {
       setTimeLeft(t => {
-        if (t <= 1) {
-          clearInterval(timerRef.current!);
-          handleAnswer(null);
-          return 0;
-        }
+        if (t <= 1) { clearInterval(timerRef.current!); handleAnswer(null); return 0; }
         return t - 1;
       });
     }, 1000);
@@ -304,15 +325,18 @@ export function WeeklyTest() {
     setTimeout(() => {
       setFlash(null);
       if (qIdx + 1 >= Q_COUNT) {
-        // End of test
         const score = estimateScore(newResults);
         const rec: RunRecord = {
           date: new Date().toLocaleDateString('ja-JP'),
           score,
           correct: newResults.filter(r => r.correct).length,
-          player: savedName || 'Player',
         };
-        saveHistory(rec, history);
+        const updated: [UserProfile, UserProfile, UserProfile] = users.map((u, i) =>
+          i === selectedUser
+            ? { ...u, history: [rec, ...u.history].slice(0, 20) }
+            : u
+        ) as [UserProfile, UserProfile, UserProfile];
+        saveUsers(updated);
         setResults(newResults);
         setPhase('result');
       } else {
@@ -322,9 +346,9 @@ export function WeeklyTest() {
         setAnswered(false);
       }
     }, 380);
-  }, [answered, questions, qIdx, results, savedName, history, saveHistory]);
+  }, [answered, questions, qIdx, results, users, selectedUser, saveUsers]);
 
-  const startTest = () => {
+  const startTest = useCallback(() => {
     const qs = buildTest();
     setQuestions(qs);
     setQIdx(0);
@@ -333,85 +357,123 @@ export function WeeklyTest() {
     setAnswered(false);
     setFlash(null);
     setPhase('test');
-  };
-
-  const canOpen = isMonday || forceOpen;
+  }, []);
 
   // ─── Gate screen ───────────────────────────────────────────────
   if (phase === 'gate') {
+    const currentUser = users[selectedUser];
+    const latestScore = currentUser.history[0]?.score;
+
     return (
       <div className="px-4 pb-32 pt-4 max-w-md mx-auto">
-        <div className="text-center mb-8">
-          <div className="text-4xl mb-2">📋</div>
-          <h1 className="text-xl font-black text-gray-900">Weekly TOEIC Test</h1>
-          <p className="text-xs text-gray-400 mt-1">毎週月曜日 · 30問 · 8秒制限</p>
+        <div className="text-center mb-5">
+          <div className="text-4xl mb-1">📋</div>
+          <h1 className="text-xl font-black text-gray-900">TOEIC 実力テスト</h1>
+          <p className="text-xs font-bold text-gray-700 mt-1">いつでも受験可能 · 30問 · 8秒制限</p>
         </div>
 
-        {!canOpen ? (
-          <div className="bg-gray-50 rounded-2xl p-6 text-center border border-gray-100 mb-6">
-            <p className="text-sm font-bold text-gray-600 mb-1">本日は月曜日ではありません</p>
-            <p className="text-xs text-gray-400">テストは月曜日のみ開催</p>
-            <button
-              onClick={() => { setDebugTaps(n => { const next = n + 1; if (next >= 5) setForceOpen(true); return next; }); }}
-              className="mt-4 text-[10px] text-gray-300 active:text-gray-400"
-            >
-              {debugTaps > 0 ? `🔓 ${5 - debugTaps}` : 'Debug'}
-            </button>
+        {/* ── 3-user selection ── */}
+        <div className="mb-4">
+          <p className="text-xs font-black text-gray-900 mb-2">受験者を選んでください</p>
+          <div className="grid grid-cols-3 gap-2">
+            {users.map((u, i) => {
+              const latest = u.history[0];
+              const isSelected = selectedUser === i;
+              return (
+                <button key={i} onClick={() => { setSelectedUser(i as UserIdx); setEditingName(false); }}
+                  className={`rounded-2xl p-3 border-2 transition-all text-center ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'}`}>
+                  <p className="text-xs font-black text-gray-900 truncate mb-1">{u.name}</p>
+                  {latest ? (
+                    <p className="text-xl font-black text-indigo-600">{latest.score}</p>
+                  ) : (
+                    <p className="text-xs font-bold text-gray-500">未受験</p>
+                  )}
+                  <p className="text-[10px] font-bold text-gray-600 mt-0.5">{u.history.length}回受験</p>
+                </button>
+              );
+            })}
           </div>
-        ) : (
-          <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100 mb-6">
-            <ul className="space-y-2 text-xs text-gray-700">
-              <li className="flex gap-2"><span>📝</span>30問 · 全5レベルから6問ずつ</li>
-              <li className="flex gap-2"><span>⏱️</span>1問あたり8秒（超過＝不正解）</li>
-              <li className="flex gap-2"><span>🎯</span>3択形式</li>
-              <li className="flex gap-2"><span>📊</span>推定TOEICスコアと弱点分析</li>
-            </ul>
-          </div>
-        )}
+        </div>
 
-        {/* History */}
-        {history.length > 0 && (
-          <div className="mb-6">
-            <button onClick={() => setShowHistory(h => !h)}
-              className="w-full flex items-center justify-between text-xs font-bold text-gray-500 py-2 px-4 rounded-xl bg-gray-50 border border-gray-100">
-              <span>📈 過去の記録 ({history.length}回)</span>
-              <span>{showHistory ? '▲' : '▼'}</span>
+        {/* ── Name edit ── */}
+        <div className="mb-4 bg-gray-50 rounded-2xl p-3 border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-black text-gray-800">
+              選択中: <span className="text-indigo-700">{currentUser.name}</span>
+              {latestScore && <span className="ml-2 text-gray-600">最新スコア: {latestScore}点</span>}
+            </p>
+            <button onClick={() => { setEditingName(e => !e); setNameInput(currentUser.name); }}
+              className="text-[10px] font-black text-indigo-700 px-2 py-1 bg-indigo-100 rounded-full active:scale-95">
+              ✏️ 名前変更
             </button>
-            {showHistory && (
-              <div className="mt-2 space-y-1.5">
-                {history.map((r, i) => (
-                  <div key={i} className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-2 text-xs">
-                    <span className="text-gray-400">{r.date}</span>
-                    <span className="font-bold text-gray-700">{r.player}</span>
-                    <span className="font-black text-indigo-600">{r.score}点</span>
-                    <span className="text-gray-400">{r.correct}/{Q_COUNT}問</span>
-                  </div>
+          </div>
+          {editingName && (
+            <div className="flex gap-2">
+              <input value={nameInput} onChange={e => setNameInput(e.target.value)}
+                className="flex-1 border-2 border-indigo-300 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none"
+                placeholder="名前を入力" maxLength={12} />
+              <button onClick={handleNameSave}
+                className="px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black active:scale-95">
+                保存
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Test info ── */}
+        <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100 mb-4">
+          <ul className="space-y-1.5 text-xs font-bold text-gray-800">
+            <li className="flex gap-2"><span>📝</span>30問 · 全5レベルから6問ずつ出題</li>
+            <li className="flex gap-2"><span>⏱️</span>1問あたり8秒（超過＝不正解）</li>
+            <li className="flex gap-2"><span>🎯</span>3択形式で語彙力を測定</li>
+            <li className="flex gap-2"><span>📊</span>推定TOEICスコアと弱点レベル分析</li>
+          </ul>
+        </div>
+
+        {/* ── Score history ── */}
+        <div className="mb-5">
+          <button onClick={() => setShowHistory(h => !h)}
+            className="w-full flex items-center justify-between text-xs font-black text-gray-900 py-2.5 px-4 rounded-xl bg-gray-100 active:bg-gray-200">
+            <span>📈 過去のスコアを見る（Score History）</span>
+            <span>{showHistory ? '▲' : '▼'}</span>
+          </button>
+          {showHistory && (
+            <div className="mt-2 border-2 border-gray-200 rounded-2xl overflow-hidden">
+              {/* User tabs */}
+              <div className="flex bg-gray-100 p-1 gap-1">
+                {users.map((u, i) => (
+                  <button key={i} onClick={() => setHistoryUser(i as UserIdx)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${historyUser === i ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}>
+                    {u.name}
+                  </button>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {canOpen && (
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-bold text-gray-600 mb-1 px-1">あなたの名前</p>
-              <input
-                type="text"
-                value={playerName}
-                onChange={e => setPlayerName(e.target.value)}
-                placeholder="例: はる"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-400"
-              />
+              <div className="p-3">
+                {users[historyUser].history.length === 0 ? (
+                  <p className="text-center text-xs font-bold text-gray-600 py-4">まだ記録がありません</p>
+                ) : (
+                  <>
+                    <ScoreChart history={users[historyUser].history} />
+                    <div className="space-y-1.5 mt-2">
+                      {users[historyUser].history.map((r, i) => (
+                        <div key={i} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                          <span className="text-xs font-bold text-gray-700">{r.date}</span>
+                          <span className="text-base font-black text-indigo-600">{r.score}点</span>
+                          <span className="text-xs font-bold text-gray-700">{r.correct}/{Q_COUNT}問正解</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-            <button
-              onClick={() => { saveName(playerName || 'Player'); startTest(); }}
-              className="w-full bg-indigo-600 text-white rounded-2xl py-4 font-black text-base active:scale-95 transition-transform"
-            >
-              テスト開始 →
-            </button>
-          </div>
-        )}
+          )}
+        </div>
+
+        <button onClick={startTest}
+          className="w-full bg-indigo-600 text-white rounded-2xl py-4 font-black text-base active:scale-95 transition-transform shadow-lg">
+          テスト開始 →（{currentUser.name}）
+        </button>
       </div>
     );
   }
@@ -424,42 +486,33 @@ export function WeeklyTest() {
       <div className={`min-h-screen px-4 pb-32 pt-4 max-w-md mx-auto transition-colors duration-150 ${
         flash === 'correct' ? 'bg-emerald-50' : flash === 'wrong' ? 'bg-red-50' : 'bg-white'
       }`}>
-        {/* Progress bar */}
         <div className="flex items-center gap-3 mb-6">
           <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-500 rounded-full transition-all duration-300"
-              style={{ width: `${progress * 100}%` }} />
+            <div className="h-full bg-indigo-500 rounded-full transition-all duration-300" style={{ width:`${progress*100}%` }} />
           </div>
-          <span className="text-xs font-bold text-gray-400 whitespace-nowrap">{qIdx + 1} / {Q_COUNT}</span>
+          <span className="text-xs font-bold text-gray-700 whitespace-nowrap">{qIdx+1}/{Q_COUNT}</span>
           <TimerRing timeLeft={timeLeft} />
         </div>
-
-        {/* Level badge */}
         <div className="mb-4 flex items-center gap-2">
-          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-600">
+          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
             Lv{q.level} · TOEIC {LEVEL_LABELS[q.level]}
           </span>
+          <span className="text-[10px] font-bold text-gray-700">{users[selectedUser].name}</span>
         </div>
-
-        {/* Word */}
         <div className="mb-8 bg-gray-50 rounded-2xl p-8 text-center border border-gray-100">
           <p className="text-3xl font-black text-gray-900 tracking-wide">{q.en}</p>
         </div>
-
-        {/* Choices */}
         <div className="grid grid-cols-1 gap-3">
           {q.choices.map(c => {
             let cls = 'w-full text-left px-5 py-4 rounded-2xl font-bold text-sm border transition-all duration-100 ';
             if (answered) {
               if (c === q.answer) cls += 'bg-emerald-100 border-emerald-300 text-emerald-800';
-              else cls += 'bg-gray-50 border-gray-100 text-gray-300';
+              else cls += 'bg-gray-50 border-gray-100 text-gray-400';
             } else {
-              cls += 'bg-white border-gray-200 text-gray-800 active:scale-98 active:bg-gray-50';
+              cls += 'bg-white border-gray-200 text-gray-900 active:scale-98 active:bg-gray-50';
             }
             return (
-              <button key={c} onClick={() => handleAnswer(c)} disabled={answered} className={cls}>
-                {c}
-              </button>
+              <button key={c} onClick={() => handleAnswer(c)} disabled={answered} className={cls}>{c}</button>
             );
           })}
         </div>
@@ -469,86 +522,83 @@ export function WeeklyTest() {
 
   // ─── Result screen ─────────────────────────────────────────────
   if (phase === 'result') {
-    const score = estimateScore(results);
+    const score   = estimateScore(results);
     const correct = results.filter(r => r.correct).length;
-    const pct = Math.round(correct / Q_COUNT * 100);
+    const pct     = Math.round(correct / Q_COUNT * 100);
+    const currentUser = users[selectedUser];
 
-    // Per-level breakdown
     const byLevel: Record<number, { total: number; correct: number }> = {};
     for (const r of results) {
       if (!byLevel[r.level]) byLevel[r.level] = { total: 0, correct: 0 };
       byLevel[r.level].total++;
       if (r.correct) byLevel[r.level].correct++;
     }
-
     const weakLevels = Object.entries(byLevel)
       .filter(([, v]) => v.correct / v.total < 0.5)
       .map(([lv]) => Number(lv));
 
     const scoreLabel =
-      score >= 860 ? 'TOEIC Gold' :
-      score >= 730 ? 'TOEIC Silver' :
-      score >= 600 ? 'Intermediate' : 'Foundation';
+      score >= 860 ? 'TOEIC Gold 🥇' :
+      score >= 730 ? 'TOEIC Silver 🥈' :
+      score >= 600 ? 'Intermediate 📗' : 'Foundation 📘';
 
     return (
       <div className="px-4 pb-32 pt-4 max-w-md mx-auto">
-        <div className="text-center mb-6">
-          <p className="text-xs font-bold text-gray-400 mb-1">{savedName || 'Player'}</p>
+        <div className="text-center mb-5">
+          <p className="text-sm font-black text-indigo-700 mb-1">{currentUser.name}のスコア</p>
           <div className="text-6xl font-black text-indigo-600 mb-1">{score}</div>
-          <p className="text-sm font-bold text-gray-700">推定TOEICスコア</p>
-          <p className="text-xs text-indigo-400 mt-0.5">{scoreLabel}</p>
+          <p className="text-sm font-bold text-gray-800">推定TOEICスコア</p>
+          <p className="text-xs font-bold text-indigo-600 mt-0.5">{scoreLabel}</p>
         </div>
 
-        {/* Summary bar */}
-        <div className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-100">
+        <div className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-200">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-gray-500">正解率</span>
-            <span className="text-sm font-black text-gray-800">{correct} / {Q_COUNT}問 ({pct}%)</span>
+            <span className="text-xs font-black text-gray-800">正解率</span>
+            <span className="text-sm font-black text-gray-900">{correct}/{Q_COUNT}問 ({pct}%)</span>
           </div>
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }} />
+            <div className="h-full bg-indigo-500 rounded-full" style={{ width:`${pct}%` }} />
           </div>
         </div>
 
-        {/* Level breakdown */}
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-4">
-          <p className="text-xs font-black text-gray-500 px-4 pt-3 pb-2">レベル別</p>
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-4">
+          <p className="text-xs font-black text-gray-800 px-4 pt-3 pb-2">レベル別正解率</p>
           {([1,2,3,4,5] as const).map(lv => {
-            const d = byLevel[lv] ?? { total: 0, correct: 0 };
+            const d = byLevel[lv] ?? { total:0, correct:0 };
             const p = d.total > 0 ? d.correct / d.total : 0;
             return (
-              <div key={lv} className="flex items-center gap-3 px-4 py-2 border-t border-gray-50">
-                <span className="text-[10px] font-black text-gray-400 w-14">Lv{lv} {LEVEL_LABELS[lv]}</span>
+              <div key={lv} className="flex items-center gap-3 px-4 py-2 border-t border-gray-100">
+                <span className="text-[10px] font-black text-gray-700 w-16">Lv{lv} {LEVEL_LABELS[lv]}</span>
                 <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all"
-                    style={{ width: `${p * 100}%`, background: p >= 0.8 ? '#10b981' : p >= 0.5 ? '#f59e0b' : '#ef4444' }} />
+                    style={{ width:`${p*100}%`, background: p>=0.8?'#10b981':p>=0.5?'#f59e0b':'#ef4444' }} />
                 </div>
-                <span className="text-xs font-bold text-gray-600 w-10 text-right">{d.correct}/{d.total}</span>
+                <span className="text-xs font-black text-gray-800 w-10 text-right">{d.correct}/{d.total}</span>
               </div>
             );
           })}
         </div>
 
-        {/* Weakness */}
         {weakLevels.length > 0 && (
-          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 mb-4">
-            <p className="text-xs font-black text-amber-700 mb-1">⚠️ 要強化レベル</p>
-            <p className="text-xs text-amber-600">
+          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 mb-4">
+            <p className="text-xs font-black text-amber-800 mb-1">⚠️ 要強化レベル</p>
+            <p className="text-xs font-bold text-amber-700">
               {weakLevels.map(lv => `Lv${lv} (TOEIC ${LEVEL_LABELS[lv]})`).join(' · ')}
             </p>
           </div>
         )}
 
-        {/* Other player scores */}
-        {history.length > 1 && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
-            <p className="text-xs font-black text-gray-500 mb-2">📊 スコア履歴</p>
-            <div className="space-y-1">
-              {history.slice(0, 5).map((r, i) => (
+        {/* Score history of selected user */}
+        {currentUser.history.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
+            <p className="text-xs font-black text-gray-800 mb-2">📊 {currentUser.name}のスコア履歴</p>
+            <ScoreChart history={currentUser.history} />
+            <div className="space-y-1 mt-2">
+              {currentUser.history.slice(0, 5).map((r, i) => (
                 <div key={i} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400">{r.date}</span>
-                  <span className="font-bold text-gray-600">{r.player}</span>
-                  <span className="font-black text-indigo-600">{r.score}点</span>
+                  <span className="font-bold text-gray-700">{r.date}</span>
+                  <span className="font-black text-indigo-600 text-sm">{r.score}点</span>
+                  <span className="font-bold text-gray-700">{r.correct}/{Q_COUNT}問</span>
                 </div>
               ))}
             </div>
@@ -556,8 +606,8 @@ export function WeeklyTest() {
         )}
 
         <button onClick={() => setPhase('gate')}
-          className="w-full border border-gray-200 rounded-2xl py-3 text-sm font-bold text-gray-600 active:bg-gray-50">
-          ← 戻る
+          className="w-full border-2 border-gray-200 rounded-2xl py-3 text-sm font-black text-gray-800 active:bg-gray-50">
+          ← ユーザー選択に戻る
         </button>
       </div>
     );
