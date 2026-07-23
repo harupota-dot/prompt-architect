@@ -115,9 +115,63 @@ function getLedgers(noteKey: string, clef: Clef): number[] {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// 調号（Key Signature）
+// ─────────────────────────────────────────────────────────────────
+type KeySig = 'C' | 'G' | 'D' | 'A' | 'E' | 'F' | 'Bb' | 'Eb';
+
+// 各調で変化する音名 → 半音オフセット (+1=♯, -1=♭)
+const KEY_SIG_MAP: Record<KeySig, Partial<Record<NoteName, number>>> = {
+  C:  {},
+  G:  { F: 1 },
+  D:  { F: 1, C: 1 },
+  A:  { F: 1, C: 1, G: 1 },
+  E:  { F: 1, C: 1, G: 1, D: 1 },
+  F:  { B: -1 },
+  Bb: { B: -1, E: -1 },
+  Eb: { B: -1, E: -1, A: -1 },
+};
+
+const SHARP_ORDER: NoteName[] = ['F','C','G','D','A','E','B'];
+const FLAT_ORDER:  NoteName[] = ['B','E','A','D','G','C','F'];
+
+// ト音記号の調号 Y座標 (TYマップに対応)
+const TREBLE_SHARP_KS_Y: Partial<Record<NoteName,number>> = {
+  F: L1-LS*4,    C: L1-LS*2.5,  G: L1-LS*4.5,
+  D: L1-LS*3,    A: L1-LS*1.5,  E: L1-LS*3.5,  B: L1-LS*2,
+};
+const TREBLE_FLAT_KS_Y: Partial<Record<NoteName,number>> = {
+  B: L1-LS*2,    E: L1,          A: L1-LS*1.5,
+  D: L1-LS*3,    G: L1-LS,       C: L1-LS*2.5,  F: L1-LS*4,
+};
+// ヘ音記号の調号 Y座標 (BYマップに対応)
+const BASS_SHARP_KS_Y: Partial<Record<NoteName,number>> = {
+  F: L1-LS*3,    C: L1-LS*1.5,  G: L1-LS*3.5,
+  D: L1-LS*2,    A: L1-LS/2,    E: L1-LS*2.5,  B: L1-LS,
+};
+const BASS_FLAT_KS_Y: Partial<Record<NoteName,number>> = {
+  B: L1-LS,      E: L1-LS*2.5,  A: L1-LS/2,
+  D: L1-LS*2,    G: L1,          C: L1-LS*1.5,  F: L1-LS*3,
+};
+
+// MIDI番号計算用ベース (octave 4)
+const BASE_MIDI: Record<NoteName, number> = {
+  C:60, D:62, E:64, F:65, G:67, A:69, B:71,
+};
+
+function playNoteAudioWithAcc(name: NoteName, acc: number): void {
+  const midi = BASE_MIDI[name] + acc;
+  const freq  = 440 * Math.pow(2, (midi - 69) / 12);
+  const ctx = getAC(); if (!ctx) return;
+  try {
+    const go = () => tone(ctx, freq, ctx.currentTime);
+    ctx.state === 'suspended' ? ctx.resume().then(go).catch(() => {}) : go();
+  } catch { /* ignore */ }
+}
+
+// ─────────────────────────────────────────────────────────────────
 // 出題プール
 // ─────────────────────────────────────────────────────────────────
-interface NQ { note: string; name: NoteName; clef: Clef }
+interface NQ { note: string; name: NoteName; clef: Clef; natural?: boolean }
 const mk = (notes: string[], clef: Clef): NQ[] =>
   notes.map(n => ({ note: n, name: n[0] as NoteName, clef }));
 
@@ -257,12 +311,30 @@ function playChordAudio(chord: string): void {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// NoteStaff — SVG 五線譜描画
+// NoteStaff — SVG 五線譜描画（調号対応）
 // ─────────────────────────────────────────────────────────────────
-function NoteStaff({ notes, clef }: { notes: string[]; clef: Clef }) {
+function NoteStaff({
+  notes, clef, keySig = 'C', naturalNote = false,
+}: {
+  notes: string[]; clef: Clef; keySig?: KeySig; naturalNote?: boolean;
+}) {
   const yMap    = clef === 'treble' ? TY : BY;
   const staffYs = [L1, L1-LS, L1-LS*2, L1-LS*3, L1-LS*4];
   const middleY = L1 - LS * 2;
+
+  // 調号シンボル計算
+  const acc      = KEY_SIG_MAP[keySig];
+  const isSharp  = Object.values(acc).some(v => (v ?? 0) > 0);
+  const isFlat   = Object.values(acc).some(v => (v ?? 0) < 0);
+  const sigCount = Object.keys(acc).length;
+  const ksSymbols: NoteName[] = isSharp
+    ? SHARP_ORDER.slice(0, sigCount)
+    : isFlat ? FLAT_ORDER.slice(0, sigCount) : [];
+  const ksYMap = clef === 'treble'
+    ? (isSharp ? TREBLE_SHARP_KS_Y : TREBLE_FLAT_KS_Y)
+    : (isSharp ? BASS_SHARP_KS_Y   : BASS_FLAT_KS_Y);
+  const KS_X0   = 55;
+  const KS_STEP = isSharp ? 13 : 11;
 
   const ledgerSet = new Set<number>();
   notes.forEach(n => getLedgers(n, clef).forEach(y => ledgerSet.add(y)));
@@ -276,38 +348,81 @@ function NoteStaff({ notes, clef }: { notes: string[]; clef: Clef }) {
   const stemStart = stemUp ? bottomY : topY;
   const stemEnd   = stemUp ? topY - LS * 3.5 : bottomY + LS * 3.5;
 
-  const PAD     = 22;
-  const vTop    = Math.min(topY    - PAD, TOP_LINE_Y - PAD);
-  const vBottom = Math.max(bottomY + PAD, L1         + PAD);
-  const vH      = vBottom - vTop;
+  // 調号が五線上部に出る場合（G# etc）を考慮してvTopを広げる
+  const ksMinY   = ksSymbols.length > 0
+    ? Math.min(...ksSymbols.map(n => ksYMap[n] ?? TOP_LINE_Y))
+    : TOP_LINE_Y;
+  const PAD      = 22;
+  const vTop     = Math.min(topY - PAD, TOP_LINE_Y - PAD, ksMinY - 18);
+  const vBottom  = Math.max(bottomY + PAD, L1 + PAD);
+  const vH       = vBottom - vTop;
 
   return (
     <svg viewBox={`0 ${vTop} 280 ${vH}`} className="w-full"
       style={{ userSelect:'none' }} aria-hidden="true">
+
+      {/* 五線 */}
       {staffYs.map(y => (
-        <line key={y} x1={40} x2={266} y1={y} y2={y} stroke="#374151" strokeWidth="1.2" />
+        <line key={y} x1={40} x2={266} y1={y} y2={y} stroke="#111827" strokeWidth="1.4" />
       ))}
+
+      {/* 音部記号 */}
       <text
         x={clef === 'treble' ? 13 : 18}
         y={clef === 'treble' ? L1+12 : L1-LS*1.5+4}
         fontSize={clef === 'treble' ? 72 : 46}
-        fill="#374151"
+        fill="#111827"
         fontFamily="'Segoe UI Symbol','Segoe UI Historic','Apple Symbols','FreeSerif','Times New Roman',serif"
       >{clef === 'treble' ? '𝄞' : '𝄢'}</text>
+
+      {/* 調号シンボル */}
+      {ksSymbols.map((noteName, i) => {
+        const ky = ksYMap[noteName];
+        if (ky === undefined) return null;
+        const kx = KS_X0 + i * KS_STEP;
+        return (
+          <text key={noteName} x={kx} y={ky}
+            fontSize={isSharp ? 17 : 19}
+            fill="#111827"
+            fontFamily="'Segoe UI Symbol','FreeSerif','Times New Roman',serif"
+            dominantBaseline="middle"
+            textAnchor="middle"
+          >{isSharp ? '♯' : '♭'}</text>
+        );
+      })}
+
+      {/* 加線 */}
       {[...ledgerSet].map(y => (
         <line key={`l${y}`}
           x1={NOTE_X-NR*2.6} x2={NOTE_X+NR*2.6} y1={y} y2={y}
-          stroke="#374151" strokeWidth="1.4" />
+          stroke="#111827" strokeWidth="1.5" />
       ))}
+
+      {/* 符幹 */}
       {notes.length > 0 && (
         <line x1={stemX} x2={stemX} y1={stemStart} y2={stemEnd}
-          stroke="#1f2937" strokeWidth="1.5" />
+          stroke="#111827" strokeWidth="1.6" />
       )}
+
+      {/* ナチュラル記号（臨時記号） */}
+      {naturalNote && notes.length > 0 && (() => {
+        const ny = yMap[notes[0]];
+        if (ny === undefined) return null;
+        return (
+          <text x={NOTE_X - NR*2.4} y={ny}
+            fontSize={18} fill="#111827"
+            fontFamily="'Segoe UI Symbol','FreeSerif','Times New Roman',serif"
+            dominantBaseline="middle" textAnchor="middle"
+          >♮</text>
+        );
+      })()}
+
+      {/* 音符 */}
       {notes.map(n => {
         const y = yMap[n]; if (y === undefined) return null;
         return (
           <ellipse key={n} cx={NOTE_X} cy={y} rx={NR} ry={NY}
-            fill="#1f2937" transform={`rotate(-12,${NOTE_X},${y})`} />
+            fill="#111827" transform={`rotate(-12,${NOTE_X},${y})`} />
         );
       })}
     </svg>
@@ -338,6 +453,7 @@ export function MusicLearning() {
   const [locked,     setLocked]     = useState(false);
   const [correct,    setCorrect]    = useState(0);
   const [total,      setTotal]      = useState(0);
+  const [keySig,     setKeySig]     = useState<KeySig>('C');
 
   const prevNoteRef  = useRef<string | undefined>(undefined);
   const prevKisoRef  = useRef<NoteName | undefined>(undefined);
@@ -368,11 +484,15 @@ export function MusicLearning() {
       prevChordRef.current = c;
       setChord(c); setQuestion(null); setKisoQ(null);
     } else {
-      const q = pickNQ(getPool(), prevNoteRef.current);
+      const base = pickNQ(getPool(), prevNoteRef.current);
+      // 調号で変化する音に対して25%の確率でナチュラル記号を出題
+      const hasAcc = (KEY_SIG_MAP[keySig][base.name] ?? 0) !== 0;
+      const natural = hasAcc && Math.random() < 0.25;
+      const q: NQ = { ...base, natural };
       prevNoteRef.current = q.note;
       setQuestion(q); setKisoQ(null); setChord(null);
     }
-  }, [mode, chordLevel, getPool]);
+  }, [mode, chordLevel, getPool, keySig]);
 
   // アンマウント時に全音源を停止・AudioContextをsuspend
   useEffect(() => () => stopAllMusicAudio(), []);
@@ -390,7 +510,11 @@ export function MusicLearning() {
   const handleNoteAnswer = useCallback((name: NoteName) => {
     const target = mode === 'kiso' ? kisoQ : question?.name;
     if (!target) return;
-    playNoteAudio(`${name}4`); // タップ即座に発音（鍵盤として機能）
+    // 調号に応じた音高で発音（ナチュラルの場合は素の音）
+    const pressAcc = (mode === 'kiso' || question?.natural)
+      ? 0
+      : (KEY_SIG_MAP[keySig][name] ?? 0);
+    playNoteAudioWithAcc(name, pressAcc);
     const ok = name === target;
     if (!locked) {
       setTotal(t => t + 1);
@@ -426,10 +550,28 @@ export function MusicLearning() {
     }
   }, [chord, locked, newQuestion]);
 
+  const handleKeySig = (k: KeySig) => {
+    setKeySig(k);
+    setCorrect(0); setTotal(0);
+  };
+
   const replay = () => {
-    if (mode === 'kiso' && kisoQ)                             playNoteAudio(`${kisoQ}4`);
-    if ((mode === 'note' || mode === 'advanced') && question) playNoteAudio(question.note);
-    if (mode === 'chord' && chord)                            playChordAudio(chord);
+    if (mode === 'kiso' && kisoQ) {
+      playNoteAudio(`${kisoQ}4`);
+    } else if ((mode === 'note' || mode === 'advanced') && question) {
+      const replayAcc = question.natural ? 0 : (KEY_SIG_MAP[keySig][question.name] ?? 0);
+      // 正確な音域（question.noteのオクターブ）で再生
+      const octave = parseInt(question.note.slice(-1));
+      const midi = BASE_MIDI[question.name] + (octave - 4) * 12 + replayAcc;
+      const freq  = 440 * Math.pow(2, (midi - 69) / 12);
+      const ctx = getAC();
+      if (ctx) {
+        const go = () => tone(ctx, freq, ctx.currentTime);
+        ctx.state === 'suspended' ? ctx.resume().then(go).catch(() => {}) : go();
+      }
+    } else if (mode === 'chord' && chord) {
+      playChordAudio(chord);
+    }
   };
 
   const staffNotes  = (mode === 'note' || mode === 'advanced') && question
@@ -449,8 +591,17 @@ export function MusicLearning() {
   const kisoDisplaySub  = kisoDir === 'ja-en'
     ? 'このカタカナのアルファベット名は？'
     : 'この音名をカタカナで選んでください';
-  const kisoBtnLabel = (name: NoteName) =>
-    kisoDir === 'ja-en' ? name : NOTE_JP[name];
+
+  // 回答ボタンのラベル（調号・ナチュラルを反映）
+  const btnLabel = (name: NoteName): string => {
+    if (mode === 'kiso') return kisoDir === 'en-ja' ? NOTE_JP[name] : name;
+    // 調号モードでナチュラル問題: 該当音のみ ♮ 表示
+    if (question?.natural && question.name === name) return `${name}♮`;
+    const a = KEY_SIG_MAP[keySig][name];
+    if (!a) return name;
+    return a > 0 ? `${name}#` : `${name}♭`;
+  };
+  const kisoBtnLabel = (name: NoteName) => btnLabel(name);
 
   return (
     <div className="flex flex-col gap-3 pb-28 max-w-md mx-auto px-4">
@@ -530,6 +681,32 @@ export function MusicLearning() {
         </div>
       )}
 
+      {/* ── 調号選択（標準・発展モード） ── */}
+      {showClef && (
+        <div>
+          <p className="text-[9px] font-black text-gray-700 mb-1 tracking-widest uppercase">🎼 調号 (Key Signature)</p>
+          <div className="grid grid-cols-8 gap-0.5">
+            {(['C','G','D','A','E','F','Bb','Eb'] as KeySig[]).map(k => {
+              const n = KEY_SIG_MAP[k];
+              const cnt = Object.keys(n).length;
+              const isS = Object.values(n).some(v => (v ?? 0) > 0);
+              const sub = cnt === 0 ? '' : isS ? `${cnt}♯` : `${cnt}♭`;
+              return (
+                <button key={k} onClick={() => handleKeySig(k)}
+                  className={`py-1.5 rounded-lg text-center transition-all ${
+                    keySig === k
+                      ? 'bg-amber-500 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-800 hover:bg-amber-50'
+                  }`}>
+                  <span className="block text-[11px] font-black leading-tight">{k}</span>
+                  <span className={`block text-[7px] font-bold leading-none ${keySig === k ? 'text-white/80' : 'text-gray-500'}`}>{sub || '♮'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── 問題エリア ── */}
       {mode === 'kiso' ? (
         <div className="relative bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
@@ -552,7 +729,12 @@ export function MusicLearning() {
         </div>
       ) : (
         <div className="relative bg-white rounded-2xl border border-gray-200 shadow-sm p-2 select-none overflow-hidden">
-          <NoteStaff notes={staffNotes} clef={staffClef} />
+          <NoteStaff
+            notes={staffNotes}
+            clef={staffClef}
+            keySig={(mode === 'note' || mode === 'advanced') ? keySig : 'C'}
+            naturalNote={question?.natural ?? false}
+          />
           {verdict && (
             <div className={`absolute inset-0 flex items-center justify-end pr-8 pointer-events-none ${
               verdict === 'correct' ? 'bg-emerald-500/15' : 'bg-red-500/15'
