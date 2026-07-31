@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 
 // ─── 定数・型 ─────────────────────────────────────────────────────
-const LS_KEY = 'english-journal-v2';
+const LS_KEY = 'english-journal-v3';
 
 interface JournalEntry {
-  date: string;        // "YYYY-MM-DD"
-  english: string;     // 英文
-  japanese: string;    // 和訳
+  date: string;           // "YYYY-MM-DD"
+  english: string;        // 英文
+  japanese: string;       // 和訳
+  pronunciation: string;  // 発音・音声変化の解説
 }
 
 type ReadType = 'en' | 'ja' | 'sel';
@@ -17,10 +18,7 @@ interface ReadState { date: string; type: ReadType }
 // ─── ユーティリティ ───────────────────────────────────────────────
 function todayStr(): string {
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function formatDate(dateStr: string): string {
@@ -50,26 +48,34 @@ function wordCount(text: string): number {
 function speakText(text: string, lang: string, onEnd: () => void): void {
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = lang;
-  utt.rate = lang === 'en-US' ? 0.88 : 1.0;
-  utt.pitch = 1.0;
-  utt.onend = onEnd;
+  utt.lang   = lang;
+  utt.rate   = lang === 'en-US' ? 0.88 : 1.0;
+  utt.pitch  = 1.0;
+  utt.onend  = onEnd;
   utt.onerror = onEnd;
   window.speechSynthesis.speak(utt);
 }
 
-function stopSpeech(): void {
-  window.speechSynthesis.cancel();
+function stopSpeech(): void { window.speechSynthesis.cancel(); }
+
+// ─── テキストエリア共通ラベル ─────────────────────────────────────
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-black text-gray-900 mb-1 uppercase tracking-widest">
+      {children}
+    </p>
+  );
 }
 
 // ─── メインコンポーネント ─────────────────────────────────────────
 export function EnglishJournal() {
-  const [entries,    setEntries]    = useState<JournalEntry[]>([]);
-  const [date,       setDate]       = useState(todayStr());
-  const [english,    setEnglish]    = useState('');
-  const [japanese,   setJapanese]   = useState('');
-  const [readState,  setReadState]  = useState<ReadState | null>(null);
-  const [saved,      setSaved]      = useState(false);
+  const [entries,       setEntries]       = useState<JournalEntry[]>([]);
+  const [date,          setDate]          = useState(todayStr());
+  const [english,       setEnglish]       = useState('');
+  const [japanese,      setJapanese]      = useState('');
+  const [pronunciation, setPronunciation] = useState('');
+  const [readState,     setReadState]     = useState<ReadState | null>(null);
+  const [saved,         setSaved]         = useState(false);
 
   useEffect(() => { setEntries(loadEntries()); }, []);
   useEffect(() => () => { stopSpeech(); }, []);
@@ -82,8 +88,10 @@ export function EnglishJournal() {
     if (!eng || !date) return;
     setEntries(prev => {
       const filtered = prev.filter(e => e.date !== date);
-      const next = [{ date, english: eng, japanese: japanese.trim() }, ...filtered]
-        .sort((a, b) => b.date.localeCompare(a.date));
+      const next = [
+        { date, english: eng, japanese: japanese.trim(), pronunciation: pronunciation.trim() },
+        ...filtered,
+      ].sort((a, b) => b.date.localeCompare(a.date));
       saveToLS(next);
       return next;
     });
@@ -91,7 +99,8 @@ export function EnglishJournal() {
     setTimeout(() => setSaved(false), 1800);
     setEnglish('');
     setJapanese('');
-  }, [date, english, japanese]);
+    setPronunciation('');
+  }, [date, english, japanese, pronunciation]);
 
   // ── 削除 ──
   const handleDelete = useCallback((d: string) => {
@@ -104,88 +113,70 @@ export function EnglishJournal() {
     });
   }, [readState]);
 
-  // ── 編集（入力欄に戻す） ──
+  // ── 編集（フォームに読み込み） ──
   const handleEdit = useCallback((entry: JournalEntry) => {
     setDate(entry.date);
     setEnglish(entry.english);
     setJapanese(entry.japanese);
+    setPronunciation(entry.pronunciation ?? '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   // ── 読み上げ ──
   const handleRead = useCallback((entry: JournalEntry, type: ReadType) => {
-    // 同じボタンをもう一度押したら停止
     if (readState?.date === entry.date && readState.type === type) {
-      stopSpeech();
-      setReadState(null);
-      return;
+      stopSpeech(); setReadState(null); return;
     }
     stopSpeech();
 
     let text = '';
     let lang = 'en-US';
-
     if (type === 'en') {
-      text = entry.english;
-      lang = 'en-US';
+      text = entry.english; lang = 'en-US';
     } else if (type === 'ja') {
-      text = entry.japanese;
-      lang = 'ja-JP';
+      text = entry.japanese; lang = 'ja-JP';
     } else {
-      // 選択テキスト
       const sel = window.getSelection()?.toString().trim();
-      if (!sel) {
-        alert('読み上げたいテキストをドラッグして選択してください。');
-        return;
-      }
+      if (!sel) { alert('読み上げたいテキストをドラッグして選択してください。'); return; }
       text = sel;
-      // 選択テキストが英語か日本語か簡易判定（日本語文字が含まれていればja）
       lang = /[぀-ヿ一-鿿]/.test(sel) ? 'ja-JP' : 'en-US';
     }
-
     if (!text) return;
     setReadState({ date: entry.date, type });
     speakText(text, lang, () => setReadState(null));
   }, [readState]);
 
-  const handleStop = useCallback(() => {
-    stopSpeech();
-    setReadState(null);
-  }, []);
+  const handleStop = useCallback(() => { stopSpeech(); setReadState(null); }, []);
 
-  const isReading = (date: string, type?: ReadType) =>
-    readState?.date === date && (type === undefined || readState.type === type);
+  const isReading = (d: string, t?: ReadType) =>
+    readState?.date === d && (t === undefined || readState.type === t);
 
   return (
     <div className="px-4 pt-2 pb-[120px] max-w-md mx-auto">
 
-      {/* ══ 入力セクション ══ */}
+      {/* ══ 入力フォーム ══ */}
       <div className="bg-white rounded-2xl border-2 border-gray-200 p-4 mb-5 shadow-sm">
+
         <div className="flex items-center gap-2 mb-4">
           <span className="text-2xl">📔</span>
           <div>
             <h2 className="text-base font-black text-gray-900">英語日記をストック</h2>
             <p className="text-[10px] font-bold text-gray-700">
-              英文・和訳をペーストして保存 → リスニング＆シャドーイング用
+              英文・和訳・発音メモをセット保存 → シャドーイング用
             </p>
           </div>
         </div>
 
         {/* 日付 */}
-        <label className="block text-[10px] font-black text-gray-900 mb-1 uppercase tracking-widest">
-          📅 日付
-        </label>
+        <FieldLabel>📅 日付</FieldLabel>
         <input
-          type="date"
-          value={date}
+          type="date" value={date}
           onChange={e => { setDate(e.target.value); setSaved(false); }}
           className="w-full mb-4 px-3 py-2.5 rounded-xl border-2 border-gray-300 text-sm font-black text-gray-900 bg-gray-50 focus:outline-none focus:border-indigo-500"
         />
 
-        {/* 英文テキストエリア */}
-        <label className="block text-[10px] font-black text-gray-900 mb-1 uppercase tracking-widest">
-          🇺🇸 英文（English）
-        </label>
+        {/* 英文 */}
+        <FieldLabel>🇺🇸 英文（English）</FieldLabel>
         <textarea
           value={english}
           onChange={e => { setEnglish(e.target.value); setSaved(false); }}
@@ -197,16 +188,29 @@ export function EnglishJournal() {
           {wordCount(english)} 語 / {english.length} 文字
         </p>
 
-        {/* 和訳テキストエリア */}
-        <label className="block text-[10px] font-black text-gray-900 mb-1 uppercase tracking-widest">
-          🇯🇵 和訳（Japanese Translation）
-        </label>
+        {/* 和訳 */}
+        <FieldLabel>🇯🇵 和訳（Japanese Translation）</FieldLabel>
         <textarea
           value={japanese}
           onChange={e => { setJapanese(e.target.value); setSaved(false); }}
           placeholder={"今日は早起きして、朝のランニングに行きました。\n空気が新鮮で、空はとても澄んでいました..."}
           rows={4}
-          className="w-full mb-3 px-3 py-3 rounded-xl border-2 border-gray-300 text-sm font-semibold text-gray-900 bg-gray-50 focus:outline-none focus:border-rose-400 resize-none leading-relaxed"
+          className="w-full mb-4 px-3 py-3 rounded-xl border-2 border-gray-300 text-sm font-semibold text-gray-900 bg-gray-50 focus:outline-none focus:border-rose-400 resize-none leading-relaxed"
+        />
+
+        {/* 発音・音声変化の解説 */}
+        <FieldLabel>🎙️ 発音・音声変化の解説（Pronunciation Tips）</FieldLabel>
+        <textarea
+          value={pronunciation}
+          onChange={e => { setPronunciation(e.target.value); setSaved(false); }}
+          placeholder={
+            "例:\n" +
+            "• \"went for\" → 「ウェン(t) フォー」t が弱まるリンキング\n" +
+            "• \"The air\" → 「ジェア」 the の後に母音が来るので「ジ」\n" +
+            "• 文末の \"clear\" は下げ調子で読む（Falling tone）"
+          }
+          rows={5}
+          className="w-full mb-3 px-3 py-3 rounded-xl border-2 border-gray-300 text-sm font-semibold text-gray-900 bg-gray-50 focus:outline-none focus:border-amber-400 resize-none leading-relaxed"
         />
 
         {editingExisting && (
@@ -235,7 +239,7 @@ export function EnglishJournal() {
           <p className="text-5xl mb-4">📖</p>
           <p className="text-base font-black text-gray-900">まだ日記がありません</p>
           <p className="text-xs font-bold text-gray-700 mt-2 leading-relaxed">
-            英文・和訳をペーストして<br />保存してみましょう！
+            英文・和訳・発音メモをペーストして<br />保存してみましょう！
           </p>
         </div>
       ) : (
@@ -255,26 +259,25 @@ export function EnglishJournal() {
                   anyReading ? 'border-indigo-400' : 'border-gray-200'
                 }`}>
 
-                {/* ── カードヘッダー ── */}
+                {/* ── ヘッダー ── */}
                 <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${
                   anyReading ? 'border-indigo-200 bg-indigo-50' : 'border-gray-100 bg-gray-50'
                 }`}>
-                  <span className="text-sm font-black text-gray-900">
-                    {formatDate(entry.date)}
-                  </span>
+                  <span className="text-sm font-black text-gray-900">{formatDate(entry.date)}</span>
                   <div className="flex items-center gap-1.5">
                     <button onClick={() => handleEdit(entry)}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-sm bg-gray-200 text-gray-800 active:scale-95 transition-all"
-                      aria-label="編集">✏️</button>
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-indigo-100 text-indigo-900 active:scale-95 transition-all">
+                      ✏️ 編集
+                    </button>
                     <button onClick={() => handleDelete(entry.date)}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-sm bg-red-100 text-red-800 active:scale-95 transition-all"
-                      aria-label="削除">🗑️</button>
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-red-100 text-red-900 active:scale-95 transition-all">
+                      🗑️ 削除
+                    </button>
                   </div>
                 </div>
 
-                {/* ── 読み上げボタン行 ── */}
+                {/* ── 読み上げボタン ── */}
                 <div className="px-3 py-2.5 border-b-2 border-gray-100 bg-white">
-                  {/* 再生中インジケーター */}
                   {anyReading && (
                     <div className="flex items-center gap-1.5 mb-2">
                       {[0,1,2].map(i => (
@@ -283,69 +286,48 @@ export function EnglishJournal() {
                           style={{ animationDelay: `${i * 0.15}s` }} />
                       ))}
                       <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">
-                        {isReading(entry.date, 'en') && 'Reading English...'}
-                        {isReading(entry.date, 'ja') && '日本語を読み上げ中...'}
-                        {isReading(entry.date, 'sel') && 'Reading selection...'}
+                        {isReading(entry.date,'en')  && 'Reading English...'}
+                        {isReading(entry.date,'ja')  && '日本語を読み上げ中...'}
+                        {isReading(entry.date,'sel') && 'Reading selection...'}
                       </span>
                     </div>
                   )}
-
                   <div className="flex gap-1.5 flex-wrap">
                     {/* 英文読み上げ */}
-                    <button
-                      onClick={() => handleRead(entry, 'en')}
+                    <button onClick={() => handleRead(entry, 'en')}
                       className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all active:scale-95 ${
-                        isReading(entry.date, 'en')
-                          ? 'bg-red-500 text-white shadow'
-                          : 'bg-indigo-600 text-white shadow-sm'
-                      }`}
-                    >
-                      {isReading(entry.date, 'en') ? '⏹' : '🔊'}
-                      <span>{isReading(entry.date, 'en') ? '停止' : '英文を読む'}</span>
+                        isReading(entry.date,'en') ? 'bg-red-500 text-white' : 'bg-indigo-600 text-white'
+                      }`}>
+                      {isReading(entry.date,'en') ? '⏹ 停止' : '🔊 英文を読む'}
                     </button>
-
                     {/* 和訳読み上げ */}
                     {entry.japanese && (
-                      <button
-                        onClick={() => handleRead(entry, 'ja')}
+                      <button onClick={() => handleRead(entry, 'ja')}
                         className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all active:scale-95 ${
-                          isReading(entry.date, 'ja')
-                            ? 'bg-red-500 text-white shadow'
-                            : 'bg-rose-600 text-white shadow-sm'
-                        }`}
-                      >
-                        {isReading(entry.date, 'ja') ? '⏹' : '🔊'}
-                        <span>{isReading(entry.date, 'ja') ? '停止' : '和訳を読む'}</span>
+                          isReading(entry.date,'ja') ? 'bg-red-500 text-white' : 'bg-rose-600 text-white'
+                        }`}>
+                        {isReading(entry.date,'ja') ? '⏹ 停止' : '🔊 和訳を読む'}
                       </button>
                     )}
-
                     {/* 選択部分読み上げ */}
-                    <button
-                      onClick={() => handleRead(entry, 'sel')}
+                    <button onClick={() => handleRead(entry, 'sel')}
                       className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black transition-all active:scale-95 ${
-                        isReading(entry.date, 'sel')
-                          ? 'bg-red-500 text-white shadow'
-                          : 'bg-emerald-700 text-white shadow-sm'
-                      }`}
-                    >
-                      {isReading(entry.date, 'sel') ? '⏹' : '✂️'}
-                      <span>{isReading(entry.date, 'sel') ? '停止' : '選択部分を読む'}</span>
+                        isReading(entry.date,'sel') ? 'bg-red-500 text-white' : 'bg-emerald-700 text-white'
+                      }`}>
+                      {isReading(entry.date,'sel') ? '⏹ 停止' : '✂️ 選択部分を読む'}
                     </button>
-
-                    {/* 共通停止ボタン（いずれか再生中に表示） */}
+                    {/* 共通停止 */}
                     {anyReading && (
-                      <button
-                        onClick={handleStop}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-gray-800 text-white shadow active:scale-95 transition-all"
-                      >
+                      <button onClick={handleStop}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-black bg-gray-800 text-white active:scale-95 transition-all">
                         ⏹ すべて停止
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* ── 英文本文 ── */}
-                <div className="px-4 pt-3 pb-2 bg-white">
+                {/* ── 英文 ── */}
+                <div className="px-4 pt-3 pb-3 bg-white">
                   <p className="text-[9px] font-black text-gray-700 uppercase tracking-widest mb-1.5">
                     🇺🇸 English
                   </p>
@@ -357,14 +339,26 @@ export function EnglishJournal() {
                   </p>
                 </div>
 
-                {/* ── 和訳本文 ── */}
+                {/* ── 和訳 ── */}
                 {entry.japanese && (
-                  <div className="px-4 pt-2 pb-3 border-t-2 border-dashed border-gray-200 bg-rose-50/40">
+                  <div className="px-4 py-3 border-t-2 border-dashed border-gray-200 bg-rose-50/40">
                     <p className="text-[9px] font-black text-gray-700 uppercase tracking-widest mb-1.5">
                       🇯🇵 和訳
                     </p>
                     <p className="text-sm font-semibold text-gray-900 leading-loose whitespace-pre-wrap select-text">
                       {entry.japanese}
+                    </p>
+                  </div>
+                )}
+
+                {/* ── 発音・音声変化の解説 ── */}
+                {entry.pronunciation && (
+                  <div className="px-4 py-3 border-t-2 border-dashed border-gray-200 bg-amber-50/50">
+                    <p className="text-[9px] font-black text-gray-700 uppercase tracking-widest mb-1.5">
+                      🎙️ 発音・音声変化の解説
+                    </p>
+                    <p className="text-sm font-semibold text-gray-900 leading-loose whitespace-pre-wrap select-text">
+                      {entry.pronunciation}
                     </p>
                   </div>
                 )}
