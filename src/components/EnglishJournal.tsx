@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 
 // ─── 定数・型 ─────────────────────────────────────────────────────
-const LS_KEY = 'english-journal-v3';
+const LS_KEY = 'english-journal-v4';
 
 interface JournalEntry {
   date: string;           // "YYYY-MM-DD"
   english: string;        // 英文
   japanese: string;       // 和訳
   pronunciation: string;  // 発音・音声変化の解説
+  phrases: string;        // 使えるフレーズ・連語の解説
 }
 
 type ReadType = 'en' | 'ja' | 'sel';
@@ -74,6 +75,7 @@ export function EnglishJournal() {
   const [english,       setEnglish]       = useState('');
   const [japanese,      setJapanese]      = useState('');
   const [pronunciation, setPronunciation] = useState('');
+  const [phrases,       setPhrases]       = useState('');
   const [readState,     setReadState]     = useState<ReadState | null>(null);
   const [saved,         setSaved]         = useState(false);
 
@@ -89,7 +91,7 @@ export function EnglishJournal() {
     setEntries(prev => {
       const filtered = prev.filter(e => e.date !== date);
       const next = [
-        { date, english: eng, japanese: japanese.trim(), pronunciation: pronunciation.trim() },
+        { date, english: eng, japanese: japanese.trim(), pronunciation: pronunciation.trim(), phrases: phrases.trim() },
         ...filtered,
       ].sort((a, b) => b.date.localeCompare(a.date));
       saveToLS(next);
@@ -100,7 +102,8 @@ export function EnglishJournal() {
     setEnglish('');
     setJapanese('');
     setPronunciation('');
-  }, [date, english, japanese, pronunciation]);
+    setPhrases('');
+  }, [date, english, japanese, pronunciation, phrases]);
 
   // ── 削除 ──
   const handleDelete = useCallback((d: string) => {
@@ -119,6 +122,7 @@ export function EnglishJournal() {
     setEnglish(entry.english);
     setJapanese(entry.japanese);
     setPronunciation(entry.pronunciation ?? '');
+    setPhrases(entry.phrases ?? '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -162,7 +166,7 @@ export function EnglishJournal() {
           <div>
             <h2 className="text-base font-black text-gray-900">英語日記をストック</h2>
             <p className="text-[10px] font-bold text-gray-700">
-              英文・和訳・発音メモをセット保存 → シャドーイング用
+              英文・和訳・発音・フレーズをセット保存 → シャドーイング用
             </p>
           </div>
         </div>
@@ -211,6 +215,21 @@ export function EnglishJournal() {
           }
           rows={5}
           className="w-full mb-3 px-3 py-3 rounded-xl border-2 border-gray-300 text-sm font-semibold text-gray-900 bg-gray-50 focus:outline-none focus:border-amber-400 resize-none leading-relaxed"
+        />
+
+        {/* 使えるフレーズ・連語の解説 */}
+        <FieldLabel>💡 使えるフレーズ・連語の解説（Useful Phrases & Collocations）</FieldLabel>
+        <textarea
+          value={phrases}
+          onChange={e => { setPhrases(e.target.value); setSaved(false); }}
+          placeholder={
+            "例:\n" +
+            "• work out → 「トレーニングをする」go to the gym より自然\n" +
+            "• feel great → 「すごく気持ちいい」I felt great! で感嘆のニュアンス\n" +
+            "• for an hour → 「1時間」期間を表す前置詞 for + 時間"
+          }
+          rows={5}
+          className="w-full mb-3 px-3 py-3 rounded-xl border-2 border-gray-300 text-sm font-semibold text-gray-900 bg-gray-50 focus:outline-none focus:border-emerald-500 resize-none leading-relaxed"
         />
 
         {editingExisting && (
@@ -359,6 +378,18 @@ export function EnglishJournal() {
                     </p>
                     <p className="text-sm font-semibold text-gray-900 leading-loose whitespace-pre-wrap select-text">
                       {entry.pronunciation}
+                    </p>
+                  </div>
+                )}
+
+                {/* ── 使えるフレーズ・連語の解説 ── */}
+                {entry.phrases && (
+                  <div className="px-4 py-3 border-t-2 border-dashed border-gray-200 bg-emerald-50/50">
+                    <p className="text-[9px] font-black text-gray-700 uppercase tracking-widest mb-1.5">
+                      💡 使えるフレーズ・連語の解説
+                    </p>
+                    <p className="text-sm font-semibold text-gray-900 leading-loose whitespace-pre-wrap select-text">
+                      {entry.phrases}
                     </p>
                   </div>
                 )}
